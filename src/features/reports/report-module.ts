@@ -27,7 +27,7 @@ export type ResidentReport = {
 export type PublicReportDetail = {
   reference: string;
   category: ReportCategory;
-  description: string;
+  publicSummary: string;
   publicArea: string;
   status: ReportStatus;
   submittedAt: string;
@@ -58,16 +58,42 @@ export class EmergencyReportError extends Error {
   }
 }
 
-function validateSubmission(input: ReportSubmission) {
+function parseSubmission(value: unknown): ReportSubmission {
+  const input = typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
   const issues: Record<string, string> = {};
-  if (!reportCategories.includes(input.category)) issues.category = "Choose a supported report category.";
-  if (input.idempotencyKey.trim().length < 12) issues.idempotencyKey = "Start a fresh submission and try again.";
-  if (input.description.trim().length < 20) issues.description = "Describe the concern in at least 20 characters.";
-  if (input.nearbyLandmark.trim().length < 3) issues.nearbyLandmark = "Add a nearby landmark.";
-  if (!input.confirmNonEmergency) issues.confirmNonEmergency = "Confirm that this is not an emergency.";
-  if (!input.confirmPublicSummary) issues.confirmPublicSummary = "Confirm that this summary may be public.";
+  const residentUid = typeof input.residentUid === "string" ? input.residentUid.trim() : "";
+  const idempotencyKey = typeof input.idempotencyKey === "string" ? input.idempotencyKey.trim() : "";
+  const category = typeof input.category === "string" && reportCategories.includes(input.category as ReportCategory) ? input.category as ReportCategory : null;
+  const description = typeof input.description === "string" ? input.description.trim() : "";
+  const nearbyLandmark = typeof input.nearbyLandmark === "string" ? input.nearbyLandmark.trim() : "";
+  if (!residentUid || residentUid.length > 128) issues.residentUid = "A valid resident account is required.";
+  if (idempotencyKey.length < 12 || idempotencyKey.length > 128) issues.idempotencyKey = "Start a fresh submission and try again.";
+  if (!category) issues.category = "Choose a supported report category.";
+  if (description.length < 20 || description.length > 1000) issues.description = "Use between 20 and 1,000 characters.";
+  if (nearbyLandmark.length < 3 || nearbyLandmark.length > 160) issues.nearbyLandmark = "Use between 3 and 160 characters for the landmark.";
+  if (input.isEmergency !== false) issues.isEmergency = "Choose whether this is an emergency.";
+  if (input.confirmNonEmergency !== true) issues.confirmNonEmergency = "Confirm that this is not an emergency.";
+  if (input.confirmPublicSummary !== true) issues.confirmPublicSummary = "Confirm that a safe summary may be public.";
   if (Object.keys(issues).length) throw new ReportValidationError(issues);
+  return {
+    residentUid,
+    idempotencyKey,
+    category: category!,
+    description,
+    nearbyLandmark,
+    isEmergency: false,
+    confirmNonEmergency: true,
+    confirmPublicSummary: true,
+  };
 }
+
+const publicSummaries: Record<ReportCategory, string> = {
+  "roads-drainage": "A roads and drainage concern was submitted for review.",
+  streetlights: "A streetlight concern was submitted for review.",
+  "waste-collection": "A waste collection concern was submitted for review.",
+};
 
 export function createReportModule({
   store,
@@ -79,9 +105,11 @@ export function createReportModule({
   nextReference?: () => string;
 }) {
   return {
-    async submit(input: ReportSubmission) {
-      if (input.isEmergency) throw new EmergencyReportError();
-      validateSubmission(input);
+    async submit(value: unknown) {
+      if (typeof value === "object" && value !== null && "isEmergency" in value && value.isEmergency === true) {
+        throw new EmergencyReportError();
+      }
+      const input = parseSubmission(value);
       const reference = nextReference();
       const submittedAt = now().toISOString();
       return store.submitOnce(`${input.residentUid}:${input.idempotencyKey}`, {
@@ -97,8 +125,8 @@ export function createReportModule({
         public: {
           reference,
           category: input.category,
-          description: input.description,
-          publicArea: input.nearbyLandmark,
+          publicSummary: publicSummaries[input.category],
+          publicArea: "Southville 1 · Location pending review",
           status: "Submitted",
           submittedAt,
           timeline: [{ status: "Submitted", occurredAt: submittedAt }],

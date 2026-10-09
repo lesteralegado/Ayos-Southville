@@ -26,8 +26,8 @@ describe("report submission module", () => {
     expect(await reports.getPublic("AS-7K3M2Q")).toEqual({
       reference: "AS-7K3M2Q",
       category: "streetlights",
-      description: "The streetlight beside the covered court no longer turns on at night.",
-      publicArea: "Phase 2 covered court",
+      publicSummary: "A streetlight concern was submitted for review.",
+      publicArea: "Southville 1 · Location pending review",
       status: "Submitted",
       submittedAt: "2026-10-10T02:00:00.000Z",
       timeline: [{ status: "Submitted", occurredAt: "2026-10-10T02:00:00.000Z" }],
@@ -96,5 +96,52 @@ describe("report submission module", () => {
     expect(await reports.submit(submission)).toEqual({ reference: "AS-FIRST1", created: true });
     expect(await reports.submit(submission)).toEqual({ reference: "AS-FIRST1", created: false });
     expect(await reports.listMine("resident-1")).toHaveLength(1);
+  });
+
+  it("never publishes unmoderated resident text or a precise landmark", async () => {
+    const reports = createReportModule({
+      store: createMemoryReportStore(),
+      nextReference: () => "AS-PRIVATE",
+    });
+    await reports.submit({
+      residentUid: "resident-1",
+      idempotencyKey: "private-text-key",
+      category: "roads-drainage",
+      description: "Contact Ana at 09171234567 beside our home at Block 9 Lot 12.",
+      nearbyLandmark: "Block 9 Lot 12, beside the blue gate",
+      isEmergency: false,
+      confirmNonEmergency: true,
+      confirmPublicSummary: true,
+    });
+
+    const publicReport = await reports.getPublic("AS-PRIVATE");
+    expect(publicReport).toMatchObject({
+      publicSummary: "A roads and drainage concern was submitted for review.",
+      publicArea: "Southville 1 · Location pending review",
+    });
+    expect(JSON.stringify(publicReport)).not.toMatch(/Ana|09171234567|Block 9|blue gate/i);
+  });
+
+  it("requires exact runtime types and caps resident-provided text", async () => {
+    const reports = createReportModule({ store: createMemoryReportStore() });
+
+    await expect(reports.submit({
+      residentUid: "resident-1",
+      idempotencyKey: "runtime-types-key",
+      category: "streetlights",
+      description: "x".repeat(1001),
+      nearbyLandmark: 42,
+      isEmergency: false,
+      confirmNonEmergency: "false",
+      confirmPublicSummary: "false",
+    } as unknown as Parameters<typeof reports.submit>[0])).rejects.toMatchObject({
+      code: "VALIDATION",
+      issues: {
+        description: expect.any(String),
+        nearbyLandmark: expect.any(String),
+        confirmNonEmergency: expect.any(String),
+        confirmPublicSummary: expect.any(String),
+      },
+    });
   });
 });

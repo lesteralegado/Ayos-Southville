@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getVerifiedResident } from "@/features/auth/session";
 import { getReportModule } from "@/features/reports/firebase-report-store";
-import { EmergencyReportError, ReportValidationError, type ReportSubmission } from "@/features/reports/report-module";
+import { EmergencyReportError, ReportValidationError } from "@/features/reports/report-module";
 
 function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
@@ -16,8 +16,9 @@ export async function POST(request: Request) {
   if (!resident) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
   try {
-    const body = await request.json() as Omit<ReportSubmission, "residentUid">;
-    const receipt = await getReportModule().submit({ ...body, residentUid: resident.uid });
+    const body: unknown = await request.json();
+    const fields = typeof body === "object" && body !== null && !Array.isArray(body) ? body : {};
+    const receipt = await getReportModule().submit({ ...fields, residentUid: resident.uid });
     return NextResponse.json(receipt, { status: receipt.created ? 201 : 200 });
   } catch (error) {
     if (error instanceof SyntaxError) return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });

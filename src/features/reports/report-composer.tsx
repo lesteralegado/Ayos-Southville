@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale } from "@/features/i18n/use-locale";
 import type { ReportCategory } from "./report-module";
 
@@ -10,6 +10,7 @@ const draftKey = "ayos-report-draft-v1";
 const draftEvent = "ayos-report-draft-change";
 
 type Draft = {
+  version: 1;
   idempotencyKey: string;
   category: ReportCategory | "";
   description: string;
@@ -20,6 +21,7 @@ type Draft = {
 };
 
 const blankDraft = (): Draft => ({
+  version: 1,
   idempotencyKey: crypto.randomUUID(),
   category: "",
   description: "",
@@ -49,7 +51,7 @@ const copy = {
     landmark: "Nearby landmark",
     landmarkHelp: "Use an approximate, recognizable public place.",
     nonEmergency: "I confirm this is not an emergency.",
-    publicSummary: "I understand the description and nearby landmark may appear publicly.",
+    publicSummary: "I understand that only a reviewed safe summary and approximate area may appear publicly.",
     submit: "Submit report",
     submitting: "Submitting…",
     errorTitle: "Please review the highlighted fields.",
@@ -75,7 +77,7 @@ const copy = {
     landmark: "Malapit na landmark",
     landmarkHelp: "Gumamit ng tinatayang pampublikong lugar na madaling makilala.",
     nonEmergency: "Kinukumpirma kong hindi ito emergency.",
-    publicSummary: "Nauunawaan kong maaaring makita sa publiko ang paglalarawan at landmark.",
+    publicSummary: "Nauunawaan kong reviewed na ligtas na summary at tinatayang lugar lamang ang maaaring makita sa publiko.",
     submit: "Isumite ang ulat",
     submitting: "Isinusumite…",
     errorTitle: "Suriin ang mga field na may marka.",
@@ -106,19 +108,28 @@ function readStoredDraft() {
   return window.localStorage.getItem(draftKey);
 }
 
+function parseStoredDraft(value: string | null): Draft | null {
+  if (!value) return null;
+  try {
+    const draft = JSON.parse(value) as Record<string, unknown>;
+    if (draft.version !== 1 || typeof draft.idempotencyKey !== "string" || !["", "roads-drainage", "streetlights", "waste-collection"].includes(String(draft.category)) || typeof draft.description !== "string" || typeof draft.nearbyLandmark !== "string" || typeof draft.isEmergency !== "boolean" || typeof draft.confirmNonEmergency !== "boolean" || typeof draft.confirmPublicSummary !== "boolean") return null;
+    return draft as Draft;
+  } catch {
+    return null;
+  }
+}
+
 export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { phone: string; sourceUrl: string } }) {
   const router = useRouter();
   const { locale } = useLocale();
   const message = copy[locale];
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const savedDraftText = useSyncExternalStore(subscribeToStoredDraft, readStoredDraft, () => null);
-  const savedDraft = useMemo(() => {
-    if (!savedDraftText) return null;
-    try { return JSON.parse(savedDraftText) as Draft; } catch { return null; }
-  }, [savedDraftText]);
+  const savedDraft = useMemo(() => parseStoredDraft(savedDraftText), [savedDraftText]);
   const [issues, setIssues] = useState<FieldIssues>({});
   const [submitError, setSubmitError] = useState("");
   const [pending, setPending] = useState(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const hasContent = draft.category || draft.description || draft.nearbyLandmark;
@@ -138,7 +149,10 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
     const nextIssues = localIssues(draft, locale);
     setIssues(nextIssues);
     setSubmitError("");
-    if (draft.isEmergency || Object.keys(nextIssues).length) return;
+    if (draft.isEmergency || Object.keys(nextIssues).length) {
+      setTimeout(() => summaryRef.current?.focus(), 0);
+      return;
+    }
     setPending(true);
     try {
       const response = await fetch("/api/reports", {
@@ -154,7 +168,7 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
       }
       if (!response.ok || !result.reference) throw new Error("Unconfirmed submission");
       window.localStorage.removeItem(draftKey);
-      router.push(`/reports/${result.reference}?submitted=1`);
+      router.push(`/reports/${result.reference}`);
     } catch {
       setSubmitError(message.networkError);
     } finally {
@@ -172,7 +186,7 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
         <section className="composer-card">
           {savedDraft && <div className="draft-banner"><p>{message.draft}</p><div><button type="button" className="button button-dark" onClick={() => setDraft(savedDraft)}>{message.resume}</button><button type="button" className="button button-quiet" onClick={discardDraft}>{message.discard}</button></div></div>}
           <form onSubmit={submit} noValidate>
-            {Object.keys(issues).length > 0 && <div className="error-summary" role="alert"><strong>{message.errorTitle}</strong><ul>{Object.values(issues).map((issue) => <li key={issue}>{issue}</li>)}</ul></div>}
+            {Object.keys(issues).length > 0 && <div ref={summaryRef} className="error-summary" role="alert" tabIndex={-1}><strong>{message.errorTitle}</strong><ul>{Object.entries(issues).map(([field, issue]) => <li key={field}><a href={`#${field === "category" ? "report-category" : field === "description" ? "report-description" : field === "nearbyLandmark" ? "nearby-landmark" : field === "confirmNonEmergency" ? "confirm-non-emergency" : "confirm-public-summary"}`}>{issue}</a></li>)}</ul></div>}
             <label className="check-row emergency-check"><input type="checkbox" checked={draft.isEmergency} onChange={(event) => update("isEmergency", event.target.checked)} /> <span>{message.danger}</span></label>
             {draft.isEmergency && <div className="emergency-guidance" role="alert"><strong>{message.emergency} <a href={`tel:${emergencyGuidance.phone}`}>{emergencyGuidance.phone}</a>.</strong><a href={emergencyGuidance.sourceUrl} target="_blank" rel="noreferrer">Official hotline source</a></div>}
             <label htmlFor="report-category">{message.category}</label>
@@ -186,10 +200,10 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
             <label htmlFor="nearby-landmark">{message.landmark}</label><p id="landmark-help" className="field-help">{message.landmarkHelp}</p>
             <input id="nearby-landmark" value={draft.nearbyLandmark} onChange={(event) => update("nearbyLandmark", event.target.value)} aria-invalid={Boolean(issues.nearbyLandmark)} aria-describedby={`landmark-help${issues.nearbyLandmark ? " landmark-error" : ""}`} />
             {issues.nearbyLandmark && <p id="landmark-error" className="field-error">{issues.nearbyLandmark}</p>}
-            <label className="check-row"><input type="checkbox" checked={draft.confirmNonEmergency} onChange={(event) => update("confirmNonEmergency", event.target.checked)} /> <span>{message.nonEmergency}</span></label>
-            {issues.confirmNonEmergency && <p className="field-error">{issues.confirmNonEmergency}</p>}
-            <label className="check-row"><input type="checkbox" checked={draft.confirmPublicSummary} onChange={(event) => update("confirmPublicSummary", event.target.checked)} /> <span>{message.publicSummary}</span></label>
-            {issues.confirmPublicSummary && <p className="field-error">{issues.confirmPublicSummary}</p>}
+            <label className="check-row"><input id="confirm-non-emergency" type="checkbox" checked={draft.confirmNonEmergency} onChange={(event) => update("confirmNonEmergency", event.target.checked)} aria-invalid={Boolean(issues.confirmNonEmergency)} aria-describedby={issues.confirmNonEmergency ? "confirm-non-emergency-error" : undefined} /> <span>{message.nonEmergency}</span></label>
+            {issues.confirmNonEmergency && <p id="confirm-non-emergency-error" className="field-error">{issues.confirmNonEmergency}</p>}
+            <label className="check-row"><input id="confirm-public-summary" type="checkbox" checked={draft.confirmPublicSummary} onChange={(event) => update("confirmPublicSummary", event.target.checked)} aria-invalid={Boolean(issues.confirmPublicSummary)} aria-describedby={issues.confirmPublicSummary ? "confirm-public-summary-error" : undefined} /> <span>{message.publicSummary}</span></label>
+            {issues.confirmPublicSummary && <p id="confirm-public-summary-error" className="field-error">{issues.confirmPublicSummary}</p>}
             <p className="form-error" role="status" aria-live="polite">{submitError}</p>
             <button className="button button-primary composer-submit" type="submit" disabled={pending || draft.isEmergency}>{pending ? message.submitting : message.submit}</button>
           </form>

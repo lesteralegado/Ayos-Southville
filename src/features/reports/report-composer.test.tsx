@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, vi } from "vitest";
 
@@ -52,7 +52,17 @@ describe("report composer", () => {
     await userEvent.click(screen.getByRole("button", { name: /isumite ang ulat/i }));
 
     expect(screen.getByRole("alert")).toHaveTextContent(/suriin ang mga field/i);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveFocus());
     expect(screen.getByLabelText(/kategorya/i)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/hindi ito emergency/i)).toHaveAttribute("aria-describedby", "confirm-non-emergency-error");
+    expect(screen.getByRole("checkbox", { name: /tinatayang lugar lamang/i })).toHaveAttribute("aria-describedby", "confirm-public-summary-error");
+  });
+
+  it("ignores a corrupt or stale stored draft", () => {
+    localStorage.setItem("ayos-report-draft-v1", JSON.stringify({ description: 42, version: 0 }));
+    render(<ReportComposer emergencyGuidance={emergencyGuidance} />);
+
+    expect(screen.queryByText(/unfinished private draft/i)).not.toBeInTheDocument();
   });
 
   it("retries an ambiguous failure with the same idempotency key", async () => {
@@ -66,7 +76,7 @@ describe("report composer", () => {
     await user.type(screen.getByLabelText(/describe/i), "The streetlight beside the covered court is dark every night.");
     await user.type(screen.getByLabelText("Nearby landmark", { exact: true }), "Phase 2 covered court");
     await user.click(screen.getByLabelText(/confirm this is not an emergency/i));
-    await user.click(screen.getByLabelText(/description and nearby landmark may appear publicly/i));
+    await user.click(screen.getByLabelText(/reviewed safe summary and approximate area/i));
 
     await user.click(screen.getByRole("button", { name: /submit report/i }));
     expect(await screen.findByRole("status")).toHaveTextContent(/draft is safe/i);
@@ -75,6 +85,6 @@ describe("report composer", () => {
     const firstBody = JSON.parse(submitReport.mock.calls[0][1].body as string);
     const secondBody = JSON.parse(submitReport.mock.calls[1][1].body as string);
     expect(secondBody.idempotencyKey).toBe(firstBody.idempotencyKey);
-    expect(push).toHaveBeenCalledWith("/reports/AS-7K3M2Q?submitted=1");
+    expect(push).toHaveBeenCalledWith("/reports/AS-7K3M2Q");
   });
 });
