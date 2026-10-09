@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   updateProfile: vi.fn(),
   deleteUser: vi.fn(),
   setDoc: vi.fn(),
-  deleteDoc: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -32,7 +31,6 @@ vi.mock("firebase/firestore", () => ({
   doc: (_db: unknown, collection: string, id: string) => ({ path: `${collection}/${id}` }),
   serverTimestamp: () => "server-time",
   setDoc: mocks.setDoc,
-  deleteDoc: mocks.deleteDoc,
 }));
 
 vi.mock("@/lib/firebase/client", () => ({
@@ -52,6 +50,8 @@ describe("resident authentication", () => {
     mocks.firebaseSignOut.mockResolvedValue(undefined);
     mocks.updateProfile.mockResolvedValue(undefined);
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it("collects a private email and a separate public alias for registration", () => {
     render(<RegisterPage />);
@@ -104,5 +104,26 @@ describe("resident authentication", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/verify your email first/i);
     expect(mocks.sendVerification).toHaveBeenCalledWith(firebaseUser, expect.any(Object));
     expect(mocks.push).not.toHaveBeenCalledWith("/account");
+  });
+
+  it("creates a server session and opens the account after verified sign-in", async () => {
+    const user = userEvent.setup();
+    const getIdToken = vi.fn().mockResolvedValue("verified-id-token");
+    mocks.signIn.mockResolvedValue({ user: { emailVerified: true, getIdToken } });
+    const fetchSession = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetchSession);
+    render(<SignInPage />);
+
+    await user.type(screen.getByLabelText(/email address/i), "resident@example.com");
+    await user.type(screen.getByLabelText(/password/i), "safe-password");
+    await user.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/account"));
+    expect(getIdToken).toHaveBeenCalledWith(true);
+    expect(fetchSession).toHaveBeenCalledWith("/api/session", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ idToken: "verified-id-token" }),
+    }));
+    expect(mocks.firebaseSignOut).toHaveBeenCalled();
   });
 });

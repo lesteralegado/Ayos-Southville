@@ -18,7 +18,7 @@ service cloud.firestore {
         && request.resource.data.publicAlias is string
         && request.resource.data.publicAlias.size() >= 3
         && request.resource.data.publicAlias.size() <= 32;
-      allow delete: if isOwner(userId);
+      allow delete: if false;
     }
 
     match /publicAliases/{userId} {

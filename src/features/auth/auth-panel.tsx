@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { createUserWithEmailAndPassword, deleteUser, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
-import { deleteDoc, doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useLocale } from "@/features/i18n/use-locale";
 import { getFirebaseClient, getSessionlessAuth } from "@/lib/firebase/client";
 
@@ -83,16 +83,15 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         const credential = await createUserWithEmailAndPassword(auth, email, password);
         const profileRef = doc(getFirebaseClient().db, "residentProfiles", credential.user.uid);
         try {
-          await setDoc(profileRef, { publicAlias, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
           await updateProfile(credential.user, { displayName: publicAlias });
           await sendEmailVerification(credential.user, { url: `${window.location.origin}/sign-in` });
-          await signOut(auth);
-          router.push(`/register/check-email?email=${encodeURIComponent(email)}`);
+          await setDoc(profileRef, { publicAlias, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
         } catch (registrationError) {
-          await deleteDoc(profileRef).catch(() => undefined);
           await deleteUser(credential.user).catch(() => undefined);
           throw registrationError;
         }
+        await signOut(auth);
+        router.push(`/register/check-email?email=${encodeURIComponent(email)}`);
       } else {
         const credential = await signInWithEmailAndPassword(auth, email, password);
         if (!credential.user.emailVerified) {
