@@ -26,6 +26,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /privateReports/{reference} {
+      allow read: if request.auth != null && resource.data.reporterUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /publicReports/{reference} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /submissionReceipts/{receiptId} {
+      allow read: if request.auth != null && resource.data.residentUid == request.auth.uid;
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
