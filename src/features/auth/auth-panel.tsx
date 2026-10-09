@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { createUserWithEmailAndPassword, deleteUser, sendEmailVerification, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
-import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { deleteDoc, doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useLocale } from "@/features/i18n/use-locale";
 import { getFirebaseClient, getSessionlessAuth } from "@/lib/firebase/client";
 
@@ -28,6 +28,11 @@ const authCopy = {
     registerSwitch: "Already a member? Sign in",
     signInSwitch: "New to the pilot? Create an account",
     language: "Filipino",
+    pilotKicker: "Southville 1 · Resident-led pilot",
+    introBefore: "Progress starts with",
+    introAccent: "being heard.",
+    introLead: "Verified accounts help keep community reports useful while your private identity stays protected.",
+    pending: "Please wait…",
   },
   fil: {
     registerTitle: "Sumali sa pilot ng mga residente",
@@ -43,6 +48,11 @@ const authCopy = {
     registerSwitch: "May account na? Mag-sign in",
     signInSwitch: "Bago sa pilot? Gumawa ng account",
     language: "English",
+    pilotKicker: "Southville 1 · Pilot ng mga residente",
+    introBefore: "Nagsisimula ang progreso sa",
+    introAccent: "pakikinig.",
+    introLead: "Tumutulong ang verified accounts na manatiling kapaki-pakinabang ang mga ulat habang protektado ang iyong pribadong pagkakakilanlan.",
+    pending: "Sandali lang…",
   },
 } as const;
 
@@ -71,17 +81,15 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       if (isRegister) {
         const publicAlias = String(formData.get("publicAlias") ?? "").trim();
         const credential = await createUserWithEmailAndPassword(auth, email, password);
+        const profileRef = doc(getFirebaseClient().db, "residentProfiles", credential.user.uid);
         try {
-          const { db } = getFirebaseClient();
-          const batch = writeBatch(db);
-          batch.set(doc(db, "residentProfiles", credential.user.uid), { publicAlias, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-          batch.set(doc(db, "publicAliases", credential.user.uid), { publicAlias });
-          await batch.commit();
+          await setDoc(profileRef, { publicAlias, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
           await updateProfile(credential.user, { displayName: publicAlias });
           await sendEmailVerification(credential.user, { url: `${window.location.origin}/sign-in` });
           await signOut(auth);
           router.push(`/register/check-email?email=${encodeURIComponent(email)}`);
         } catch (registrationError) {
+          await deleteDoc(profileRef).catch(() => undefined);
           await deleteUser(credential.user).catch(() => undefined);
           throw registrationError;
         }
@@ -112,9 +120,9 @@ export function AuthPanel({ mode }: AuthPanelProps) {
       <section className="auth-intro">
         <Link className="brand brand-light" href="/">Ayos Southville</Link>
         <div>
-          <span className="panel-kicker">Southville 1 · Resident-led pilot</span>
-          <h1>Progress starts with <em>being heard.</em></h1>
-          <p>Verified accounts help keep community reports useful while your private identity stays protected.</p>
+          <span className="panel-kicker">{copy.pilotKicker}</span>
+          <h1>{copy.introBefore} <em>{copy.introAccent}</em></h1>
+          <p>{copy.introLead}</p>
         </div>
       </section>
       <section className="auth-form-wrap">
@@ -131,7 +139,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
             <input id={`${mode}-password`} name="password" type="password" autoComplete={isRegister ? "new-password" : "current-password"} minLength={8} required />
             {isRegister && <p className="privacy-note">{copy.privacy}</p>}
             <p className="form-error" role="alert" aria-live="polite">{error}</p>
-            <button className="button button-primary auth-submit" type="submit" disabled={pending}>{pending ? "Please wait…" : isRegister ? copy.registerAction : copy.signInAction}</button>
+            <button className="button button-primary auth-submit" type="submit" disabled={pending}>{pending ? copy.pending : isRegister ? copy.registerAction : copy.signInAction}</button>
           </form>
           <Link className="auth-switch" href={isRegister ? "/sign-in" : "/register"}>{isRegister ? copy.registerSwitch : copy.signInSwitch}</Link>
         </div>

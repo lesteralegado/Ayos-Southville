@@ -18,23 +18,12 @@ service cloud.firestore {
         && request.resource.data.publicAlias is string
         && request.resource.data.publicAlias.size() >= 3
         && request.resource.data.publicAlias.size() <= 32;
-      allow delete: if false;
+      allow delete: if isOwner(userId);
     }
 
     match /publicAliases/{userId} {
       allow read: if true;
-      allow create: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['publicAlias'])
-        && request.resource.data.publicAlias is string
-        && request.resource.data.publicAlias.size() >= 3
-        && request.resource.data.publicAlias.size() <= 32;
-      allow update: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(['publicAlias'])
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['publicAlias'])
-        && request.resource.data.publicAlias is string
-        && request.resource.data.publicAlias.size() >= 3
-        && request.resource.data.publicAlias.size() <= 32;
-      allow delete: if false;
+      allow write: if false;
     }
 
     match /{document=**} {

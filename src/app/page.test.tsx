@@ -30,5 +30,6 @@ describe("public pilot directory", () => {
     render(<HomePage />);
 
     expect(screen.getByRole("link", { name: /mga ulat sa komunidad/i })).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute("lang", "fil");
   });
 });

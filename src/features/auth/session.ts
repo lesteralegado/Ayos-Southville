@@ -8,8 +8,11 @@ export async function getVerifiedResident() {
   const sessionCookie = (await cookies()).get(sessionCookieName)?.value;
   if (!sessionCookie) return null;
   try {
-    const claims = await getFirebaseAdmin().auth.verifySessionCookie(sessionCookie, true);
-    return claims.email_verified ? claims : null;
+    const { auth, db } = getFirebaseAdmin();
+    const claims = await auth.verifySessionCookie(sessionCookie, true);
+    if (!claims.email_verified) return null;
+    const profile = await db.collection("residentProfiles").doc(claims.uid).get();
+    return profile.exists ? claims : null;
   } catch {
     return null;
   }

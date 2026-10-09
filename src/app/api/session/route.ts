@@ -11,17 +11,25 @@ export async function POST(request: Request) {
   if (!sameOrigin(request) || !request.headers.get("content-type")?.startsWith("application/json")) {
     return NextResponse.json({ error: "Invalid request." }, { status: 403 });
   }
-  const { idToken } = (await request.json()) as { idToken?: unknown };
-  if (typeof idToken !== "string") return NextResponse.json({ error: "Missing token." }, { status: 400 });
 
   try {
-    const adminAuth = getFirebaseAdmin().auth;
-    const claims = await adminAuth.verifyIdToken(idToken, true);
+    const body = (await request.json()) as { idToken?: unknown };
+    if (typeof body.idToken !== "string") {
+      return NextResponse.json({ error: "Missing token." }, { status: 400 });
+    }
+    const { auth: adminAuth, db } = getFirebaseAdmin();
+    const claims = await adminAuth.verifyIdToken(body.idToken, true);
     const signedInRecently = Date.now() / 1000 - claims.auth_time < 5 * 60;
     if (!claims.email_verified || !signedInRecently) {
       return NextResponse.json({ error: "Verified recent sign-in required." }, { status: 401 });
     }
-    const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn: sessionDurationMs });
+    const profile = await db.collection("residentProfiles").doc(claims.uid).get();
+    const publicAlias = profile.data()?.publicAlias;
+    if (!profile.exists || typeof publicAlias !== "string") {
+      return NextResponse.json({ error: "Resident profile required." }, { status: 403 });
+    }
+    await db.collection("publicAliases").doc(claims.uid).set({ publicAlias });
+    const sessionCookie = await adminAuth.createSessionCookie(body.idToken, { expiresIn: sessionDurationMs });
     const response = NextResponse.json({ ok: true });
     response.cookies.set(sessionCookieName, sessionCookie, {
       httpOnly: true,
@@ -31,7 +39,10 @@ export async function POST(request: Request) {
       maxAge: sessionDurationMs / 1000,
     });
     return response;
-  } catch {
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+    }
     return NextResponse.json({ error: "Invalid authentication token." }, { status: 401 });
   }
 }

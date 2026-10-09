@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type { Locale } from "./messages";
 
 const localeEvent = "ayos-locale-change";
@@ -21,6 +21,10 @@ function subscribe(onStoreChange: () => void) {
 
 export function useLocale() {
   const locale = useSyncExternalStore<Locale>(subscribe, readLocale, (): Locale => "en");
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   function chooseLocale(nextLocale: Locale) {
     window.localStorage.setItem("ayos-locale", nextLocale);
