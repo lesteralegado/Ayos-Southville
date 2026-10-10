@@ -82,7 +82,7 @@ h1 em { display: block; color: var(--green); font-weight: 450; }
 .report-card footer { padding-top: 13px; display: flex; justify-content: space-between; gap: 14px; border-top: 1px solid var(--line); color: #7a817d; font-size: .66rem; }
 
 .auth-page { min-height: 100vh; display: grid; grid-template-columns: .9fr 1.1fr; }
-.auth-intro { padding: 48px clamp(30px, 6vw, 90px); display: flex; flex-direction: column; justify-content: space-between; color: white; background: var(--green-dark); }
+.auth-intro { position: sticky; top: 0; align-self: start; width: 100%; min-height: 100vh; padding: 48px clamp(30px, 6vw, 90px); display: flex; flex-direction: column; justify-content: space-between; color: white; background: var(--green-dark); }
 .brand-light { color: white; }
 .auth-intro h1 { max-width: 640px; font-size: clamp(3.5rem, 6vw, 6.2rem); }
 .auth-intro p { max-width: 540px; color: rgba(255,255,255,.68); font-size: 1rem; line-height: 1.65; }
@@ -166,7 +166,7 @@ h1 em { display: block; color: var(--green); font-weight: 450; }
   .hero-panel { max-width: 600px; }
   .report-grid { grid-template-columns: 1fr; }
   .auth-page { grid-template-columns: 1fr; }
-  .auth-intro { min-height: 430px; }
+  .auth-intro { position: static; min-height: 430px; }
   .composer-layout { grid-template-columns: 1fr; gap: 35px; }
   .composer-copy { position: static; }
 }
