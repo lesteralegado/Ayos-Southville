@@ -23,4 +23,14 @@ describe("pilot administration boundary", () => {
     await expect(administration.updateConfiguration(admin, { configuration: { ...configuration, emergency: { ...configuration.emergency, fil: { ...configuration.emergency.fil, sourceUrl: "http://unverified.test" } } }, reason: "Unsafe source." })).rejects.toMatchObject({ code: "VALIDATION" });
     await expect(administration.updateConfiguration(resident, { configuration, reason: "Unauthorized." })).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(await administration.listAudit(admin)).toEqual([expect.objectContaining({ action: "pilot.configuration-updated", reason: "Verified pilot routing." })]);
+  });
+  it("bootstraps the three active pilot categories and responsible destinations", async () => {
+    const administration = createAdministrationModule({ store: createMemoryAdministrationStore({ users: [{ uid: "admin-1", roles: ["Administrator"] }] }) });
+    const configuration = await administration.getConfiguration(admin);
+    expect(configuration.categories.map(({ id, destinationId, active }) => ({ id, destinationId, active }))).toEqual([
+      { id: "roads-drainage", destinationId: "public-works", active: true },
+      { id: "streetlights", destinationId: "lighting", active: true },
+      { id: "waste-collection", destinationId: "waste", active: true },
+    ]);
+    expect(configuration.destinations).toHaveLength(3);
   });});

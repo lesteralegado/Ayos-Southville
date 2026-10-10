@@ -1,6 +1,6 @@
 import "server-only";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
-import { AdministrationValidationError, createAdministrationModule, type AdministrationStore, type PilotConfiguration, type PilotUser } from "./administration-module";
+import { AdministrationValidationError, createAdministrationModule, defaultPilotConfiguration, type AdministrationStore, type PilotConfiguration, type PilotUser } from "./administration-module";
 import type { AuditEvent } from "@/features/reports/moderation-module";
 
 function createFirebaseAdministrationStore(): AdministrationStore {
@@ -20,7 +20,7 @@ function createFirebaseAdministrationStore(): AdministrationStore {
         transaction.create(db.collection("auditEvents").doc(crypto.randomUUID()),event);
       });
     },
-    async getConfiguration(){const doc=await db.collection("pilotConfiguration").doc("current").get(); return (doc.data()??{categories:[],destinations:[],emergency:{en:{message:"Call 911 for emergencies.",phone:"911",sourceUrl:"https://e911.gov.ph/"},fil:{message:"Tumawag sa 911 para sa emergency.",phone:"911",sourceUrl:"https://e911.gov.ph/"}}}) as PilotConfiguration;},
+    async getConfiguration(){const doc=await db.collection("pilotConfiguration").doc("current").get(); return (doc.data() ?? structuredClone(defaultPilotConfiguration)) as PilotConfiguration;},
     async saveConfiguration(configuration,event){const batch=db.batch(); batch.set(db.collection("pilotConfiguration").doc("current"),configuration); batch.create(db.collection("auditEvents").doc(crypto.randomUUID()),event); await batch.commit();},
     async listAudit(){const snapshot=await db.collection("auditEvents").get(); return snapshot.docs.map((doc)=>doc.data() as AuditEvent);},
   };

@@ -9,7 +9,22 @@ export type AdministrationStore = { listUsers(): Promise<PilotUser[]>; saveUser(
 export class AdministrationForbiddenError extends Error { readonly code = "FORBIDDEN"; }
 export class AdministrationValidationError extends Error { readonly code = "VALIDATION"; }
 const allowedRoles: OperatorRole[] = ["Resident", "Moderator", "Coordinator", "Administrator"];
-const defaults: PilotConfiguration = { categories: [], destinations: [], emergency: { en: { message: "Call 911 for emergencies.", phone: "911", sourceUrl: "https://e911.gov.ph/" }, fil: { message: "Tumawag sa 911 para sa emergency.", phone: "911", sourceUrl: "https://e911.gov.ph/" } } };
+export const defaultPilotConfiguration: PilotConfiguration = {
+  destinations: [
+    { id: "public-works", name: "Roads and drainage desk", active: true },
+    { id: "lighting", name: "Streetlight desk", active: true },
+    { id: "waste", name: "Waste collection desk", active: true },
+  ],
+  categories: [
+    { id: "roads-drainage", label: { en: "Roads and drainage", fil: "Kalsada at kanal" }, destinationId: "public-works", active: true },
+    { id: "streetlights", label: { en: "Broken streetlight", fil: "Sirang ilaw sa kalsada" }, destinationId: "lighting", active: true },
+    { id: "waste-collection", label: { en: "Waste collection", fil: "Koleksyon ng basura" }, destinationId: "waste", active: true },
+  ],
+  emergency: {
+    en: { message: "Call 911 for emergencies.", phone: "911", sourceUrl: "https://e911.gov.ph/" },
+    fil: { message: "Tumawag sa 911 para sa emergency.", phone: "911", sourceUrl: "https://e911.gov.ph/" },
+  },
+};
 function requireAdmin(actor: Operator) { if (!actor.roles.includes("Administrator")) throw new AdministrationForbiddenError("Administrator capability is required."); }
 function text(value: string, label: string) { if (typeof value !== "string" || !value.trim()) throw new AdministrationValidationError(`${label} is required.`); return value.trim(); }
 function validateConfig(config: PilotConfiguration) {
@@ -32,6 +47,6 @@ export function createAdministrationModule({ store, now = () => new Date() }: { 
   };
 }
 export function createMemoryAdministrationStore(seed: { users?: PilotUser[]; configuration?: PilotConfiguration } = {}): AdministrationStore {
-  const users = new Map((seed.users ?? []).map((user) => [user.uid, structuredClone(user)])); let configuration = structuredClone(seed.configuration ?? defaults); const audit: AuditEvent[] = [];
+  const users = new Map((seed.users ?? []).map((user) => [user.uid, structuredClone(user)])); let configuration = structuredClone(seed.configuration ?? defaultPilotConfiguration); const audit: AuditEvent[] = [];
   return { async listUsers() { return [...users.values()].map((user) => structuredClone(user)); }, async saveUser(user, event) { users.set(user.uid, structuredClone(user)); audit.push(structuredClone(event)); }, async getConfiguration() { return structuredClone(configuration); }, async saveConfiguration(value, event) { configuration = structuredClone(value); audit.push(structuredClone(event)); }, async listAudit() { return structuredClone(audit); } };
 }
