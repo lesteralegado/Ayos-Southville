@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getVerifiedResident } from "@/features/auth/session";
+import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
 import { getEngagementModule } from "@/features/reports/firebase-engagement-store";
 import type { EvidenceAsset } from "@/features/reports/report-module";
 import { EngagementValidationError } from "@/features/reports/engagement-module";
@@ -12,8 +12,10 @@ export async function GET(_: Request, context: { params: Promise<{ reference: st
 }
 
 export async function POST(request: Request, context: { params: Promise<{ reference: string }> }) {
+  if (request.headers.get("origin") !== new URL(request.url).origin || !request.headers.get("content-type")?.startsWith("application/json")) return NextResponse.json({ error: "Invalid request." }, { status: 403 });
   const resident = await getVerifiedResident();
   if (!resident) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  if (!await hasPilotAccess(resident)) return NextResponse.json({ error: "Pilot approval is required.", code: "PILOT_ACCESS_REQUIRED" }, { status: 403 });
   const { reference } = await context.params;
   const input = await request.json() as { action?: string; active?: boolean; evidence?: EvidenceAsset[] };
   const engagement = getEngagementModule();

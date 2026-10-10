@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getVerifiedResident } from "@/features/auth/session";
+import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
 import { getReportModule } from "@/features/reports/firebase-report-store";
 import { EmergencyReportError, ReportValidationError } from "@/features/reports/report-module";
 
@@ -16,6 +16,7 @@ export async function POST(request: Request) {
   if (!resident) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
   try {
+    if (!await hasPilotAccess(resident)) return NextResponse.json({ error: "Pilot approval is required to submit a report.", code: "PILOT_ACCESS_REQUIRED" }, { status: 403 });
     const body: unknown = await request.json();
     const fields = typeof body === "object" && body !== null && !Array.isArray(body) ? body : {};
     const receipt = await (await getReportModule()).submit({ ...fields, residentUid: resident.uid });

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
-import type { OperatorRole } from "@/features/reports/moderation-module";
+import { profileRoles } from "@/features/admin/administration-module";
 
 export const sessionCookieName = "ayos_session";
 export const sessionDurationMs = 5 * 24 * 60 * 60 * 1000;
@@ -12,7 +12,10 @@ export async function getVerifiedResident() {
     const { auth, db } = getFirebaseAdmin();
     const claims = await auth.verifySessionCookie(sessionCookie, true);
     if (!claims.email_verified) return null;
-    const profile = await db.collection("residentProfiles").doc(claims.uid).get();
+    const profile = await db
+      .collection("residentProfiles")
+      .doc(claims.uid)
+      .get();
     return profile.exists ? claims : null;
   } catch {
     return null;
@@ -22,7 +25,23 @@ export async function getVerifiedResident() {
 export async function getVerifiedOperator() {
   const resident = await getVerifiedResident();
   if (!resident) return null;
-  const profile = await getFirebaseAdmin().db.collection("residentProfiles").doc(resident.uid).get();
+  const profile = await getFirebaseAdmin()
+    .db.collection("residentProfiles")
+    .doc(resident.uid)
+    .get();
   const roles: unknown = profile.data()?.roles;
-  return { uid: resident.uid, roles: Array.isArray(roles) ? roles.filter((role): role is OperatorRole => typeof role === "string" && ["Resident", "Moderator", "Coordinator", "Administrator"].includes(role)) : ["Resident"] satisfies OperatorRole[] };
+  return { uid: resident.uid, roles: profileRoles(roles) };
+}
+
+export async function hasPilotAccess(resident: {
+  uid: string;
+  email?: string;
+  email_verified?: boolean;
+}) {
+  const { getAdministrationModule } = await import("@/features/admin/firebase-administration-store");
+  return getAdministrationModule().canParticipate({
+    uid: resident.uid,
+    email: resident.email,
+    emailVerified: resident.email_verified === true,
+  });
 }

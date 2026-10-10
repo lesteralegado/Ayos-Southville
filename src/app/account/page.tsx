@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getVerifiedResident } from "@/features/auth/session";
+import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { ResidentPanel } from "@/features/auth/resident-panel";
 
@@ -9,7 +9,19 @@ export default async function AccountPage() {
   const resident = await getVerifiedResident();
   if (!resident) redirect("/sign-in?next=/account");
 
-  const profile = await getFirebaseAdmin().db.collection("residentProfiles").doc(resident.uid).get();
+  const profile = await getFirebaseAdmin()
+    .db.collection("residentProfiles")
+    .doc(resident.uid)
+    .get();
   const publicAlias = profile.data()?.publicAlias;
-  return <ResidentPanel publicAlias={typeof publicAlias === "string" ? publicAlias : "neighbor"} />;
+  const roles = Array.isArray(profile.data()?.roles)
+    ? profile.data()?.roles
+    : ["Resident"];
+  return (
+    <ResidentPanel
+      publicAlias={typeof publicAlias === "string" ? publicAlias : "neighbor"}
+      roles={roles}
+      approved={await hasPilotAccess(resident)}
+    />
+  );
 }

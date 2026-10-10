@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getVerifiedResident: vi.fn(),
+  hasPilotAccess: vi.fn(),
   submit: vi.fn(),
   listMine: vi.fn(),
 }));
 
-vi.mock("@/features/auth/session", () => ({ getVerifiedResident: mocks.getVerifiedResident }));
+vi.mock("@/features/auth/session", () => ({ getVerifiedResident: mocks.getVerifiedResident, hasPilotAccess: mocks.hasPilotAccess }));
 vi.mock("@/features/reports/firebase-report-store", () => ({
   getReportModule: () => ({ submit: mocks.submit, listMine: mocks.listMine }),
 }));
@@ -22,7 +23,15 @@ function postRequest(body: unknown) {
 }
 
 describe("resident report application boundary", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mocks.hasPilotAccess.mockResolvedValue(true); });
+
+  it("denies a verified but unapproved resident directly at submission", async () => {
+    mocks.getVerifiedResident.mockResolvedValue({ uid: "unapproved" });
+    mocks.hasPilotAccess.mockResolvedValue(false);
+    const response = await POST(postRequest({ category: "streetlights" }));
+    expect(response.status).toBe(403);
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
 
   it("submits with the authenticated resident identity and returns a stable receipt", async () => {
     mocks.getVerifiedResident.mockResolvedValue({ uid: "resident-1" });
