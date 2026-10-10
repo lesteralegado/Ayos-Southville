@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 import { ReportComposer } from "./report-composer";
 
-const emergencyGuidance = { phone: "911", sourceUrl: "https://ehotlines.e.gov.ph/" };
+const emergencyGuidance = { en: { message: "Call emergency services", phone: "911", sourceUrl: "https://ehotlines.e.gov.ph/" }, fil: { message: "Tumawag sa emergency services", phone: "911", sourceUrl: "https://ehotlines.e.gov.ph/" } };
 
 describe("report composer", () => {
   beforeEach(() => {

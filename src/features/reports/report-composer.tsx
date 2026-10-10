@@ -132,7 +132,7 @@ function parseStoredDraft(value: string | null): Draft | null {
   if (!value) return null;
   try {
     const draft = JSON.parse(value) as Record<string, unknown>;
-    if (draft.version !== 1 || typeof draft.idempotencyKey !== "string" || !["", "roads-drainage", "streetlights", "waste-collection"].includes(String(draft.category)) || typeof draft.description !== "string" || typeof draft.nearbyLandmark !== "string" || typeof draft.isEmergency !== "boolean" || typeof draft.confirmNonEmergency !== "boolean" || typeof draft.confirmPublicSummary !== "boolean") return null;
+    if (draft.version !== 1 || typeof draft.idempotencyKey !== "string" || typeof draft.category !== "string" || typeof draft.description !== "string" || typeof draft.nearbyLandmark !== "string" || typeof draft.isEmergency !== "boolean" || typeof draft.confirmNonEmergency !== "boolean" || typeof draft.confirmPublicSummary !== "boolean") return null;
     draft.latitude = typeof draft.latitude === "string" ? draft.latitude : "";
     draft.longitude = typeof draft.longitude === "string" ? draft.longitude : "";
     draft.privateLocationDetails = typeof draft.privateLocationDetails === "string" ? draft.privateLocationDetails : "";
@@ -142,9 +142,12 @@ function parseStoredDraft(value: string | null): Draft | null {
   }
 }
 
-export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { phone: string; sourceUrl: string } }) {
+type ComposerCategory = { id: string; label: { en: string; fil: string } };
+
+export function ReportComposer({ emergencyGuidance, categories }: { emergencyGuidance: { en: { message: string; phone: string; sourceUrl: string }; fil: { message: string; phone: string; sourceUrl: string } }; categories?: ComposerCategory[] }) {
   const router = useRouter();
   const { locale } = useLocale();
+  const activeEmergencyGuidance = locale === "fil" ? emergencyGuidance.fil : emergencyGuidance.en;
   const message = copy[locale];
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const savedDraftText = useSyncExternalStore(subscribeToStoredDraft, readStoredDraft, () => null);
@@ -262,10 +265,15 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
           <form ref={formRef} onSubmit={submit} noValidate>
             {Object.keys(issues).length > 0 && <div ref={summaryRef} className="error-summary" role="alert" tabIndex={-1}><strong>{message.errorTitle}</strong><ul>{Object.entries(issues).map(([field, issue]) => <li key={field}><a href={`#${field === "category" ? "report-category" : field === "description" ? "report-description" : field === "nearbyLandmark" ? "nearby-landmark" : field === "confirmNonEmergency" ? "confirm-non-emergency" : "confirm-public-summary"}`}>{issue}</a></li>)}</ul></div>}
             <label className="check-row emergency-check"><input type="checkbox" checked={draft.isEmergency} onChange={(event) => update("isEmergency", event.target.checked)} /> <span>{message.danger}</span></label>
-            {draft.isEmergency && <div className="emergency-guidance" role="alert"><strong>{message.emergency} <a href={`tel:${emergencyGuidance.phone}`}>{emergencyGuidance.phone}</a>.</strong><a href={emergencyGuidance.sourceUrl} target="_blank" rel="noreferrer">Official hotline source</a></div>}
+            {draft.isEmergency && <div className="emergency-guidance" role="alert"><strong>{activeEmergencyGuidance.message} <a href={`tel:${activeEmergencyGuidance.phone}`}>{activeEmergencyGuidance.phone}</a>.</strong><a href={activeEmergencyGuidance.sourceUrl} target="_blank" rel="noreferrer">Official hotline source</a></div>}
             <label htmlFor="report-category">{message.category}</label>
             <select id="report-category" value={draft.category} onChange={(event) => update("category", event.target.value as Draft["category"])} aria-invalid={Boolean(issues.category)} aria-describedby={issues.category ? "category-error" : undefined}>
-              <option value="">{message.categoryPlaceholder}</option><option value="roads-drainage">{message.roads}</option><option value="streetlights">{message.lights}</option><option value="waste-collection">{message.waste}</option>
+              <option value="">{message.categoryPlaceholder}</option>
+              {(categories ?? [
+                { id: "roads-drainage", label: { en: copy.en.roads, fil: copy.fil.roads } },
+                { id: "streetlights", label: { en: copy.en.lights, fil: copy.fil.lights } },
+                { id: "waste-collection", label: { en: copy.en.waste, fil: copy.fil.waste } },
+              ]).map((category) => <option key={category.id} value={category.id}>{category.label[locale]}</option>)}
             </select>
             {issues.category && <p id="category-error" className="field-error">{issues.category}</p>}
             <label htmlFor="report-description">{message.description}</label><p id="description-help" className="field-help">{message.descriptionHelp}</p>

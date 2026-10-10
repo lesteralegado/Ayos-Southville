@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   try {
     const body: unknown = await request.json();
     const fields = typeof body === "object" && body !== null && !Array.isArray(body) ? body : {};
-    const receipt = await getReportModule().submit({ ...fields, residentUid: resident.uid });
+    const receipt = await (await getReportModule()).submit({ ...fields, residentUid: resident.uid });
     return NextResponse.json(receipt, { status: receipt.created ? 201 : 200 });
   } catch (error) {
     if (error instanceof SyntaxError) return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
@@ -33,6 +33,6 @@ export async function POST(request: Request) {
 export async function GET() {
   const resident = await getVerifiedResident();
   if (!resident) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  const reports = await getReportModule().listMine(resident.uid);
+  const reports = await (await getReportModule()).listMine(resident.uid);
   return NextResponse.json({ reports });
 }

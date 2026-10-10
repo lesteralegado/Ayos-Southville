@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getVerifiedOperator } from "@/features/auth/session";
+import { getPublicPilotConfiguration } from "@/features/admin/firebase-administration-store";
 import { getModerationModule } from "@/features/reports/firebase-moderation-store";
 import { ModerationForbiddenError, ModerationNotFoundError, ModerationValidationError } from "@/features/reports/moderation-module";
 
@@ -16,7 +17,12 @@ export async function PATCH(request: Request) {
     if (body.action === "accept") await moderation.accept(actor, body.input as Parameters<typeof moderation.accept>[1]);
     else if (body.action === "reject") await moderation.reject(actor, body.input as Parameters<typeof moderation.reject>[1]);
     else if (body.action === "merge") await moderation.merge(actor, body.input as Parameters<typeof moderation.merge>[1]);
-    else if (body.action === "assign") await moderation.assign(actor, body.input as Parameters<typeof moderation.assign>[1]);
+    else if (body.action === "assign") {
+      const input = body.input as Parameters<typeof moderation.assign>[1];
+      const configuration = await getPublicPilotConfiguration();
+      if (!configuration.destinations.some((destination) => destination.active && destination.id === input?.destination)) throw new ModerationValidationError("Choose an active responsible destination.");
+      await moderation.assign(actor, input);
+    }
     else if (body.action === "transition") await moderation.transition(actor, body.input as Parameters<typeof moderation.transition>[1]);
     else if (body.action === "respond-to-resolution") await moderation.respondToResolution(actor, body.input as Parameters<typeof moderation.respondToResolution>[1]);
     else throw new ModerationValidationError("Choose a supported moderation action.");

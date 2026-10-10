@@ -1,6 +1,6 @@
 export const reportCategories = ["roads-drainage", "streetlights", "waste-collection"] as const;
 
-export type ReportCategory = (typeof reportCategories)[number];
+export type ReportCategory = string;
 export type ReportStatus = "Submitted" | "Under review" | "Assigned" | "In progress" | "Resolved" | "Resident confirmed" | "Rejected" | "Duplicate";
 
 export type ReportSubmission = {
@@ -67,14 +67,14 @@ export class EmergencyReportError extends Error {
   }
 }
 
-function parseSubmission(value: unknown): ReportSubmission {
+function parseSubmission(value: unknown, supportedCategories: readonly string[]): ReportSubmission {
   const input = typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
   const issues: Record<string, string> = {};
   const residentUid = typeof input.residentUid === "string" ? input.residentUid.trim() : "";
   const idempotencyKey = typeof input.idempotencyKey === "string" ? input.idempotencyKey.trim() : "";
-  const category = typeof input.category === "string" && reportCategories.includes(input.category as ReportCategory) ? input.category as ReportCategory : null;
+  const category = typeof input.category === "string" && supportedCategories.includes(input.category) ? input.category as ReportCategory : null;
   const description = typeof input.description === "string" ? input.description.trim() : "";
   const nearbyLandmark = typeof input.nearbyLandmark === "string" ? input.nearbyLandmark.trim() : "";
   const locationInput = typeof input.exactLocation === "object" && input.exactLocation !== null ? input.exactLocation as Record<string, unknown> : null;
@@ -123,17 +123,19 @@ export function createReportModule({
   store,
   now = () => new Date(),
   nextReference = () => `AS-${crypto.randomUUID().replaceAll("-", "").slice(0, 6).toUpperCase()}`,
+  supportedCategories = reportCategories,
 }: {
   store: ReportStore;
   now?: () => Date;
   nextReference?: () => string;
+  supportedCategories?: readonly string[];
 }) {
   return {
     async submit(value: unknown) {
       if (typeof value === "object" && value !== null && "isEmergency" in value && value.isEmergency === true) {
         throw new EmergencyReportError();
       }
-      const input = parseSubmission(value);
+      const input = parseSubmission(value, supportedCategories);
       const reference = nextReference();
       const submittedAt = now().toISOString();
       return store.submitOnce(`${input.residentUid}:${input.idempotencyKey}`, {

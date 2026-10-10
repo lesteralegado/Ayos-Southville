@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ReportPage({ params }: { params: Promise<{ reference: string }> }) {
   const { reference } = await params;
-  const report = await getReportModule().getPublic(reference.toUpperCase());
+  const report = await (await getReportModule()).getPublic(reference.toUpperCase());
   if (!report) notFound();
   return <ReportDetail report={report} />;
 }

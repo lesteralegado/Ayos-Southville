@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { getPublicPilotConfiguration } from "@/features/admin/firebase-administration-store";
 import {
   createReportModule,
   type PublicReportDetail,
