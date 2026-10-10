@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useLocale } from "@/features/i18n/use-locale";
 import type { PublicReportDetail } from "./report-module";
 import { formatManilaDate, reportCategoryLabels, reportStatusLabels } from "./report-presentation";
+import { ReportEngagement } from "./report-engagement";
 
 export function ReportDetail({ report }: { report: PublicReportDetail }) {
   const { locale } = useLocale();
@@ -18,6 +19,7 @@ export function ReportDetail({ report }: { report: PublicReportDetail }) {
         <p className="report-place"><span aria-hidden="true">⌖</span>{report.publicArea}</p>
         <dl className="report-meta"><div><dt>Reference</dt><dd>{report.reference}</dd></div><div><dt>{fil ? "Isinumite" : "Submitted"}</dt><dd>{formatManilaDate(report.submittedAt, locale, true)}</dd></div></dl>
         <section className="timeline" aria-labelledby="timeline-title"><h2 id="timeline-title">Timeline</h2><ol>{report.timeline.map((event) => <li key={`${event.status}-${event.occurredAt}`}><span className="timeline-dot" /><div><strong>{reportStatusLabels[locale][event.status]}</strong><time dateTime={event.occurredAt}>{formatManilaDate(event.occurredAt, locale, true)}</time></div></li>)}</ol></section>
+        <ReportEngagement reference={report.reference} />
       </article>
     </main>
   );

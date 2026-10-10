@@ -26,6 +26,15 @@ function createFirebaseReportStore(): ReportStore {
         }
         transaction.create(db.collection("privateReports").doc(report.private.reference), report.private);
         transaction.create(db.collection("publicReports").doc(report.public.reference), report.public);
+        transaction.create(db.collection("residentNotifications").doc(receiptId(`${report.private.reporterUid}:${report.private.reference}:submitted`)), {
+          id: receiptId(`${report.private.reporterUid}:${report.private.reference}:submitted`),
+          residentUid: report.private.reporterUid,
+          reference: report.private.reference,
+          kind: "report-update",
+          message: "Your report was submitted and is ready for review.",
+          createdAt: report.private.submittedAt,
+          read: false,
+        });
         transaction.create(receiptRef, {
           reference: report.private.reference,
           residentUid: report.private.reporterUid,

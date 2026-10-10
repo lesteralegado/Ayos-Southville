@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale } from "@/features/i18n/use-locale";
 import type { ReportCategory } from "./report-module";
+import type { DuplicateSuggestion } from "./engagement-module";
 import { compressEvidencePhoto, validateEvidenceFiles } from "./media-evidence";
 
 const draftKey = "ayos-report-draft-v1";
@@ -154,7 +155,10 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
   const [evidence, setEvidence] = useState<Array<{ file: File; preview: string }>>([]);
   const [evidenceMessage, setEvidenceMessage] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [suggestions, setSuggestions] = useState<DuplicateSuggestion[]>([]);
+  const [duplicatesReviewed, setDuplicatesReviewed] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     const hasContent = draft.category || draft.description || draft.nearbyLandmark;
@@ -177,6 +181,23 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
     if (draft.isEmergency || Object.keys(nextIssues).length) {
       setTimeout(() => summaryRef.current?.focus(), 0);
       return;
+    }
+    if (!duplicatesReviewed && draft.latitude && draft.longitude) {
+      setPending(true);
+      try {
+        const response = await fetch("/api/reports/suggestions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ category: draft.category, latitude: Number(draft.latitude), longitude: Number(draft.longitude) }) });
+        const result = await response.json() as { suggestions?: DuplicateSuggestion[] };
+        if (result.suggestions?.length) {
+          setSuggestions(result.suggestions);
+          return;
+        }
+        setDuplicatesReviewed(true);
+      } catch {
+        setSubmitError(message.networkError);
+        return;
+      } finally {
+        setPending(false);
+      }
     }
     setPending(true);
     try {
@@ -217,6 +238,20 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
     }
   }
 
+  async function supportSuggestion(reference: string) {
+    setPending(true);
+    try {
+      const response = await fetch(`/api/reports/${reference}/engagement`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "affected", active: true, evidence: evidence.map(({ file }) => ({ id: crypto.randomUUID(), name: file.name, type: file.type, size: file.size, visibility: "restricted" })) }) });
+      if (!response.ok) throw new Error("Could not support report");
+      window.localStorage.removeItem(draftKey);
+      router.push(`/reports/${reference}`);
+    } catch {
+      setSubmitError(locale === "fil" ? "Hindi ma-update ang ulat. Ligtas ang draft; subukan muli." : "We could not update the report. Your draft is safe; retry.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <main className="composer-page">
       <header className="composer-header"><Link className="brand" href="/">Ayos Southville</Link><Link className="text-link" href="/account">{message.back}</Link></header>
@@ -224,7 +259,7 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
         <section className="composer-copy"><span className="eyebrow">{message.kicker}</span><h1>{message.title}</h1><p>{message.lead}</p></section>
         <section className="composer-card">
           {savedDraft && <div className="draft-banner"><p>{message.draft}</p><div><button type="button" className="button button-dark" onClick={() => setDraft(savedDraft)}>{message.resume}</button><button type="button" className="button button-quiet" onClick={discardDraft}>{message.discard}</button></div></div>}
-          <form onSubmit={submit} noValidate>
+          <form ref={formRef} onSubmit={submit} noValidate>
             {Object.keys(issues).length > 0 && <div ref={summaryRef} className="error-summary" role="alert" tabIndex={-1}><strong>{message.errorTitle}</strong><ul>{Object.entries(issues).map(([field, issue]) => <li key={field}><a href={`#${field === "category" ? "report-category" : field === "description" ? "report-description" : field === "nearbyLandmark" ? "nearby-landmark" : field === "confirmNonEmergency" ? "confirm-non-emergency" : "confirm-public-summary"}`}>{issue}</a></li>)}</ul></div>}
             <label className="check-row emergency-check"><input type="checkbox" checked={draft.isEmergency} onChange={(event) => update("isEmergency", event.target.checked)} /> <span>{message.danger}</span></label>
             {draft.isEmergency && <div className="emergency-guidance" role="alert"><strong>{message.emergency} <a href={`tel:${emergencyGuidance.phone}`}>{emergencyGuidance.phone}</a>.</strong><a href={emergencyGuidance.sourceUrl} target="_blank" rel="noreferrer">Official hotline source</a></div>}
@@ -239,6 +274,12 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
             <label htmlFor="nearby-landmark">{message.landmark}</label><p id="landmark-help" className="field-help">{message.landmarkHelp}</p>
             <input id="nearby-landmark" value={draft.nearbyLandmark} onChange={(event) => update("nearbyLandmark", event.target.value)} aria-invalid={Boolean(issues.nearbyLandmark)} aria-describedby={`landmark-help${issues.nearbyLandmark ? " landmark-error" : ""}`} />
             {issues.nearbyLandmark && <p id="landmark-error" className="field-error">{issues.nearbyLandmark}</p>}
+            {suggestions.length > 0 && !duplicatesReviewed && <section className="duplicate-panel" aria-labelledby="duplicate-title">
+              <h2 id="duplicate-title">{locale === "fil" ? "Maaaring naiulat na ito" : "This may already be reported"}</h2>
+              <p>{locale === "fil" ? "Suriin ang mga malapit na unresolved na concern bago gumawa ng bago." : "Review nearby unresolved concerns before creating a new one."}</p>
+              <ul>{suggestions.map((suggestion) => <li key={suggestion.reference}><div><strong>{suggestion.reference}</strong><span>{suggestion.distanceKm} km · {suggestion.reasons.join(" · ")}</span></div><button type="button" className="button button-dark" onClick={() => void supportSuggestion(suggestion.reference)}>{locale === "fil" ? "Apektado rin ako" : "I'm affected too"}</button></li>)}</ul>
+              <button type="button" className="text-link" onClick={() => { setDuplicatesReviewed(true); setSuggestions([]); setTimeout(() => formRef.current?.requestSubmit(), 0); }}>{locale === "fil" ? "Hindi kaugnay � magsumite ng bagong ulat" : "Not related � submit a new report"}</button>
+            </section>}
             <fieldset className="location-fieldset">
               <legend>{message.location}</legend><p className="field-help">{message.locationHelp}</p>
               <div className="location-picker" aria-label="Map location picker" onClick={(event) => { const box = event.currentTarget.getBoundingClientRect(); update("latitude", (14.276 + ((event.clientY - box.top) / box.height) * .012).toFixed(6)); update("longitude", (121.12 + ((event.clientX - box.left) / box.width) * .016).toFixed(6)); }}>
