@@ -1,6 +1,50 @@
 import { createMemoryReportStore, createReportModule } from "./report-module";
 
 describe("report submission module", () => {
+  it("recovers a committed receipt even when its category has since been disabled", async () => {
+    const store = createMemoryReportStore();
+    const submission = {
+      residentUid: "r1",
+      idempotencyKey: "disabled-category-retry",
+      category: "streetlights",
+      description: "The streetlight beside the covered court is broken.",
+      nearbyLandmark: "Covered court",
+      evidence: [],
+      isEmergency: false,
+      confirmNonEmergency: true,
+      confirmPublicSummary: true,
+    };
+    const first = await createReportModule({
+      store,
+      nextReference: () => "AS-ORIGINAL",
+    }).submit(submission);
+    const current = createReportModule({ store, supportedCategories: [] });
+    expect(await current.submit(submission)).toEqual({
+      ...first,
+      created: false,
+    });
+  });
+  it("supports configured categories without undefined public fields", async () => {
+    const reports = createReportModule({
+      store: createMemoryReportStore(),
+      supportedCategories: ["water-supply"],
+      nextReference: () => "AS-WATER",
+    });
+    await reports.submit({
+      residentUid: "r1",
+      idempotencyKey: "configured-category-123",
+      category: "water-supply",
+      description: "There is no water at the communal tap this morning.",
+      nearbyLandmark: "Communal tap",
+      evidence: [],
+      isEmergency: false,
+      confirmNonEmergency: true,
+      confirmPublicSummary: true,
+    });
+    expect(await reports.getPublic("AS-WATER")).toMatchObject({
+      publicSummary: "A community concern was submitted for review.",
+    });
+  });
   it("submits one private report and exposes a privacy-safe public timeline", async () => {
     const reports = createReportModule({
       store: createMemoryReportStore(),
@@ -12,7 +56,8 @@ describe("report submission module", () => {
       residentUid: "resident-1",
       idempotencyKey: "submission-key-1234",
       category: "streetlights",
-      description: "The streetlight beside the covered court no longer turns on at night.",
+      description:
+        "The streetlight beside the covered court no longer turns on at night.",
       nearbyLandmark: "Phase 2 covered court",
       isEmergency: false,
       confirmNonEmergency: true,
@@ -31,23 +76,27 @@ describe("report submission module", () => {
       media: [],
       status: "Submitted",
       submittedAt: "2026-10-10T02:00:00.000Z",
-      timeline: [{ status: "Submitted", occurredAt: "2026-10-10T02:00:00.000Z" }],
+      timeline: [
+        { status: "Submitted", occurredAt: "2026-10-10T02:00:00.000Z" },
+      ],
     });
   });
 
   it("rejects incomplete reports with field-addressable validation issues", async () => {
     const reports = createReportModule({ store: createMemoryReportStore() });
 
-    await expect(reports.submit({
-      residentUid: "resident-1",
-      idempotencyKey: "short",
-      category: "streetlights",
-      description: "Too short",
-      nearbyLandmark: "",
-      isEmergency: false,
-      confirmNonEmergency: false,
-      confirmPublicSummary: false,
-    })).rejects.toMatchObject({
+    await expect(
+      reports.submit({
+        residentUid: "resident-1",
+        idempotencyKey: "short",
+        category: "streetlights",
+        description: "Too short",
+        nearbyLandmark: "",
+        isEmergency: false,
+        confirmNonEmergency: false,
+        confirmPublicSummary: false,
+      }),
+    ).rejects.toMatchObject({
       code: "VALIDATION",
       issues: {
         idempotencyKey: expect.any(String),
@@ -62,16 +111,19 @@ describe("report submission module", () => {
   it("diverts potential emergencies before creating a report", async () => {
     const reports = createReportModule({ store: createMemoryReportStore() });
 
-    await expect(reports.submit({
-      residentUid: "resident-1",
-      idempotencyKey: "submission-key-1234",
-      category: "roads-drainage",
-      description: "Flood water is rising quickly and somebody may be in immediate danger.",
-      nearbyLandmark: "Phase 1 entrance",
-      isEmergency: true,
-      confirmNonEmergency: true,
-      confirmPublicSummary: true,
-    })).rejects.toMatchObject({ code: "EMERGENCY" });
+    await expect(
+      reports.submit({
+        residentUid: "resident-1",
+        idempotencyKey: "submission-key-1234",
+        category: "roads-drainage",
+        description:
+          "Flood water is rising quickly and somebody may be in immediate danger.",
+        nearbyLandmark: "Phase 1 entrance",
+        isEmergency: true,
+        confirmNonEmergency: true,
+        confirmPublicSummary: true,
+      }),
+    ).rejects.toMatchObject({ code: "EMERGENCY" });
     expect(await reports.listMine("resident-1")).toEqual([]);
   });
 
@@ -87,15 +139,22 @@ describe("report submission module", () => {
       residentUid: "resident-1",
       idempotencyKey: "same-submission-key",
       category: "waste-collection" as const,
-      description: "Waste collection missed the marked pickup point for two scheduled rounds.",
+      description:
+        "Waste collection missed the marked pickup point for two scheduled rounds.",
       nearbyLandmark: "Phase 3 east entrance",
       isEmergency: false,
       confirmNonEmergency: true,
       confirmPublicSummary: true,
     };
 
-    expect(await reports.submit(submission)).toEqual({ reference: "AS-FIRST1", created: true });
-    expect(await reports.submit(submission)).toEqual({ reference: "AS-FIRST1", created: false });
+    expect(await reports.submit(submission)).toEqual({
+      reference: "AS-FIRST1",
+      created: true,
+    });
+    expect(await reports.submit(submission)).toEqual({
+      reference: "AS-FIRST1",
+      created: false,
+    });
     expect(await reports.listMine("resident-1")).toHaveLength(1);
   });
 
@@ -108,7 +167,8 @@ describe("report submission module", () => {
       residentUid: "resident-1",
       idempotencyKey: "private-text-key",
       category: "roads-drainage",
-      description: "Contact Ana at 09171234567 beside our home at Block 9 Lot 12.",
+      description:
+        "Contact Ana at 09171234567 beside our home at Block 9 Lot 12.",
       nearbyLandmark: "Block 9 Lot 12, beside the blue gate",
       isEmergency: false,
       confirmNonEmergency: true,
@@ -120,22 +180,26 @@ describe("report submission module", () => {
       publicSummary: "A roads and drainage concern was submitted for review.",
       publicArea: "Southville 1 · Location pending review",
     });
-    expect(JSON.stringify(publicReport)).not.toMatch(/Ana|09171234567|Block 9|blue gate/i);
+    expect(JSON.stringify(publicReport)).not.toMatch(
+      /Ana|09171234567|Block 9|blue gate/i,
+    );
   });
 
   it("requires exact runtime types and caps resident-provided text", async () => {
     const reports = createReportModule({ store: createMemoryReportStore() });
 
-    await expect(reports.submit({
-      residentUid: "resident-1",
-      idempotencyKey: "runtime-types-key",
-      category: "streetlights",
-      description: "x".repeat(1001),
-      nearbyLandmark: 42,
-      isEmergency: false,
-      confirmNonEmergency: "false",
-      confirmPublicSummary: "false",
-    } as unknown as Parameters<typeof reports.submit>[0])).rejects.toMatchObject({
+    await expect(
+      reports.submit({
+        residentUid: "resident-1",
+        idempotencyKey: "runtime-types-key",
+        category: "streetlights",
+        description: "x".repeat(1001),
+        nearbyLandmark: 42,
+        isEmergency: false,
+        confirmNonEmergency: "false",
+        confirmPublicSummary: "false",
+      } as unknown as Parameters<typeof reports.submit>[0]),
+    ).rejects.toMatchObject({
       code: "VALIDATION",
       issues: {
         description: expect.any(String),
@@ -147,11 +211,46 @@ describe("report submission module", () => {
   });
 
   it("keeps precise locations private", async () => {
-    const reports = createReportModule({ store: createMemoryReportStore(), nextReference: () => "AS-GEO123" });
-    await reports.submit({ residentUid: "r1", idempotencyKey: "location-media-key", category: "roads-drainage", description: "The drainage grate is blocked and water covers half the road.", nearbyLandmark: "Covered court", exactLocation: { latitude: 14.281234, longitude: 121.126789, privateDetails: "Block 9 Lot 12" }, evidence: [{ id: "asset-private", name: "home.jpg", type: "image/jpeg", size: 24000, visibility: "restricted" }], isEmergency: false, confirmNonEmergency: true, confirmPublicSummary: true });
-    expect((await reports.listMine("r1"))[0]).toMatchObject({ exactLocation: { privateDetails: "Block 9 Lot 12" }, evidence: [{ id: "asset-private" }] });
+    const reports = createReportModule({
+      store: createMemoryReportStore(),
+      nextReference: () => "AS-GEO123",
+    });
+    await reports.submit({
+      residentUid: "r1",
+      idempotencyKey: "location-media-key",
+      category: "roads-drainage",
+      description:
+        "The drainage grate is blocked and water covers half the road.",
+      nearbyLandmark: "Covered court",
+      exactLocation: {
+        latitude: 14.281234,
+        longitude: 121.126789,
+        privateDetails: "Block 9 Lot 12",
+      },
+      evidence: [
+        {
+          id: "asset-private",
+          name: "home.jpg",
+          type: "image/jpeg",
+          size: 24000,
+          visibility: "restricted",
+        },
+      ],
+      isEmergency: false,
+      confirmNonEmergency: true,
+      confirmPublicSummary: true,
+    });
+    expect((await reports.listMine("r1"))[0]).toMatchObject({
+      exactLocation: { privateDetails: "Block 9 Lot 12" },
+      evidence: [{ id: "asset-private" }],
+    });
     const publicReport = await reports.getPublic("AS-GEO123");
-    expect(publicReport).toMatchObject({ publicLocation: { latitude: 14.28, longitude: 121.13 }, media: [] });
-    expect(JSON.stringify(publicReport)).not.toMatch(/14\.281234|Block 9|asset-private|home\.jpg/i);
+    expect(publicReport).toMatchObject({
+      publicLocation: { latitude: 14.28, longitude: 121.13 },
+      media: [],
+    });
+    expect(JSON.stringify(publicReport)).not.toMatch(
+      /14\.281234|Block 9|asset-private|home\.jpg/i,
+    );
   });
 });

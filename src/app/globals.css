@@ -114,6 +114,32 @@ h1 em { display: block; color: var(--green); font-weight: 450; }
 .composer-copy p { color: var(--muted); line-height: 1.65; }
 .composer-card, .detail-card { padding: clamp(25px, 5vw, 48px); border: 1px solid var(--line); border-radius: 28px; background: var(--card); box-shadow: var(--shadow); }
 .composer-card form { display: grid; gap: 9px; }
+.composer-fields { display: grid; gap: 9px; min-width: 0; padding: 0; margin: 0; border: 0; }
+.composer-layout > *, .composer-card, .composer-card fieldset { min-width: 0; }
+.intake-header-actions, .intake-location-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.composer-page .button-quiet { display: inline-flex; }
+.composer-page .composer-header { flex-wrap: wrap; }
+.composer-page h1 { overflow-wrap: anywhere; }
+.intake-header-actions .button { min-height: 44px; padding: 10px 16px; }
+.intake-map { height: 280px; width: 100%; margin-top: 14px; border-radius: 12px; overflow: hidden; background: var(--deep-paper); }
+.intake-map button { min-height: 30px; }
+.intake-map .maplibregl-canvas:focus-visible { outline: 3px solid var(--green); outline-offset: -3px; }
+.map-attribution { font-size: .75rem; line-height: 1.6; }
+.intake-location-actions .button { min-height: 44px; padding: 10px 16px; font-size: .83rem; }
+.evidence-previews progress { width: 100%; accent-color: var(--green); }
+.evidence-previews button { min-height: 44px; cursor: pointer; }
+.composer-page button:focus-visible, .composer-page a:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+.composer-page button:disabled { cursor: not-allowed; opacity: .6; }
+.composer-page .composer-copy h1 { font-size: 3.5rem; letter-spacing: -.035em; }
+.composer-page ::selection { color: var(--card); background: var(--green); }
+.composer-page input, .composer-page textarea { caret-color: var(--green); }
+@media (max-width: 560px) {
+  .composer-page .composer-copy h1 { font-size: 2.65rem; }
+  .composer-header { align-items: flex-start; padding: 14px 0; gap: 12px; }
+  .intake-header-actions { justify-content: flex-end; font-size: .8rem; }
+  .coordinate-grid { grid-template-columns: 1fr; }
+  .location-fieldset, .evidence-fieldset { padding: 14px 10px; }
+}
 .composer-card label:not(.check-row) { margin-top: 16px; font-size: .78rem; font-weight: 850; }
 .composer-card input:not([type="checkbox"]), .composer-card select, .composer-card textarea { width: 100%; padding: 13px 14px; border: 1px solid #c8c9c0; border-radius: 10px; background: white; color: var(--ink); font: inherit; }
 .composer-card textarea { resize: vertical; line-height: 1.5; }

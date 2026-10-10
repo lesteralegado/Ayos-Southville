@@ -11,6 +11,7 @@ export default async function NewReportPage() {
   const configuration = await getPublicPilotConfiguration();
   return (
     <ReportComposer
+      residentUid={resident.uid}
       emergencyGuidance={configuration.emergency}
       categories={configuration.categories.filter(
         (category) => category.active,
