@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>{process.env.NEXT_PUBLIC_DEMO_MODE === "true" && <div className="global-demo-banner" role="status">Demonstration mode · Synthetic data · Not an official service</div>}{children}</body>
     </html>
   );
 }

@@ -57,6 +57,7 @@ function createFirebaseReportStore(): ReportStore {
   };
 }
 
-export function getReportModule() {
-  return createReportModule({ store: createFirebaseReportStore() });
+export async function getReportModule() {
+  const configuration = await getPublicPilotConfiguration();
+  return createReportModule({ store: createFirebaseReportStore(), supportedCategories: configuration.categories.filter((category) => category.active).map((category) => category.id) });
 }

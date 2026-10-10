@@ -300,7 +300,7 @@ export function ReportComposer({ emergencyGuidance, categories }: { emergencyGui
             </fieldset>
             <fieldset className="evidence-fieldset">
               <legend>{message.photos}</legend><p className="field-help">{message.photosHelp}</p>
-              <input id="evidence-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void selectEvidence(Array.from(event.target.files ?? []))} />
+              <label htmlFor="evidence-photos">{message.photos}</label><input id="evidence-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void selectEvidence(Array.from(event.target.files ?? []))} />
               <div className="evidence-previews">{evidence.map(({ file, preview }, index) => <figure key={preview}><img src={preview} alt={`Preview of ${file.name}`} /><figcaption>{file.name}<button type="button" onClick={() => { URL.revokeObjectURL(preview); setEvidence((items) => items.filter((_, itemIndex) => itemIndex !== index)); }}>Remove</button></figcaption></figure>)}</div>
               {evidenceMessage && <p className="field-help" role="status" aria-live="polite">{evidenceMessage} {evidenceMessage.includes("could not") && <button type="button" onClick={() => void selectEvidence(selectedFiles)}>Retry photo preparation</button>}</p>}
             </fieldset>
