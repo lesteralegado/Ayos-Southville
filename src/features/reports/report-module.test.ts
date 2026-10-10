@@ -28,6 +28,7 @@ describe("report submission module", () => {
       category: "streetlights",
       publicSummary: "A streetlight concern was submitted for review.",
       publicArea: "Southville 1 · Location pending review",
+      media: [],
       status: "Submitted",
       submittedAt: "2026-10-10T02:00:00.000Z",
       timeline: [{ status: "Submitted", occurredAt: "2026-10-10T02:00:00.000Z" }],
@@ -143,5 +144,14 @@ describe("report submission module", () => {
         confirmPublicSummary: expect.any(String),
       },
     });
+  });
+
+  it("keeps precise locations private", async () => {
+    const reports = createReportModule({ store: createMemoryReportStore(), nextReference: () => "AS-GEO123" });
+    await reports.submit({ residentUid: "r1", idempotencyKey: "location-media-key", category: "roads-drainage", description: "The drainage grate is blocked and water covers half the road.", nearbyLandmark: "Covered court", exactLocation: { latitude: 14.281234, longitude: 121.126789, privateDetails: "Block 9 Lot 12" }, evidence: [{ id: "asset-private", name: "home.jpg", type: "image/jpeg", size: 24000, visibility: "restricted" }], isEmergency: false, confirmNonEmergency: true, confirmPublicSummary: true });
+    expect((await reports.listMine("r1"))[0]).toMatchObject({ exactLocation: { privateDetails: "Block 9 Lot 12" }, evidence: [{ id: "asset-private" }] });
+    const publicReport = await reports.getPublic("AS-GEO123");
+    expect(publicReport).toMatchObject({ publicLocation: { latitude: 14.28, longitude: 121.13 }, media: [] });
+    expect(JSON.stringify(publicReport)).not.toMatch(/14\.281234|Block 9|asset-private|home\.jpg/i);
   });
 });

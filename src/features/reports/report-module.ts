@@ -9,10 +9,15 @@ export type ReportSubmission = {
   category: ReportCategory;
   description: string;
   nearbyLandmark: string;
+  exactLocation?: ExactLocation;
+  evidence: EvidenceAsset[];
   isEmergency: boolean;
   confirmNonEmergency: boolean;
   confirmPublicSummary: boolean;
 };
+
+export type ExactLocation = { latitude: number; longitude: number; privateDetails: string };
+export type EvidenceAsset = { id: string; name: string; type: "image/jpeg" | "image/png" | "image/webp"; size: number; visibility: "restricted" };
 
 export type ResidentReport = {
   reference: string;
@@ -20,6 +25,8 @@ export type ResidentReport = {
   category: ReportCategory;
   description: string;
   nearbyLandmark: string;
+  exactLocation?: ExactLocation;
+  evidence: EvidenceAsset[];
   status: ReportStatus;
   submittedAt: string;
 };
@@ -29,6 +36,8 @@ export type PublicReportDetail = {
   category: ReportCategory;
   publicSummary: string;
   publicArea: string;
+  publicLocation?: { latitude: number; longitude: number };
+  media: Array<{ id: string; alt: string }>;
   status: ReportStatus;
   submittedAt: string;
   timeline: Array<{ status: ReportStatus; occurredAt: string }>;
@@ -68,11 +77,24 @@ function parseSubmission(value: unknown): ReportSubmission {
   const category = typeof input.category === "string" && reportCategories.includes(input.category as ReportCategory) ? input.category as ReportCategory : null;
   const description = typeof input.description === "string" ? input.description.trim() : "";
   const nearbyLandmark = typeof input.nearbyLandmark === "string" ? input.nearbyLandmark.trim() : "";
+  const locationInput = typeof input.exactLocation === "object" && input.exactLocation !== null ? input.exactLocation as Record<string, unknown> : null;
+  const exactLocation = locationInput && typeof locationInput.latitude === "number" && typeof locationInput.longitude === "number" && typeof locationInput.privateDetails === "string"
+    ? { latitude: locationInput.latitude, longitude: locationInput.longitude, privateDetails: locationInput.privateDetails.trim() }
+    : undefined;
+  const evidenceInput = Array.isArray(input.evidence) ? input.evidence : [];
+  const evidence = evidenceInput.filter((item): item is EvidenceAsset => {
+    if (typeof item !== "object" || item === null) return false;
+    const asset = item as Record<string, unknown>;
+    return typeof asset.id === "string" && typeof asset.name === "string" && typeof asset.size === "number"
+      && ["image/jpeg", "image/png", "image/webp"].includes(String(asset.type)) && asset.visibility === "restricted";
+  });
   if (!residentUid || residentUid.length > 128) issues.residentUid = "A valid resident account is required.";
   if (idempotencyKey.length < 12 || idempotencyKey.length > 128) issues.idempotencyKey = "Start a fresh submission and try again.";
   if (!category) issues.category = "Choose a supported report category.";
   if (description.length < 20 || description.length > 1000) issues.description = "Use between 20 and 1,000 characters.";
   if (nearbyLandmark.length < 3 || nearbyLandmark.length > 160) issues.nearbyLandmark = "Use between 3 and 160 characters for the landmark.";
+  if (locationInput && (!exactLocation || Math.abs(exactLocation.latitude) > 90 || Math.abs(exactLocation.longitude) > 180 || exactLocation.privateDetails.length > 200)) issues.exactLocation = "Choose a valid map point and keep private location details under 200 characters.";
+  if (evidenceInput.length > 5 || evidence.length !== evidenceInput.length || evidence.some((asset) => asset.size > 8_000_000)) issues.evidence = "Attach up to 5 JPEG, PNG, or WebP photos, no more than 8 MB each.";
   if (input.isEmergency !== false) issues.isEmergency = "Choose whether this is an emergency.";
   if (input.confirmNonEmergency !== true) issues.confirmNonEmergency = "Confirm that this is not an emergency.";
   if (input.confirmPublicSummary !== true) issues.confirmPublicSummary = "Confirm that a safe summary may be public.";
@@ -83,6 +105,8 @@ function parseSubmission(value: unknown): ReportSubmission {
     category: category!,
     description,
     nearbyLandmark,
+    exactLocation,
+    evidence,
     isEmergency: false,
     confirmNonEmergency: true,
     confirmPublicSummary: true,
@@ -119,6 +143,8 @@ export function createReportModule({
           category: input.category,
           description: input.description,
           nearbyLandmark: input.nearbyLandmark,
+          exactLocation: input.exactLocation,
+          evidence: input.evidence,
           status: "Submitted",
           submittedAt,
         },
@@ -127,6 +153,11 @@ export function createReportModule({
           category: input.category,
           publicSummary: publicSummaries[input.category],
           publicArea: "Southville 1 · Location pending review",
+          publicLocation: input.exactLocation ? {
+            latitude: Number(input.exactLocation.latitude.toFixed(2)),
+            longitude: Number(input.exactLocation.longitude.toFixed(2)),
+          } : undefined,
+          media: [],
           status: "Submitted",
           submittedAt,
           timeline: [{ status: "Submitted", occurredAt: submittedAt }],

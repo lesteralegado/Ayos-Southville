@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale } from "@/features/i18n/use-locale";
 import type { ReportCategory } from "./report-module";
+import { compressEvidencePhoto, validateEvidenceFiles } from "./media-evidence";
 
 const draftKey = "ayos-report-draft-v1";
 const draftEvent = "ayos-report-draft-change";
@@ -15,6 +16,9 @@ type Draft = {
   category: ReportCategory | "";
   description: string;
   nearbyLandmark: string;
+  latitude: string;
+  longitude: string;
+  privateLocationDetails: string;
   isEmergency: boolean;
   confirmNonEmergency: boolean;
   confirmPublicSummary: boolean;
@@ -26,6 +30,9 @@ const blankDraft = (): Draft => ({
   category: "",
   description: "",
   nearbyLandmark: "",
+  latitude: "",
+  longitude: "",
+  privateLocationDetails: "",
   isEmergency: false,
   confirmNonEmergency: false,
   confirmPublicSummary: false,
@@ -50,6 +57,12 @@ const copy = {
     descriptionHelp: "Include what happened and how residents are affected. Do not include names or exact home addresses.",
     landmark: "Nearby landmark",
     landmarkHelp: "Use an approximate, recognizable public place.",
+    location: "Pin the issue location",
+    locationHelp: "Coordinates and block or lot details stay private. The public sees a rounded approximate point.",
+    useLocation: "Use my current location",
+    privateDetails: "Private block, lot, or access details",
+    photos: "Evidence photos",
+    photosHelp: "Up to 5 JPEG, PNG, or WebP photos. We resize large photos before upload; evidence stays restricted until reviewed.",
     nonEmergency: "I confirm this is not an emergency.",
     publicSummary: "I understand that only a reviewed safe summary and approximate area may appear publicly.",
     submit: "Submit report",
@@ -76,6 +89,12 @@ const copy = {
     descriptionHelp: "Isama ang nangyari at epekto sa mga residente. Huwag maglagay ng pangalan o eksaktong address.",
     landmark: "Malapit na landmark",
     landmarkHelp: "Gumamit ng tinatayang pampublikong lugar na madaling makilala.",
+    location: "I-pin ang lokasyon ng concern",
+    locationHelp: "Pribado ang coordinates at block o lot. Tinatayang lokasyon lamang ang makikita sa publiko.",
+    useLocation: "Gamitin ang kasalukuyang lokasyon",
+    privateDetails: "Pribadong block, lot, o detalye ng pagpunta",
+    photos: "Mga litrato bilang ebidensya",
+    photosHelp: "Hanggang 5 JPEG, PNG, o WebP. Pinaliliit ang malalaking litrato at mananatiling restricted hanggang ma-review.",
     nonEmergency: "Kinukumpirma kong hindi ito emergency.",
     publicSummary: "Nauunawaan kong reviewed na ligtas na summary at tinatayang lugar lamang ang maaaring makita sa publiko.",
     submit: "Isumite ang ulat",
@@ -113,6 +132,9 @@ function parseStoredDraft(value: string | null): Draft | null {
   try {
     const draft = JSON.parse(value) as Record<string, unknown>;
     if (draft.version !== 1 || typeof draft.idempotencyKey !== "string" || !["", "roads-drainage", "streetlights", "waste-collection"].includes(String(draft.category)) || typeof draft.description !== "string" || typeof draft.nearbyLandmark !== "string" || typeof draft.isEmergency !== "boolean" || typeof draft.confirmNonEmergency !== "boolean" || typeof draft.confirmPublicSummary !== "boolean") return null;
+    draft.latitude = typeof draft.latitude === "string" ? draft.latitude : "";
+    draft.longitude = typeof draft.longitude === "string" ? draft.longitude : "";
+    draft.privateLocationDetails = typeof draft.privateLocationDetails === "string" ? draft.privateLocationDetails : "";
     return draft as Draft;
   } catch {
     return null;
@@ -129,6 +151,9 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
   const [issues, setIssues] = useState<FieldIssues>({});
   const [submitError, setSubmitError] = useState("");
   const [pending, setPending] = useState(false);
+  const [evidence, setEvidence] = useState<Array<{ file: File; preview: string }>>([]);
+  const [evidenceMessage, setEvidenceMessage] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const summaryRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -159,7 +184,7 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify({ ...draft, exactLocation: draft.latitude && draft.longitude ? { latitude: Number(draft.latitude), longitude: Number(draft.longitude), privateDetails: draft.privateLocationDetails } : undefined, evidence: evidence.map(({ file }) => ({ id: crypto.randomUUID(), name: file.name, type: file.type, size: file.size, visibility: "restricted" })) }),
       });
       const result = await response.json() as { reference?: string; issues?: FieldIssues };
       if (response.status === 422 && result.issues) {
@@ -177,6 +202,20 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
   }
 
   const update = <Key extends keyof Draft>(key: Key, value: Draft[Key]) => setDraft((current) => ({ ...current, [key]: value }));
+
+  async function selectEvidence(files: File[]) {
+    setSelectedFiles(files);
+    setEvidenceMessage("Preparing photos⬦");
+    try {
+      const checked = validateEvidenceFiles(files);
+      const prepared = await Promise.all(checked.files.map(compressEvidencePhoto));
+      evidence.forEach(({ preview }) => URL.revokeObjectURL(preview));
+      setEvidence(prepared.map((file) => ({ file, preview: URL.createObjectURL(file) })));
+      setEvidenceMessage(checked.issues.join(" ") || `${prepared.length} photo${prepared.length === 1 ? "" : "s"} ready and restricted.`);
+    } catch {
+      setEvidenceMessage("We could not prepare the photos. Your report is safe; retry or choose them again.");
+    }
+  }
 
   return (
     <main className="composer-page">
@@ -200,12 +239,28 @@ export function ReportComposer({ emergencyGuidance }: { emergencyGuidance: { pho
             <label htmlFor="nearby-landmark">{message.landmark}</label><p id="landmark-help" className="field-help">{message.landmarkHelp}</p>
             <input id="nearby-landmark" value={draft.nearbyLandmark} onChange={(event) => update("nearbyLandmark", event.target.value)} aria-invalid={Boolean(issues.nearbyLandmark)} aria-describedby={`landmark-help${issues.nearbyLandmark ? " landmark-error" : ""}`} />
             {issues.nearbyLandmark && <p id="landmark-error" className="field-error">{issues.nearbyLandmark}</p>}
+            <fieldset className="location-fieldset">
+              <legend>{message.location}</legend><p className="field-help">{message.locationHelp}</p>
+              <div className="location-picker" aria-label="Map location picker" onClick={(event) => { const box = event.currentTarget.getBoundingClientRect(); update("latitude", (14.276 + ((event.clientY - box.top) / box.height) * .012).toFixed(6)); update("longitude", (121.12 + ((event.clientX - box.left) / box.width) * .016).toFixed(6)); }}>
+                <span className="map-road map-road-a" /><span className="map-road map-road-b" />
+                {draft.latitude && <span className="location-pin" aria-label="Selected location" />}
+                <button type="button" className="button button-quiet" onClickCapture={(event) => event.stopPropagation()} onClick={() => navigator.geolocation?.getCurrentPosition((position) => setDraft((current) => ({ ...current, latitude: position.coords.latitude.toFixed(6), longitude: position.coords.longitude.toFixed(6) })), () => setEvidenceMessage("Location access was unavailable. Enter coordinates below."))}>{message.useLocation}</button>
+              </div>
+              <div className="coordinate-grid"><label>Latitude<input inputMode="decimal" value={draft.latitude} onChange={(event) => update("latitude", event.target.value)} /></label><label>Longitude<input inputMode="decimal" value={draft.longitude} onChange={(event) => update("longitude", event.target.value)} /></label></div>
+              <label htmlFor="private-location">{message.privateDetails}</label><input id="private-location" maxLength={200} value={draft.privateLocationDetails} onChange={(event) => update("privateLocationDetails", event.target.value)} />
+            </fieldset>
+            <fieldset className="evidence-fieldset">
+              <legend>{message.photos}</legend><p className="field-help">{message.photosHelp}</p>
+              <input id="evidence-photos" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => void selectEvidence(Array.from(event.target.files ?? []))} />
+              <div className="evidence-previews">{evidence.map(({ file, preview }, index) => <figure key={preview}><img src={preview} alt={`Preview of ${file.name}`} /><figcaption>{file.name}<button type="button" onClick={() => { URL.revokeObjectURL(preview); setEvidence((items) => items.filter((_, itemIndex) => itemIndex !== index)); }}>Remove</button></figcaption></figure>)}</div>
+              {evidenceMessage && <p className="field-help" role="status" aria-live="polite">{evidenceMessage} {evidenceMessage.includes("could not") && <button type="button" onClick={() => void selectEvidence(selectedFiles)}>Retry photo preparation</button>}</p>}
+            </fieldset>
             <label className="check-row"><input id="confirm-non-emergency" type="checkbox" checked={draft.confirmNonEmergency} onChange={(event) => update("confirmNonEmergency", event.target.checked)} aria-invalid={Boolean(issues.confirmNonEmergency)} aria-describedby={issues.confirmNonEmergency ? "confirm-non-emergency-error" : undefined} /> <span>{message.nonEmergency}</span></label>
             {issues.confirmNonEmergency && <p id="confirm-non-emergency-error" className="field-error">{issues.confirmNonEmergency}</p>}
             <label className="check-row"><input id="confirm-public-summary" type="checkbox" checked={draft.confirmPublicSummary} onChange={(event) => update("confirmPublicSummary", event.target.checked)} aria-invalid={Boolean(issues.confirmPublicSummary)} aria-describedby={issues.confirmPublicSummary ? "confirm-public-summary-error" : undefined} /> <span>{message.publicSummary}</span></label>
             {issues.confirmPublicSummary && <p id="confirm-public-summary-error" className="field-error">{issues.confirmPublicSummary}</p>}
             <p className="form-error" role="status" aria-live="polite">{submitError}</p>
-            <button className="button button-primary composer-submit" type="submit" disabled={pending || draft.isEmergency}>{pending ? message.submitting : message.submit}</button>
+            <button className="button button-primary composer-submit" type="submit" disabled={pending || draft.isEmergency}>{pending && evidence.length ? "Uploading evidence and submitting⬦" : pending ? message.submitting : message.submit}</button>
           </form>
         </section>
       </div>

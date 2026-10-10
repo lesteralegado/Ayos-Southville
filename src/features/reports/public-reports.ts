@@ -7,6 +7,7 @@ export type PublicReport = {
   summary: string;
   reportedAt: string;
   affectedResidents: number;
+  publicLocation: { latitude: number; longitude: number };
 };
 
 type SeedReport = PublicReport & {
@@ -25,6 +26,7 @@ const seedReports: SeedReport[] = [
     summary: "Standing water remains along the walkway after rainfall.",
     reportedAt: "2026-10-08T08:10:00+08:00",
     affectedResidents: 14,
+    publicLocation: { latitude: 14.281, longitude: 121.127 },
     reporterEmail: "reporter@example.com",
     exactAddress: "Block 11, Lot 4",
     internalNotes: "Call the reporter before visiting.",
@@ -38,6 +40,7 @@ const seedReports: SeedReport[] = [
     summary: "The light near the pedestrian crossing has been dark for three nights.",
     reportedAt: "2026-10-07T19:35:00+08:00",
     affectedResidents: 9,
+    publicLocation: { latitude: 14.279, longitude: 121.124 },
     reporterEmail: "private@example.com",
     exactAddress: "Block 3, Lot 18",
     internalNotes: "Possible wiring issue.",
@@ -51,6 +54,7 @@ const seedReports: SeedReport[] = [
     summary: "Several collection points were missed during the regular route.",
     reportedAt: "2026-10-06T17:20:00+08:00",
     affectedResidents: 6,
+    publicLocation: { latitude: 14.284, longitude: 121.13 },
     reporterEmail: "hidden@example.com",
     exactAddress: "Block 20, Lot 2",
     internalNotes: "Confirm schedule with coordinator.",
@@ -68,6 +72,7 @@ export function listPublicReports(): PublicReport[] {
       summary,
       reportedAt,
       affectedResidents,
+      publicLocation,
     }) => ({
       id,
       title,
@@ -77,6 +82,7 @@ export function listPublicReports(): PublicReport[] {
       summary,
       reportedAt,
       affectedResidents,
+      publicLocation,
     }),
   );
 }
