@@ -7,8 +7,8 @@ export const reportCategoryLabels: Record<Locale, Record<ReportCategory, string>
 };
 
 export const reportStatusLabels: Record<Locale, Record<ReportStatus, string>> = {
-  en: { Submitted: "Submitted" },
-  fil: { Submitted: "Isinumite" },
+  en: { Submitted: "Submitted", "Under review": "Under review", Assigned: "Assigned", "In progress": "In progress", Resolved: "Resolved", "Resident confirmed": "Resident confirmed", Rejected: "Rejected", Duplicate: "Duplicate" },
+  fil: { Submitted: "Isinumite", "Under review": "Sinusuri", Assigned: "Itinalaga", "In progress": "Isinasagawa", Resolved: "Nalutas", "Resident confirmed": "Kinumpirma ng residente", Rejected: "Tinanggihan", Duplicate: "Duplikado" },
 };
 
 export function formatManilaDate(value: string, locale: Locale, includeTime = false) {

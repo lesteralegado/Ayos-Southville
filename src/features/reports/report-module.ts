@@ -1,7 +1,7 @@
 export const reportCategories = ["roads-drainage", "streetlights", "waste-collection"] as const;
 
 export type ReportCategory = (typeof reportCategories)[number];
-export type ReportStatus = "Submitted";
+export type ReportStatus = "Submitted" | "Under review" | "Assigned" | "In progress" | "Resolved" | "Resident confirmed" | "Rejected" | "Duplicate";
 
 export type ReportSubmission = {
   residentUid: string;
@@ -40,7 +40,7 @@ export type PublicReportDetail = {
   media: Array<{ id: string; alt: string }>;
   status: ReportStatus;
   submittedAt: string;
-  timeline: Array<{ status: ReportStatus; occurredAt: string }>;
+  timeline: Array<{ status: ReportStatus; occurredAt: string; update?: { en: string; fil: string } }>;
 };
 
 export type StoredReport = { private: ResidentReport; public: PublicReportDetail };
@@ -153,10 +153,10 @@ export function createReportModule({
           category: input.category,
           publicSummary: publicSummaries[input.category],
           publicArea: "Southville 1 · Location pending review",
-          publicLocation: input.exactLocation ? {
+          ...(input.exactLocation ? { publicLocation: {
             latitude: Number(input.exactLocation.latitude.toFixed(2)),
             longitude: Number(input.exactLocation.longitude.toFixed(2)),
-          } : undefined,
+          } } : {}),
           media: [],
           status: "Submitted",
           submittedAt,

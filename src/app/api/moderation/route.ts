@@ -17,6 +17,8 @@ export async function PATCH(request: Request) {
     else if (body.action === "reject") await moderation.reject(actor, body.input as Parameters<typeof moderation.reject>[1]);
     else if (body.action === "merge") await moderation.merge(actor, body.input as Parameters<typeof moderation.merge>[1]);
     else if (body.action === "assign") await moderation.assign(actor, body.input as Parameters<typeof moderation.assign>[1]);
+    else if (body.action === "transition") await moderation.transition(actor, body.input as Parameters<typeof moderation.transition>[1]);
+    else if (body.action === "respond-to-resolution") await moderation.respondToResolution(actor, body.input as Parameters<typeof moderation.respondToResolution>[1]);
     else throw new ModerationValidationError("Choose a supported moderation action.");
     return NextResponse.json({ ok: true });
   } catch (error) { return failure(error); }

@@ -18,11 +18,11 @@ function createFirebaseModerationStore(): ModerationStore {
       reference: privateReport.reference, reporterUid: privateReport.reporterUid, category: privateReport.category,
       description: privateReport.description, nearbyLandmark: privateReport.nearbyLandmark, exactLocation: privateReport.exactLocation,
       evidence: privateReport.evidence, status: stored?.status ?? privateReport.status, submittedAt: privateReport.submittedAt,
-      public: stored?.public ?? { summary: publicReport?.publicSummary ?? "A community concern was submitted for review.", area: publicReport?.publicArea ?? "Southville 1 · Location pending review", location: publicReport?.publicLocation, media: publicReport?.media ?? [] },
+      public: stored?.public ?? { summary: publicReport?.publicSummary ?? "A community concern was submitted for review.", area: publicReport?.publicArea ?? "Southville 1 Â· Location pending review", location: publicReport?.publicLocation, media: publicReport?.media ?? [] },
       followers: stored?.followers ?? states.filter((state) => state.following).map((state) => state.residentUid),
       affectedResidents: stored?.affectedResidents ?? states.filter((state) => state.affected).map((state) => state.residentUid),
       supportingEvidence: stored?.supportingEvidence ?? states.flatMap((state) => state.supportingEvidence ?? []),
-      history: stored?.history ?? [], priority: stored?.priority, destination: stored?.destination,
+      history: stored?.history ?? [{ action: "submitted", status: "Submitted", occurredAt: privateReport.submittedAt, update: { en: "Report submitted.", fil: "Isinumite ang ulat." } }], priority: stored?.priority, destination: stored?.destination, resolutionEvidence: stored?.resolutionEvidence,
     };
   }
   return {
@@ -34,7 +34,7 @@ function createFirebaseModerationStore(): ModerationStore {
       batch.set(db.collection("publicReports").doc(report.reference), {
         reference: report.reference, category: report.category, publicSummary: report.public.summary, publicArea: report.public.area,
         publicLocation: report.public.location, media: report.public.media, status: report.status, submittedAt: report.submittedAt,
-        timeline: report.history.map((event) => ({ status: report.status, occurredAt: event.occurredAt })), outcomeReason: report.public.outcomeReason,
+        timeline: report.history.filter((event) => event.status).map((event) => ({ status: event.status, occurredAt: event.occurredAt, update: event.update })), outcomeReason: report.public.outcomeReason,
         canonicalReference: report.public.canonicalReference,
       });
       for (const residentUid of new Set([...report.followers, ...report.affectedResidents])) batch.set(db.collection("reportEngagements").doc(documentId(residentUid, report.reference)), { residentUid, reference: report.reference, following: report.followers.includes(residentUid), affected: report.affectedResidents.includes(residentUid), supportingEvidence: [] }, { merge: true });
@@ -47,4 +47,16 @@ function createFirebaseModerationStore(): ModerationStore {
   };
 }
 
-export function getModerationModule() { return createModerationModule({ store: createFirebaseModerationStore() }); }
+export function getModerationModule() {
+  const db = getFirebaseAdmin().db;
+  return createModerationModule({
+    store: createFirebaseModerationStore(),
+    async emailEnabled(residentUid) {
+      const preference = await db.collection("notificationPreferences").doc(residentUid).get();
+      return preference.data()?.emailEnabled === true;
+    },
+    async sendEmail(delivery) {
+      await db.collection("emailDeliveryRequests").doc(documentId(delivery.residentUid, delivery.reference, delivery.message)).create({ ...delivery, createdAt: new Date().toISOString(), status: "pending" });
+    },
+  });
+}

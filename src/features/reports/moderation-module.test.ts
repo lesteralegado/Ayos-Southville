@@ -6,7 +6,7 @@ const submittedReport = (reference = "AS-REVIEW1", reporterUid = "resident-1"): 
   exactLocation: { latitude: 14.281234, longitude: 121.126789, privateDetails: "Blue gate" },
   evidence: [{ id: "photo-1", name: "home.jpg", type: "image/jpeg", size: 24_000, visibility: "restricted" }],
   status: "Submitted", submittedAt: "2026-10-10T02:00:00.000Z",
-  public: { summary: "A streetlight concern was submitted for review.", area: "Southville 1 · Location pending review", media: [] },
+  public: { summary: "A streetlight concern was submitted for review.", area: "Southville 1 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Location pending review", media: [] },
   followers: [reporterUid], affectedResidents: [reporterUid], supportingEvidence: [], history: [],
 });
 
@@ -25,10 +25,10 @@ describe("report moderation application boundary", () => {
 
   it("publishes only moderator-approved text, approximate location, and media", async () => {
     const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [submittedReport()] }), now: () => new Date("2026-10-10T03:00:00.000Z") });
-    await expect(moderation.accept(resident, { reference: "AS-REVIEW1", publicSummary: "Broken light near the covered court.", publicArea: "Phase 2 · Covered court", publicLocation: { latitude: 14.28, longitude: 121.13 }, approvedMedia: [{ id: "photo-1", alt: "Unlit streetlight" }], reason: "Private details removed." })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await moderation.accept(moderator, { reference: "AS-REVIEW1", publicSummary: "Broken light near the covered court.", publicArea: "Phase 2 · Covered court", publicLocation: { latitude: 14.28, longitude: 121.13 }, approvedMedia: [{ id: "photo-1", alt: "Unlit streetlight" }], reason: "Private details removed." });
+    await expect(moderation.accept(resident, { reference: "AS-REVIEW1", publicSummary: "Broken light near the covered court.", publicArea: "Phase 2 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Covered court", publicLocation: { latitude: 14.28, longitude: 121.13 }, approvedMedia: [{ id: "photo-1", alt: "Unlit streetlight" }], reason: "Private details removed." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await moderation.accept(moderator, { reference: "AS-REVIEW1", publicSummary: "Broken light near the covered court.", publicArea: "Phase 2 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Covered court", publicLocation: { latitude: 14.28, longitude: 121.13 }, approvedMedia: [{ id: "photo-1", alt: "Unlit streetlight" }], reason: "Private details removed." });
     const publicReport = await moderation.getPublicReport("AS-REVIEW1");
-    expect(publicReport).toMatchObject({ status: "Under review", summary: "Broken light near the covered court.", area: "Phase 2 · Covered court", location: { latitude: 14.28, longitude: 121.13 }, media: [{ id: "photo-1" }] });
+    expect(publicReport).toMatchObject({ status: "Under review", summary: "Broken light near the covered court.", area: "Phase 2 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Covered court", location: { latitude: 14.28, longitude: 121.13 }, media: [{ id: "photo-1" }] });
     expect(JSON.stringify(publicReport)).not.toMatch(/09171234567|Block 9|Blue gate|home.jpg/i);
   });
 
@@ -53,7 +53,9 @@ describe("report moderation application boundary", () => {
   });
 
   it("lets coordinators assign priority and destination but denies moderators", async () => {
-    const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [submittedReport()] }) });
+    const accepted = submittedReport();
+    accepted.status = "Under review";
+    const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [accepted] }) });
     await expect(moderation.assign(moderator, { reference: "AS-REVIEW1", priority: "high", destination: "Southville pilot lighting desk", reason: "Dark pedestrian crossing." })).rejects.toMatchObject({ code: "FORBIDDEN" });
     await moderation.assign(coordinator, { reference: "AS-REVIEW1", priority: "high", destination: "Southville pilot lighting desk", reason: "Dark pedestrian crossing." });
     expect(await moderation.getPrivateReport(coordinator, "AS-REVIEW1")).toMatchObject({ status: "Assigned", priority: "high", destination: "Southville pilot lighting desk" });
