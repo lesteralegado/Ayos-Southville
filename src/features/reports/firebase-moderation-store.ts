@@ -189,6 +189,14 @@ function createFirebaseModerationStore(): ModerationStore {
             ...(current[0].data()?.resolutionEvidence ?? []),
             ...verified.map(evidenceAsset),
           ];
+        const notifications = new Map(change.notifications.map(notice => [notice.residentUid, notice]));
+        const template = change.notifications[0];
+        const currentStates = engagements.flatMap(snapshot => snapshot.docs.map(doc => doc.data()));
+        if (template) for (const state of currentStates)
+          if (state.following || state.affected) notifications.set(state.residentUid, { ...template, residentUid: state.residentUid });
+        const recipientIds = [...notifications.keys()];
+        const preferences = recipientIds.length ? await transaction.getAll(...recipientIds.map(uid => db.collection("notificationPreferences").doc(uid))) : [];
+        const preferencesByUid = new Map(recipientIds.map((uid, index) => [uid, preferences[index].data()]));
         for (let index = 0; index < change.reports.length; index++) {
           const report = change.reports[index];
           transaction.set(
@@ -196,7 +204,7 @@ function createFirebaseModerationStore(): ModerationStore {
             JSON.parse(
               JSON.stringify({
                 ...report,
-                revision: (report.revision ?? 0) + 1,
+                  revision: (report.revision ?? 0) + 1,
               }),
             ),
           );
@@ -217,6 +225,7 @@ function createFirebaseModerationStore(): ModerationStore {
                 JSON.stringify({
                   approved: true,
                   reference: report.reference,
+                revision: (report.revision ?? 0) + 1,
                   category: report.category,
                   publicSummary: report.public.summary,
                   publicArea: report.public.area,
@@ -275,23 +284,10 @@ function createFirebaseModerationStore(): ModerationStore {
             );
           }
         }
-        const notifications = new Map(
-          change.notifications.map((notification) => [
-            notification.residentUid,
-            notification,
-          ]),
-        );
-        const template = change.notifications[0];
-        if (template)
-          for (const doc of engagements[0].docs) {
-            const state = doc.data();
-            if (state.following || state.affected)
-              notifications.set(state.residentUid, {
-                ...template,
-                residentUid: state.residentUid,
-              });
-          }
         for (const notification of notifications.values()) {
+          const preference = preferencesByUid.get(notification.residentUid);
+          const audience = change.reports.some(report => report.reporterUid === notification.residentUid || report.affectedResidents.includes(notification.residentUid)) || currentStates.some(state => state.residentUid === notification.residentUid && state.affected) ? "status" : "follow";
+          if (preference?.[audience === "status" ? "statusUpdates" : "followUpdates"] === false) continue;
           const id = documentId(
             notification.residentUid,
             change.audit.target,
@@ -302,6 +298,11 @@ function createFirebaseModerationStore(): ModerationStore {
             id,
             kind: "report-update",
             read: false,
+          });
+          if (preference?.emailEnabled === true) transaction.create(db.collection("lifecycleEmailJobs").doc(id), {
+            id, residentUid: notification.residentUid, reference: notification.reference,
+            audience, createdAt: notification.createdAt, status: "pending", attempts: 0,
+            nextAttemptAt: notification.createdAt,
           });
         }
         transaction.create(db.collection("auditEvents").doc(), change.audit);
@@ -337,31 +338,7 @@ function createFirebaseModerationStore(): ModerationStore {
 }
 
 export function getModerationModule() {
-  const db = getFirebaseAdmin().db;
   return createModerationModule({
     store: createFirebaseModerationStore(),
-    async emailEnabled(residentUid) {
-      const preference = await db
-        .collection("notificationPreferences")
-        .doc(residentUid)
-        .get();
-      return preference.data()?.emailEnabled === true;
-    },
-    async sendEmail(delivery) {
-      await db
-        .collection("emailDeliveryRequests")
-        .doc(
-          documentId(
-            delivery.residentUid,
-            delivery.reference,
-            delivery.message,
-          ),
-        )
-        .create({
-          ...delivery,
-          createdAt: new Date().toISOString(),
-          status: "pending",
-        });
-    },
   });
 }

@@ -55,6 +55,7 @@ export type ResidentReport = {
 };
 
 export type PublicReportDetail = {
+  revision?: number;
   reference: string;
   category: ReportCategory;
   publicSummary: string;

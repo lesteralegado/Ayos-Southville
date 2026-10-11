@@ -48,6 +48,30 @@ async function start() {
   await moderation.transition(actor, { reference, expectedRevision: 2, to: "In progress", update: { en: "Started.", fil: "Nagsimula." } });
   return moderation;
 }
+it("persists a merge notification and opt-in email for both original reporters without canonical engagement", async () => {
+  const moderation = getModerationModule();
+  await moderation.accept(actor, acceptance);
+  const duplicateReference = "AS-300002";
+  fixture.records.set("privateReports/" + duplicateReference, { ...fixture.records.get("privateReports/" + reference), reference: duplicateReference, reporterUid: "duplicate-reporter", status: "Submitted" });
+  for (const uid of ["resident", "duplicate-reporter"]) fixture.records.set("notificationPreferences/" + uid, { emailEnabled: true, statusUpdates: true, followUpdates: true });
+  await moderation.merge(actor, { duplicateReference, canonicalReference: reference, expectedRevision: 0, canonicalRevision: 1, reason: "Same streetlight concern." });
+  expect(await moderation.listNotifications("resident")).toHaveLength(2);
+  expect(await moderation.listNotifications("duplicate-reporter")).toHaveLength(1);
+  const jobs = [...fixture.records].filter(([key]) => key.startsWith("lifecycleEmailJobs/")).map(([,job]) => job.residentUid).sort();
+  expect(jobs).toEqual(["duplicate-reporter", "resident"]);
+});
+it("honors status and follow preferences while retaining an atomic email outbox", async () => {
+  fixture.records.set("notificationPreferences/resident", { emailEnabled: true, statusUpdates: false, followUpdates: true });
+  fixture.records.set("reportEngagements/neighbor", { reference, residentUid: "neighbor", following: true });
+  fixture.records.set("notificationPreferences/neighbor", { emailEnabled: true, statusUpdates: true, followUpdates: true });
+  const moderation = getModerationModule();
+  await moderation.accept(actor, acceptance);
+  expect(await moderation.listNotifications("resident")).toEqual([]);
+  expect(await moderation.listNotifications("neighbor")).toHaveLength(1);
+  const jobs = [...fixture.records].filter(([key]) => key.startsWith("lifecycleEmailJobs/"));
+  expect(jobs).toHaveLength(1);
+  expect(jobs[0][1]).toMatchObject({ residentUid: "neighbor", audience: "follow", status: "pending" });
+});
 it("includes later supporting evidence alongside retained evidence without duplicates", async () => {
   const moderation = getModerationModule();
   await moderation.accept(actor, acceptance);

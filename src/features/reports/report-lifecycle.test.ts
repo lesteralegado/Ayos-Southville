@@ -21,7 +21,7 @@ describe("report resolution lifecycle", () => {
     await moderation.assign(coordinator, { reference: "AS-LIFE01", priority: "high", destination: "Drainage team", reason: "Standing water affects access.", update: { en: "Assigned to the drainage team.", fil: "Itinalaga sa pangkat ng drainage." } });
     await moderation.transition(coordinator, { reference: "AS-LIFE01", to: "In progress", update: { en: "Clearing work has started.", fil: "Nagsimula na ang paglilinis." } });
     await moderation.transition(coordinator, { reference: "AS-LIFE01", to: "Resolved", update: { en: "The drain was cleared and tested.", fil: "Nilinis at sinubukan na ang daluyan." }, resolutionEvidence: [{ id: "resolution-1", name: "cleared-drain.jpg", type: "image/jpeg", size: 12000, visibility: "restricted" }] });
-    await moderation.respondToResolution(reporter, { reference: "AS-LIFE01", response: "confirm", reason: "Water now drains normally.", update: { en: "The resident confirmed the fix.", fil: "Kinumpirma ng residente ang pag-aayos." } });
+    await moderation.respondToResolution(reporter, { reference: "AS-LIFE01", response: "confirm", reason: "Water now drains normally." });
     expect(await moderation.getPrivateReport(coordinator, "AS-LIFE01")).toMatchObject({ status: "Resident confirmed", resolutionEvidence: [{ id: "resolution-1" }] });
     expect(await moderation.getPublicReport("AS-LIFE01")).toMatchObject({ status: "Resident confirmed", timeline: [expect.objectContaining({ status: "Under review" }), expect.objectContaining({ status: "Assigned" }), expect.objectContaining({ status: "In progress" }), expect.objectContaining({ status: "Resolved" }), expect.objectContaining({ status: "Resident confirmed" })] });
     expect(await moderation.listNotifications("resident-2")).toHaveLength(5);
@@ -34,9 +34,9 @@ describe("report resolution lifecycle", () => {
     await expect(moderation.transition(coordinator, { reference: "AS-LIFE01", to: "Resolved", update: { en: "Skipped work.", fil: "Nilaktawan ang gawain." }, resolutionEvidence: [{ id: "bad", name: "bad.jpg", type: "image/jpeg", size: 10, visibility: "restricted" }] })).rejects.toMatchObject({ code: "VALIDATION" });
     await moderation.transition(coordinator, { reference: "AS-LIFE01", to: "In progress", update: { en: "Work started.", fil: "Nagsimula ang gawain." } });
     await moderation.transition(coordinator, { reference: "AS-LIFE01", to: "Resolved", update: { en: "Work completed.", fil: "Natapos ang gawain." }, resolutionEvidence: [{ id: "proof", name: "proof.jpg", type: "image/jpeg", size: 10, visibility: "restricted" }] });
-    await moderation.respondToResolution(reporter, { reference: "AS-LIFE01", response: "dispute", reason: "Water still pools after rain.", update: { en: "The resident reported the problem remains.", fil: "Iniulat ng residente na nananatili ang problema." } });
+    await moderation.respondToResolution(reporter, { reference: "AS-LIFE01", response: "dispute", reason: "Water still pools after rain." });
     expect(await moderation.getPrivateReport(coordinator, "AS-LIFE01")).toMatchObject({ status: "Under review", resolutionEvidence: [{ id: "proof" }], history: expect.arrayContaining([expect.objectContaining({ status: "Resolved" }), expect.objectContaining({ action: "resident-disputed" })]) });
-    await expect(moderation.respondToResolution({ uid: "resident-2", roles: ["Resident"] }, { reference: "AS-LIFE01", response: "confirm", reason: "Looks good.", update: { en: "Confirmed.", fil: "Nakumpirma." } })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(moderation.respondToResolution({ uid: "resident-2", roles: ["Resident"] }, { reference: "AS-LIFE01", response: "confirm", reason: "Looks good." })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("keeps a successful transition when optional email delivery fails", async () => {

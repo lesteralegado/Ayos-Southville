@@ -1,21 +1,29 @@
 "use client";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
-import { useState } from "react";
-
-export function ResolutionResponse({ reference, fil }: { reference: string; fil: boolean }) {
-  const [reason, setReason] = useState(""); const [message, setMessage] = useState(""); const [pending, setPending] = useState(false);
+export function ResolutionResponse({ reference, fil, revision }: { reference: string; fil: boolean; revision: number }) {
+  const router = useRouter(); const locked = useRef(false);
+  const [reason, setReason] = useState(""); const [error, setError] = useState<"forbidden" | "conflict" | "network" | "">("");
+  const [pending, setPending] = useState(false); const [done, setDone] = useState<"confirm" | "dispute" | "">("");
+  const t = (en: string, translated: string) => fil ? translated : en;
   async function respond(response: "confirm" | "dispute") {
-    setPending(true); setMessage("");
-    const update = response === "confirm"
-      ? { en: "The resident confirmed the resolution.", fil: "Kinumpirma ng residente ang resolusyon." }
-      : { en: "The resident reported that the problem remains.", fil: "Iniulat ng residente na nananatili ang problema." };
+    if (locked.current) return;
+    locked.current = true; setPending(true); setError("");
     try {
-      const result = await fetch("/api/moderation", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "respond-to-resolution", input: { reference, response, reason, update } }) });
-      const body = await result.json() as { error?: string };
-      if (!result.ok) throw new Error(body.error ?? "Response could not be saved.");
-      setMessage(fil ? "Naitala ang iyong tugon. I-refresh upang makita ang bagong status." : "Your response was recorded. Refresh to see the new status.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Response could not be saved."); }
-    finally { setPending(false); }
+      const result = await fetch("/api/moderation", { method: "PATCH", signal: AbortSignal.timeout(20_000), headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "respond-to-resolution", input: { reference, expectedRevision: revision, response, reason } }) });
+      if (!result.ok) { setError([401,403].includes(result.status) ? "forbidden" : result.status === 409 ? "conflict" : "network"); return; }
+      setDone(response); router.refresh();
+    } catch { setError("network"); }
+    finally { locked.current = false; setPending(false); }
   }
-  return <section className="engagement-panel" aria-labelledby="resolution-response-title"><h2 id="resolution-response-title">{fil ? "Gumana ba ang resolusyon?" : "Did the resolution work?"}</h2><label>{fil ? "Dahilan" : "Reason"}<textarea value={reason} onChange={(event) => setReason(event.target.value)} required minLength={3} /></label><div className="engagement-actions"><button className="button button-dark" type="button" disabled={pending || reason.trim().length < 3} onClick={() => void respond("confirm")}>{fil ? "Kumpirmahin" : "Confirm resolution"}</button><button className="button button-quiet" type="button" disabled={pending || reason.trim().length < 3} onClick={() => void respond("dispute")}>{fil ? "Hindi pa nalutas" : "Problem remains"}</button></div><p role="status" aria-live="polite">{pending ? (fil ? "Sine-save…" : "Saving…") : message}</p></section>;
+  return <section className="engagement-panel resolution-panel" aria-labelledby="resolution-response-title">
+    <h2 id="resolution-response-title">{t("Did the resolution work?", "Gumana ba ang resolusyon?")}</h2>
+    <p>{t("Only the original reporter can respond. Your reason stays private to authorized operators; only the outcome appears on the public timeline.", "Ang orihinal na nagsumite lamang ang maaaring tumugon. Pribado sa awtorisadong operator ang iyong dahilan; resulta lamang ang lalabas sa pampublikong timeline.")}</p>
+    {!done && <><label htmlFor="resolution-reason">{t("Reason (3–4,000 characters)", "Dahilan (3–4,000 character)")}</label><textarea id="resolution-reason" value={reason} onChange={event => setReason(event.target.value)} disabled={pending} required minLength={3} maxLength={4000} aria-describedby="resolution-help" />
+    <p id="resolution-help">{t("Explain what you observed. If the problem remains, the report returns to review with its evidence and history preserved.", "Ipaliwanag ang iyong napansin. Kung may problema pa rin, ibabalik sa pagsusuri ang ulat at pananatilihin ang ebidensya at kasaysayan nito.")}</p>
+    <div className="engagement-actions"><button className="button button-dark" type="button" disabled={pending || reason.trim().length < 3 || !!error} onClick={() => void respond("confirm")}>{t("Confirm resolution", "Kumpirmahin ang resolusyon")}</button><button className="button button-quiet" type="button" disabled={pending || reason.trim().length < 3 || !!error} onClick={() => void respond("dispute")}>{t("Problem remains", "Hindi pa nalutas")}</button></div></>}
+    <p role="status" aria-live="polite">{pending ? t("Saving your response…", "Sine-save ang iyong tugon…") : done === "confirm" ? t("Resolution confirmed. Your response was saved.", "Nakumpirma ang resolusyon. Na-save ang iyong tugon.") : done === "dispute" ? t("Your dispute was saved. The report is back under review.", "Na-save ang iyong pagtutol. Muling sinusuri ang ulat.") : ""}</p>
+    {error && <div role="alert" className="form-alert"><p>{error === "forbidden" ? t("Only the approved original reporter can respond. Check your signed-in account.", "Ang aprubadong orihinal na nagsumite lamang ang maaaring tumugon. Suriin ang account na naka-sign in.") : error === "conflict" ? t("The report changed. Reload its current status before responding.", "Nagbago ang ulat. I-reload ang kasalukuyang status bago tumugon.") : t("Your response could not be confirmed. Your reason is kept. Reload the report before retrying.", "Hindi makumpirma ang iyong tugon. Napanatili ang dahilan. I-reload ang ulat bago subukan muli.")}</p><button className="button button-quiet" type="button" onClick={() => window.location.reload()}>{t("Reload report", "I-reload ang ulat")}</button></div>}
+  </section>;
 }

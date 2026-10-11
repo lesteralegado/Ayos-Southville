@@ -14,7 +14,8 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "verify:administration": "node scripts/verify-administration-browser.mjs",
     "verify:intake": "node scripts/verify-intake-browser.mjs",
-    "verify:operator": "node scripts/verify-operator-browser.mjs"
+    "verify:operator": "node scripts/verify-operator-browser.mjs",
+    "verify:communication": "node scripts/verify-communication-browser.mjs"
   },
   "dependencies": {
     "firebase": "^13.0.0",

@@ -57,7 +57,6 @@ export async function PATCH(request: Request) {
       throw new ModerationValidationError("Provide complete action details.");
     const inputRecord = body.input as Record<string, unknown>;
     if (
-      body.action !== "respond-to-resolution" &&
       (!Number.isSafeInteger(inputRecord.expectedRevision) ||
         Number(inputRecord.expectedRevision) < 0)
     )

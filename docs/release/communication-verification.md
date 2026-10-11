@@ -1,0 +1,40 @@
+# Ticket 04: resident communication
+
+## Delivered behavior
+
+The bilingual notification center reads the authenticated resident's inbox, retains read state, and confirms preferences against the server before displaying success. Failed loads do not become empty inboxes; failed or uncertain writes retain previous visible state and ask for reload. Every primary state has English/Filipino copy, native controls, visible focus, and live announcements.
+
+Lifecycle notifications are persisted with the report transaction. Submitted/affected recipients use `statusUpdates`; follow-only recipients use `followUpdates`. Both default on; email defaults off. Category opt-outs suppress future notices and emails, not historical notices. Current engagement recipients and preferences are read before transaction writes. Merge notifications include current canonical followers; older links resolve canonical references without returning private report fields.
+
+Only the approved original reporter sees resolution controls and can submit a response. The observed revision is required by the API; repeated/stale responses cannot append another event. Confirmation produces Resident confirmed; disputes return to Under review while retaining resolution evidence and history. Reasons stay private. Bilingual public outcome text is generated on the server, never copied from resident-supplied update text.
+
+## Independent email delivery
+
+An opt-in job is created in `lifecycleEmailJobs` in the same transaction as its notification/report change. The notification ID is the delivery identity. The former best-effort `emailDeliveryRequests` path is no longer used; do not automatically replay old legacy requests.
+
+The worker uses a replaceable email adapter, persisted leases, backoff, frozen recipient/body, and provider idempotency. Sender credentials exist only in server-only modules. Emails contain a report reference, a sign-in link to private notifications, preference guidance, and independent-pilot disclosure—not descriptions, reasons, names, locations, evidence, or operator notes. Consent, category preference, verified/active identity, and pilot access are rechecked before each send. Changed email addresses skip frozen requests rather than sending to the former address.
+
+Provider acceptance is recorded as `sent`; it is not proof of inbox delivery. Bounces/deliverability must be checked at the provider during release. [Resend keeps idempotency keys for 24 hours](https://resend.com/docs/dashboard/emails/idempotency-keys); uncertain attempts stop automatically after 23 hours and require manual review. Never delete a sent job or blindly requeue a manual-review job with a new key. Check the provider by the original key/record first to avoid duplicates.
+
+`POST /api/internal/email-delivery` requires a server-only bearer secret of at least 32 characters and returns aggregate counts only. Each invocation processes at most five jobs with a 90-second start-next-job cutoff and a 20-second provider timeout. The route sets a 120-second [Vercel function duration](https://vercel.com/docs/functions/configuring-functions/duration); interrupted work recovers after a two-minute lease. No fire-and-forget process or in-memory production queue is used. Database outages return 503; scheduled invocations must retry and alert on persistent failure/backlog.
+
+## Production prerequisites — not completed locally
+
+1. Use a domain you control. Complete the DNS records shown by Resend and confirm its [verified sending-domain state](https://resend.com/docs/dashboard/domains/introduction). Use a sender address belonging to that domain. Do not change existing mail DNS records without checking their purpose.
+2. Configure server-only production values: `RESEND_API_KEY` (send-only scope), `RESEND_FROM`, `RESEND_SENDER_VERIFIED=true` only after actual verification, `APP_SITE_URL` (trusted HTTPS production origin), and a randomly generated `EMAIL_DELIVERY_SECRET` of at least 32 characters. Never use `NEXT_PUBLIC_` prefixes or commit real values. Preview must use isolated test credentials/recipients or leave sender verification false. Existing Firebase Admin configuration is still required.
+3. Arrange an authenticated scheduler to POST to the worker every few minutes using `Authorization: Bearer <EMAIL_DELIVERY_SECRET>`. This is an explicit launch gate: deploying the application alone does not start email delivery. Check scheduler method, timeout, retry policy, credentials, production-only target, frequency, and any provider/hosting plan limits before enabling it. No paid scheduler or production integration was provisioned during this ticket.
+4. Preserve Firestore's default-deny client rules for notifications, preferences, moderation, and email jobs; server routes use Firebase Admin. Keep the notification/outbox transaction and worker on the same project. No new composite Firestore index is required by the worker's single-field due-date query.
+5. With consented accounts, opt in and advance a real report. Confirm one provider-accepted email, working sign-in/canonical links, read-state persistence, opt-out behavior, forbidden other-account requests, confirmation/dispute, and private reasons/evidence. Inspect provider delivery/bounce outcomes. Reinvoke the worker and repeat a stale browser action; neither should duplicate delivery/history/audit.
+6. Exercise a provider outage and recovery within the idempotency window. Monitor oldest pending jobs, expired leases, manual-review jobs, and aggregate worker failures. Stop scheduling/revoke the secret if inappropriate sends occur. Disabling sender verification pauses delivery without rolling back reports; opting out suppresses queued sends on the next worker attempt.
+
+## Local evidence
+
+Two-axis review against `99195d8`: Standards identified one misleading unused outcome-update input, now removed. Spec identified a missing canonical original reporter on merge; the recipient union now covers every changed report, with application and Firebase-adapter regressions proving both original reporters receive their canonical-linked notices and opted-in jobs. Both axes have no remaining findings.
+
+Final local gates passed: typecheck, source/script lint, production build, and all 138 tests across 40 files. The browser journey passed separately, including functional-only confirmation after review fixes. Visual fixes restored the inherited hidden mobile follow control and clarified the disabled resolution action; the final visual confirmation was limited to the resolution surface.
+
+Application/API tests cover preference validation, recipients, cross-origin/auth guards, inbox isolation/read state, reporter-only response, safe public outcomes, and stale retries. Actual Firebase adapters are tested with deterministic external database/Auth/Storage boundaries; the worker tests simulate provider failure and recovery, verify frozen key/body, and confirm opt-out/sender-verification gates. These are not Firebase emulator or production-deliverability claims.
+
+`npm run verify:communication` renders the actual resident components and application boundaries in a Vite fixture with synthetic records. Next navigation/authentication and external persistence are adapted. It covers inbox/read state/preferences reload, connection failure/recovery, confirmation, dispute, preserved evidence/history, private reasons, non-reporter denial, and stale conflicts. Separate API/adapter tests cover production guards and canonical-link resolution.
+
+Ignored local captures are `artifacts/communication-*.png` under the completion plan: inbox and resolution at desktop 1440×1000, tablet 768×1024, and phone 390×844, plus Filipino inbox. The batched run and its one confirmation passed axe WCAG A/AA checks, viewport overflow, keyboard traversal, reduced-motion emulation, and 200% text sizing. A test-driver checkbox assumption was corrected to wait for server confirmation, not an optimistic toggle. Human screen-reader traversal, physical-device/browser zoom, Filipino copy review, real weak-network testing, and two-account production verification remain release gates.

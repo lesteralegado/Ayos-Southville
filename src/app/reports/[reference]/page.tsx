@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getReportModule } from "@/features/reports/firebase-report-store";
 import { ReportDetail } from "@/features/reports/report-detail";
-import { getVerifiedResident } from "@/features/auth/session";
+import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -15,5 +15,7 @@ export default async function ReportPage({ params }: { params: Promise<{ referen
     if (owned.status === "Duplicate" && owned.canonicalReference) redirect("/reports/" + owned.canonicalReference);
     return <ReportDetail privateReceipt report={{ reference: owned.reference, category: owned.category, status: owned.status, publicSummary: "Private report / Pribadong ulat", publicArea: "Not publicly visible / Hindi nakikita ng publiko", submittedAt: owned.submittedAt, media: [], timeline: [{ status: "Submitted", occurredAt: owned.submittedAt }] }} />;
   }
-  return <ReportDetail report={report} />;
+  const resident = report.status === "Resolved" ? await getVerifiedResident() : null;
+  const canRespond = !!resident && await hasPilotAccess(resident) && (await (await getReportModule()).listMine(resident.uid)).some(owned => owned.reference === report.reference);
+  return <ReportDetail report={report} canRespond={canRespond} />;
 }

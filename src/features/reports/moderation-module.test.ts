@@ -92,3 +92,11 @@ describe("report moderation application boundary", () => {
     await expect(store.appendAudit(attemptedReplacement, "existing-id")).rejects.toThrow(/immutable/i);
   });
 });
+it("notifies the canonical original reporter even when they do not follow their report", async () => {
+  const make = (reference: string, reporterUid: string, status: "Submitted" | "Under review"): ModerationReport => ({ reference, reporterUid, status, category: "streetlights", description: "Streetlight concern.", nearbyLandmark: "Court", evidence: [], submittedAt: "2026-10-11T00:00:00Z", public: { summary: "Streetlight concern", area: "Court", media: [] }, followers: [], affectedResidents: [], supportingEvidence: [], history: [] });
+  const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [make("AS-DUP001", "duplicate-reporter", "Submitted"), make("AS-CAN001", "canonical-reporter", "Under review")] }) });
+  await moderation.merge({ uid: "operator", roles: ["Moderator"] }, { duplicateReference: "AS-DUP001", canonicalReference: "AS-CAN001", reason: "Same streetlight concern." });
+  expect(await moderation.listNotifications("canonical-reporter")).toHaveLength(1);
+  expect((await moderation.listNotifications("canonical-reporter"))[0].reference).toBe("AS-CAN001");
+  expect(await moderation.listNotifications("duplicate-reporter")).toHaveLength(1);
+});

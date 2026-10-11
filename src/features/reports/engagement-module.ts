@@ -33,6 +33,7 @@ export type ResidentNotification = {
   message: string;
   createdAt: string;
   read: boolean;
+  update?: { en: string; fil: string };
 };
 
 export type EngagementStore = {
@@ -224,10 +225,14 @@ export function createEngagementModule({
       store.markNotificationRead(residentUid, id),
     getPreferences: async (residentUid: string) =>
       (await store.getPreferences(residentUid)) ?? defaults,
-    setPreferences: (
+    async setPreferences(
       residentUid: string,
       preferences: NotificationPreferences,
-    ) => store.setPreferences(residentUid, preferences),
+    ) {
+      if (!preferences || ["emailEnabled", "statusUpdates", "followUpdates"].some(key => typeof preferences[key as keyof NotificationPreferences] !== "boolean"))
+        throw new EngagementValidationError("Choose valid notification preferences.");
+      await store.setPreferences(residentUid, { emailEnabled: preferences.emailEnabled, statusUpdates: preferences.statusUpdates, followUpdates: preferences.followUpdates });
+    },
   };
 }
 

@@ -311,3 +311,22 @@ h1 em { display: block; color: var(--green); font-weight: 450; }
 .admin-page ::selection { background:var(--lime); color:var(--ink); }
 @media(max-width:850px) { .admin-category-row { grid-template-columns:1fr 1fr; } .admin-invite-form,.admin-invitations li { grid-template-columns:1fr; } .admin-section-nav>a:not(.button) { display:block; } }
 @media(max-width:560px) { .admin-shell { width:calc(100% - 28px); padding-top:32px; } .admin-shell h1 { font-size:2.3rem; } .admin-header-actions { gap:12px; } .admin-person-forms,.admin-config-row,.admin-emergency-grid,.admin-invitations fieldset { grid-template-columns:1fr; gap:18px; } .admin-person-forms { gap:28px; } .admin-section button { max-width:100%; white-space:normal; } }
+/* Resident communication follows the existing ledger surfaces. */
+.communication-nav{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.communication-nav label{display:flex;align-items:center;gap:8px}
+.communication-nav select{min-height:44px;font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px}
+.notifications-page .button-quiet,.resolution-panel .button-quiet{display:inline-flex;min-height:44px}
+.notifications-page .notification-list li.is-read{opacity:1;background:var(--paper-deep)}
+.notifications-page .notification-list li div{min-width:0;overflow-wrap:anywhere}
+.notification-read-state{font-size:.875rem;font-weight:700;color:var(--green)}
+.notifications-page time{font-size:.875rem;color:var(--muted)}
+.notifications-page .preferences-panel p{margin:0;line-height:1.6}
+.notifications-page .preferences-panel label{min-height:44px;align-items:center;line-height:1.5}
+.notifications-page input[type=checkbox]{width:20px;height:20px;flex-shrink:0;accent-color:var(--green)}
+.resolution-panel label{display:block;font-weight:700;margin-block:16px 8px}
+.resolution-panel textarea{display:block;width:100%;min-height:120px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;background:var(--card);color:var(--ink)}
+.resolution-panel p{line-height:1.6;overflow-wrap:anywhere}
+.detail-page .engagement-panel .button-quiet{display:inline-flex}
+.resolution-panel .button:disabled{opacity:.55;box-shadow:none;cursor:not-allowed}
+.communication-nav select:focus-visible,.resolution-panel textarea:focus-visible,.notifications-page input:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+@media(max-width:560px){.notifications-layout{width:calc(100% - 28px);margin-block:28px}.communication-nav{gap:10px}.notification-list .button{width:100%}.resolution-panel{padding:16px}.notifications-page .composer-header{gap:14px;flex-wrap:wrap}}

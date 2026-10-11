@@ -14,9 +14,11 @@ import { ResolutionResponse } from "./resolution-response";
 export function ReportDetail({
   report,
   privateReceipt = false,
+  canRespond = false,
 }: {
   report: PublicReportDetail;
   privateReceipt?: boolean;
+  canRespond?: boolean;
 }) {
   const { locale } = useLocale();
   const fil = locale === "fil";
@@ -51,7 +53,7 @@ export function ReportDetail({
         </p>
         <dl className="report-meta">
           <div>
-            <dt>Reference</dt>
+            <dt>{fil ? "Reference ng ulat" : "Reference"}</dt>
             <dd>{report.reference}</dd>
           </div>
           <div>
@@ -75,7 +77,7 @@ export function ReportDetail({
           </section>
         )}
         <section className="timeline" aria-labelledby="timeline-title">
-          <h2 id="timeline-title">Timeline</h2>
+          <h2 id="timeline-title">{fil ? "Kasaysayan ng ulat" : "Report timeline"}</h2>
           <ol>
             {report.timeline.map((event) => (
               <li key={`${event.status}-${event.occurredAt}`}>
@@ -93,8 +95,8 @@ export function ReportDetail({
             ))}
           </ol>
         </section>
-        {report.status === "Resolved" && (
-          <ResolutionResponse reference={report.reference} fil={fil} />
+        {report.status === "Resolved" && canRespond && (
+          <ResolutionResponse key={report.reference + ":" + report.revision} reference={report.reference} fil={fil} revision={report.revision ?? 0} />
         )}
         {privateReceipt ? (
           <p>

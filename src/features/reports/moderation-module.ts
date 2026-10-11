@@ -29,6 +29,7 @@ export type ModerationNotification = {
   reference: string;
   message: string;
   createdAt: string;
+  update?: BilingualUpdate;
 };
 export type TimelineEvent = {
   action: string;
@@ -195,13 +196,12 @@ export function createModerationModule({
     const occurredAt = now().toISOString();
     const notifications = update
       ? unique([
-          notifiedReport.reporterUid,
-          ...notifiedReport.followers,
-          ...notifiedReport.affectedResidents,
+          ...reports.flatMap(report => [report.reporterUid, ...report.followers, ...report.affectedResidents]),
         ]).map((residentUid) => ({
           residentUid,
           reference: notifiedReport.reference,
           message: `${update.en} / ${update.fil}`,
+          update,
           createdAt: occurredAt,
         }))
       : [];
@@ -544,19 +544,22 @@ export function createModerationModule({
       actor: Operator,
       input: {
         reference: string;
+        expectedRevision?: number;
         response: "confirm" | "dispute";
         reason: string;
-        update: BilingualUpdate;
       },
     ) {
       const report = await findReport(input.reference);
       if (actor.uid !== report.reporterUid)
         throw new ModerationForbiddenError();
+      requireRevision(report, input.expectedRevision);
       requireStatus(report, "Resolved");
       if (!["confirm", "dispute"].includes(input.response))
         throw new ModerationValidationError("Choose confirm or dispute.");
       const reason = requireText(input.reason, "Resident reason");
-      const update = requireUpdate(input.update);
+      const update = input.response === "confirm"
+        ? { en: "The resident confirmed the resolution.", fil: "Kinumpirma ng residente ang resolusyon." }
+        : { en: "The resident reported that the problem remains.", fil: "Iniulat ng residente na nananatili ang problema." };
       const occurredAt = now().toISOString();
       const status =
         input.response === "confirm" ? "Resident confirmed" : "Under review";

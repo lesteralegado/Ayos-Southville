@@ -70,9 +70,19 @@ function createFirebaseEngagementStore(): EngagementStore {
         .collection("residentNotifications")
         .where("residentUid", "==", residentUid)
         .get();
-      return snapshot.docs
-        .map((document) => document.data() as ResidentNotification)
-        .toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const notices = await Promise.all(snapshot.docs.map(async document => {
+        const notice = document.data() as ResidentNotification;
+        let reference = notice.reference;
+        const seen = new Set<string>();
+        for (let depth = 0; depth < 8 && !seen.has(reference); depth++) {
+          seen.add(reference);
+          const report = (await db.collection("privateReports").doc(reference).get()).data();
+          if (report?.status !== "Duplicate" || typeof report.canonicalReference !== "string" || !/^[A-Z0-9-]{3,80}$/.test(report.canonicalReference)) break;
+          reference = report.canonicalReference;
+        }
+        return { id: notice.id, residentUid, reference, kind: notice.kind, message: notice.message, createdAt: notice.createdAt, read: notice.read === true, ...(notice.update ? { update: { en: notice.update.en, fil: notice.update.fil } } : {}) };
+      }));
+      return notices.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
     async markNotificationRead(residentUid, id) {
       const snapshot = await db

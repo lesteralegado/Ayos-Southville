@@ -91,3 +91,16 @@ it("denies revoked operator access and malformed direct requests", async () => {
   state.access = true;
   expect((await PATCH(request("accept", null))).status).toBe(422);
 });
+it("accepts only the original reporter's current resolution response and publishes a safe outcome", async () => {
+  state.moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [{ ...seed, status: "Resolved", revision: 4, resolutionEvidence: [{ id: "proof", name: "proof.jpg", type: "image/jpeg", size: 20, visibility: "restricted" }] }] }) });
+  const input = { reference: seed.reference, expectedRevision: 4, response: "dispute", reason: "Private phone 09171234567; still broken.", update: { en: "Private malicious text", fil: "Private malicious text" } };
+  state.actor = { uid: "neighbor", roles: ["Resident"] };
+  expect((await PATCH(request("respond-to-resolution", input))).status).toBe(403);
+  state.actor = { uid: "r1", roles: ["Resident"] };
+  expect((await PATCH(request("respond-to-resolution", input))).status).toBe(200);
+  const publicReport = await state.moderation.getPublicReport(seed.reference);
+  expect(publicReport.status).toBe("Under review");
+  expect(JSON.stringify(publicReport)).not.toMatch(/09171234567|malicious/);
+  expect((await PATCH(request("respond-to-resolution", input))).status).toBe(409);
+  expect(await state.moderation.listNotifications("r1")).toHaveLength(1);
+});
