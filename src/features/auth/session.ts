@@ -30,7 +30,7 @@ export async function getVerifiedOperator() {
     .doc(resident.uid)
     .get();
   const roles: unknown = profile.data()?.roles;
-  return { uid: resident.uid, roles: profileRoles(roles) };
+  return { uid: resident.uid, roles: profileRoles(roles), email: resident.email };
 }
 
 export async function hasPilotAccess(resident: {

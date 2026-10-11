@@ -20,7 +20,7 @@ function createFirebaseEngagementStore(): EngagementStore {
       const snapshot = await db.collection("publicReports").get();
       return snapshot.docs.flatMap((document): SuggestionReport[] => {
         const value = document.data();
-        if (!["Under review", "Assigned", "In progress"].includes(value.status))
+        if (value.approved !== true || !["Under review", "Assigned", "In progress"].includes(value.status))
           return [];
         // Construct an allowlisted projection; never spread a stored document.
         return [

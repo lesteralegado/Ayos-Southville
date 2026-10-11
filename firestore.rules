@@ -32,7 +32,8 @@ service cloud.firestore {
     }
 
     match /publicReports/{reference} {
-      allow read: if true;
+      allow read: if resource.data.approved == true
+        && resource.data.status in ['Under review', 'Assigned', 'In progress', 'Resolved', 'Resident confirmed'];
       allow write: if false;
     }
 

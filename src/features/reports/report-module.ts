@@ -42,6 +42,7 @@ export type EvidenceAsset = {
 };
 
 export type ResidentReport = {
+  canonicalReference?: string;
   reference: string;
   reporterUid: string;
   category: ReportCategory;
@@ -288,7 +289,10 @@ export function createReportModule({
     listMine: (residentUid: string) => store.listByResident(residentUid),
     recover: (residentUid: string, key: string) =>
       store.getReceipt(`${residentUid}:${key}`),
-    getPublic: (reference: string) => store.getPublic(reference),
+    async getPublic(reference: string) {
+      const report = await store.getPublic(reference);
+      return report && !["Submitted", "Rejected"].includes(report.status) ? report : null;
+    },
   };
 }
 

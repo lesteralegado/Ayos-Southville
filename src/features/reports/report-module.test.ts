@@ -41,11 +41,9 @@ describe("report submission module", () => {
       confirmNonEmergency: true,
       confirmPublicSummary: true,
     });
-    expect(await reports.getPublic("AS-WATER")).toMatchObject({
-      publicSummary: "A community concern was submitted for review.",
-    });
+    expect(await reports.getPublic("AS-WATER")).toBeNull();
   });
-  it("submits one private report and exposes a privacy-safe public timeline", async () => {
+  it("submits one private report and withholds public content until acceptance", async () => {
     const reports = createReportModule({
       store: createMemoryReportStore(),
       now: () => new Date("2026-10-10T02:00:00.000Z"),
@@ -68,18 +66,7 @@ describe("report submission module", () => {
     expect(await reports.listMine("resident-1")).toEqual([
       expect.objectContaining({ reference: "AS-7K3M2Q", status: "Submitted" }),
     ]);
-    expect(await reports.getPublic("AS-7K3M2Q")).toEqual({
-      reference: "AS-7K3M2Q",
-      category: "streetlights",
-      publicSummary: "A streetlight concern was submitted for review.",
-      publicArea: "Southville 1 · Location pending review",
-      media: [],
-      status: "Submitted",
-      submittedAt: "2026-10-10T02:00:00.000Z",
-      timeline: [
-        { status: "Submitted", occurredAt: "2026-10-10T02:00:00.000Z" },
-      ],
-    });
+    expect(await reports.getPublic("AS-7K3M2Q")).toBeNull();
   });
 
   it("rejects incomplete reports with field-addressable validation issues", async () => {
@@ -176,10 +163,7 @@ describe("report submission module", () => {
     });
 
     const publicReport = await reports.getPublic("AS-PRIVATE");
-    expect(publicReport).toMatchObject({
-      publicSummary: "A roads and drainage concern was submitted for review.",
-      publicArea: "Southville 1 · Location pending review",
-    });
+    expect(publicReport).toBeNull();
     expect(JSON.stringify(publicReport)).not.toMatch(
       /Ana|09171234567|Block 9|blue gate/i,
     );
@@ -245,10 +229,7 @@ describe("report submission module", () => {
       evidence: [{ id: "asset-private" }],
     });
     const publicReport = await reports.getPublic("AS-GEO123");
-    expect(publicReport).toMatchObject({
-      publicLocation: { latitude: 14.28, longitude: 121.13 },
-      media: [],
-    });
+    expect(publicReport).toBeNull();
     expect(JSON.stringify(publicReport)).not.toMatch(
       /14\.281234|Block 9|asset-private|home\.jpg/i,
     );

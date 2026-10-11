@@ -70,6 +70,27 @@ export function getEvidenceBucket() {
   return getStorage().bucket(bucketName);
 }
 
+export async function readApprovedPublicEvidence(id: string) {
+  if (!/^[a-f0-9]{64}$/.test(id))
+    throw new EvidenceError("Photo not found.", 404);
+  const db = getFirebaseAdmin().db;
+  const upload = await db.collection("evidenceUploads").doc(id).get();
+  const record = upload.data() as EvidenceRecord | undefined;
+  if (!record || record.deleted || !record.attachedTo)
+    throw new EvidenceError("Photo not found.", 404);
+  const projection = (
+    await db.collection("publicReports").doc(record.attachedTo).get()
+  ).data();
+  if (
+    projection?.approved !== true ||
+    ["Submitted", "Rejected", "Duplicate"].includes(projection.status) ||
+    !projection.media?.some((asset: { id: string }) => asset.id === id)
+  )
+    throw new EvidenceError("Photo not found.", 404);
+  const [bytes] = await getEvidenceBucket().file(record.path).download();
+  return { bytes, type: record.type };
+}
+
 export function getEvidenceModule() {
   const db = getFirebaseAdmin().db;
   const store: EvidenceStore = {

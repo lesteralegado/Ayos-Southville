@@ -22,6 +22,7 @@ type Props = {
   owner: string;
   draftKey: string;
   locale: "en" | "fil";
+  required?: boolean;
   onAssets: (assets: EvidenceAsset[]) => void;
   onBlocked: (blocked: boolean) => void;
 };
@@ -82,6 +83,7 @@ export function EvidencePicker({
   owner,
   draftKey,
   locale,
+  required = false,
   onAssets,
   onBlocked,
 }: Props) {
@@ -317,7 +319,11 @@ export function EvidencePicker({
         {fil ? "Mga litrato bilang ebidensya" : "Evidence photos"}
       </legend>
       <p className="field-help">
-        {fil
+        {required
+          ? fil
+            ? "Kailangan ang kahit isang nakumpletong litrato. Hanggang 5 litrato. Pribado ang mga file; mae-expire ang hindi naisumiteng upload pagkalipas ng 24 oras."
+            : "At least one completed photo is required. Up to 5 photos. Files are private; unsubmitted uploads expire after 24 hours."
+          : fil
           ? "Opsyonal. Hanggang 5 litrato. Pribado ang mga file; ang may-ari at awtorisadong operator lamang ang may access. Mae-expire ang hindi naisumiteng upload pagkalipas ng 24 oras."
           : "Optional. Up to 5 photos. Files are private to you and authorized operators. Unsubmitted uploads expire after 24 hours."}
       </p>
@@ -346,7 +352,11 @@ export function EvidencePicker({
               : "Photos could not be recovered. Reconnect and retry before submitting."
             : message ||
               (photos.length === 0
-                ? fil
+                ? required
+                  ? fil
+                    ? "Wala pang litrato. Mag-upload ng ebidensya bago markahang nalutas."
+                    : "No photos yet. Upload evidence before marking resolved."
+                  : fil
                   ? "Wala pang litrato. Maaari kang magsumite nang walang litrato."
                   : "No photos yet. You can submit without a photo."
                 : `${photos.filter((photo) => photo.status === "complete").length}/${photos.length} ${fil ? "upload ang nakumpirma" : "uploads confirmed"}`)}

@@ -23,7 +23,7 @@ describe("report resolution lifecycle", () => {
     await moderation.transition(coordinator, { reference: "AS-LIFE01", to: "Resolved", update: { en: "The drain was cleared and tested.", fil: "Nilinis at sinubukan na ang daluyan." }, resolutionEvidence: [{ id: "resolution-1", name: "cleared-drain.jpg", type: "image/jpeg", size: 12000, visibility: "restricted" }] });
     await moderation.respondToResolution(reporter, { reference: "AS-LIFE01", response: "confirm", reason: "Water now drains normally.", update: { en: "The resident confirmed the fix.", fil: "Kinumpirma ng residente ang pag-aayos." } });
     expect(await moderation.getPrivateReport(coordinator, "AS-LIFE01")).toMatchObject({ status: "Resident confirmed", resolutionEvidence: [{ id: "resolution-1" }] });
-    expect(await moderation.getPublicReport("AS-LIFE01")).toMatchObject({ status: "Resident confirmed", timeline: [expect.objectContaining({ status: "Submitted" }), expect.objectContaining({ status: "Under review" }), expect.objectContaining({ status: "Assigned" }), expect.objectContaining({ status: "In progress" }), expect.objectContaining({ status: "Resolved" }), expect.objectContaining({ status: "Resident confirmed" })] });
+    expect(await moderation.getPublicReport("AS-LIFE01")).toMatchObject({ status: "Resident confirmed", timeline: [expect.objectContaining({ status: "Under review" }), expect.objectContaining({ status: "Assigned" }), expect.objectContaining({ status: "In progress" }), expect.objectContaining({ status: "Resolved" }), expect.objectContaining({ status: "Resident confirmed" })] });
     expect(await moderation.listNotifications("resident-2")).toHaveLength(5);
     expect(await moderation.listAudit({ uid: "admin-1", roles: ["Administrator"] })).toHaveLength(5);
   });

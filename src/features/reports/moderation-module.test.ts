@@ -15,6 +15,25 @@ const coordinator = { uid: "coordinator-1", roles: ["Coordinator"] as const };
 const resident = { uid: "resident-1", roles: ["Resident"] as const };
 
 describe("report moderation application boundary", () => {
+  it("accepts only one concurrent decision and keeps one timeline, notification, and audit set", async () => {
+    const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [submittedReport()] }) });
+    const input = { reference: "AS-REVIEW1", expectedRevision: 0, publicSummary: "Broken light near the court.", publicArea: "Court", approvedMedia: [], reason: "Reviewed safely." };
+    const decisions = await Promise.allSettled([moderation.accept(moderator, input), moderation.accept(moderator, input)]);
+    expect(decisions.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(decisions.filter((result) => result.status === "rejected")).toEqual([expect.objectContaining({ reason: expect.objectContaining({ code: "CONFLICT" }) })]);
+    expect((await moderation.getPrivateReport(moderator, "AS-REVIEW1")).history).toHaveLength(1);
+    expect(await moderation.listNotifications("resident-1")).toHaveLength(1);
+    expect(await moderation.listAudit({ uid: "admin", roles: ["Administrator"] })).toHaveLength(1);
+  });
+  it("keeps accepted work in the workspace and rejects stale actions without side effects", async () => {
+    const store = createMemoryModerationStore({ reports: [submittedReport()] });
+    const moderation = createModerationModule({ store });
+    await moderation.accept(moderator, { reference: "AS-REVIEW1", publicSummary: "Broken light near the court.", publicArea: "Covered court", approvedMedia: [], reason: "Private details removed.", expectedRevision: 0 });
+    expect(await moderation.listWorkspace(coordinator)).toEqual([expect.objectContaining({ status: "Under review", revision: 1 })]);
+    await expect(moderation.assign(coordinator, { reference: "AS-REVIEW1", priority: "high", destination: "lighting", reason: "Dark crossing.", update: { en: "Assigned.", fil: "Itinalaga." }, expectedRevision: 0 })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect((await moderation.getPrivateReport(coordinator, "AS-REVIEW1")).status).toBe("Under review");
+    expect(await moderation.listAudit({ uid: "admin", roles: ["Administrator"] })).toHaveLength(1);
+  });
   it("allows authorized operators to review private reports while denying residents", async () => {
     const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [submittedReport()] }) });
     await expect(moderation.listQueue(resident)).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -35,11 +54,13 @@ describe("report moderation application boundary", () => {
   it.each(["spam", "abusive", "emergency", "out-of-area", "out-of-scope"] as const)("rejects %s reports with a resident-readable reason", async (category) => {
     const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [submittedReport()] }) });
     await moderation.reject(moderator, { reference: "AS-REVIEW1", category, reason: "This report cannot be processed in the community queue." });
-    expect(await moderation.getPublicReport("AS-REVIEW1")).toMatchObject({ status: "Rejected", outcomeReason: "This report cannot be processed in the community queue." });
+    await expect(moderation.getPublicReport("AS-REVIEW1")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await moderation.getPrivateReport(moderator, "AS-REVIEW1")).toMatchObject({ status: "Rejected", public: { outcomeReason: "This report cannot be processed in the community queue." } });
   });
 
   it("merges duplicates without losing residents, evidence, or history and redirects followers", async () => {
     const canonical = submittedReport("AS-CANON", "resident-1");
+    canonical.status = "Under review";
     canonical.followers = ["resident-1"]; canonical.affectedResidents = ["resident-1"];
     const duplicate = submittedReport("AS-DUPE", "resident-2");
     duplicate.followers = ["resident-2", "resident-3"]; duplicate.affectedResidents = ["resident-2"];

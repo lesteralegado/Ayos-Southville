@@ -1,49 +1,338 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
-import { createModerationModule, type AuditEvent, type ModerationNotification, type ModerationReport, type ModerationStore } from "./moderation-module";
+import {
+  createModerationModule,
+  ModerationConflictError,
+  ModerationValidationError,
+  type AuditEvent,
+  type ModerationNotification,
+  type ModerationReport,
+  type ModerationStore,
+} from "./moderation-module";
+import { evidenceAsset, type EvidenceRecord } from "./evidence-module";
+import { getEvidenceBucket } from "./firebase-evidence-store";
+import {
+  defaultPilotConfiguration,
+  type PilotConfiguration,
+} from "@/features/admin/administration-module";
 import type { PublicReportDetail, ResidentReport } from "./report-module";
 
-const documentId = (...parts: string[]) => createHash("sha256").update(parts.join(":"), "utf8").digest("hex");
+const documentId = (...parts: string[]) =>
+  createHash("sha256").update(parts.join(":"), "utf8").digest("hex");
 
 function createFirebaseModerationStore(): ModerationStore {
   const db = getFirebaseAdmin().db;
-  async function hydrate(privateReport: ResidentReport): Promise<ModerationReport> {
-    const publicDocument = await db.collection("publicReports").doc(privateReport.reference).get();
-    const publicReport = publicDocument.data() as PublicReportDetail | undefined;
-    const engagements = await db.collection("reportEngagements").where("reference", "==", privateReport.reference).get();
-    const states = engagements.docs.map((item) => item.data() as { residentUid: string; affected?: boolean; following?: boolean; supportingEvidence?: ModerationReport["supportingEvidence"] });
-    const stored = (await db.collection("moderationReports").doc(privateReport.reference).get()).data() as Partial<ModerationReport> | undefined;
+  async function hydrate(
+    privateReport: ResidentReport,
+  ): Promise<ModerationReport> {
+    const publicDocument = await db
+      .collection("publicReports")
+      .doc(privateReport.reference)
+      .get();
+    const publicReport = publicDocument.data() as
+      PublicReportDetail | undefined;
+    const engagements = await db
+      .collection("reportEngagements")
+      .where("reference", "==", privateReport.reference)
+      .get();
+    const states = engagements.docs.map(
+      (item) =>
+        item.data() as {
+          residentUid: string;
+          affected?: boolean;
+          following?: boolean;
+          supportingEvidence?: ModerationReport["supportingEvidence"];
+        },
+    );
+    const stored = (
+      await db
+        .collection("moderationReports")
+        .doc(privateReport.reference)
+        .get()
+    ).data() as Partial<ModerationReport> | undefined;
     return {
-      reference: privateReport.reference, reporterUid: privateReport.reporterUid, category: privateReport.category,
-      description: privateReport.description, nearbyLandmark: privateReport.nearbyLandmark, exactLocation: privateReport.exactLocation,
-      evidence: privateReport.evidence, status: stored?.status ?? privateReport.status, submittedAt: privateReport.submittedAt,
-      public: stored?.public ?? { summary: publicReport?.publicSummary ?? "A community concern was submitted for review.", area: publicReport?.publicArea ?? "Southville 1 Â· Location pending review", location: publicReport?.publicLocation, media: publicReport?.media ?? [] },
-      followers: stored?.followers ?? states.filter((state) => state.following).map((state) => state.residentUid),
-      affectedResidents: stored?.affectedResidents ?? states.filter((state) => state.affected).map((state) => state.residentUid),
-      supportingEvidence: stored?.supportingEvidence ?? states.flatMap((state) => state.supportingEvidence ?? []),
-      history: stored?.history ?? [{ action: "submitted", status: "Submitted", occurredAt: privateReport.submittedAt, update: { en: "Report submitted.", fil: "Isinumite ang ulat." } }], priority: stored?.priority, destination: stored?.destination, resolutionEvidence: stored?.resolutionEvidence,
+      reference: privateReport.reference,
+      reporterUid: privateReport.reporterUid,
+      category: privateReport.category,
+      description: privateReport.description,
+      nearbyLandmark: privateReport.nearbyLandmark,
+      exactLocation: privateReport.exactLocation,
+      evidence: privateReport.evidence,
+      status: stored?.status ?? privateReport.status,
+      submittedAt: privateReport.submittedAt,
+      public: stored?.public ?? {
+        summary:
+          publicReport?.publicSummary ??
+          "A community concern was submitted for review.",
+        area:
+          publicReport?.publicArea ?? "Southville 1 Â· Location pending review",
+        location: publicReport?.publicLocation,
+        media: publicReport?.media ?? [],
+      },
+      revision: stored?.revision ?? 0,
+      approved: stored?.approved ?? false,
+      followers: states
+        .filter((state) => state.following)
+        .map((state) => state.residentUid),
+      affectedResidents: states
+        .filter((state) => state.affected)
+        .map((state) => state.residentUid),
+      supportingEvidence:
+        [...new Map([
+          ...(stored?.supportingEvidence ?? []),
+          ...states.flatMap((state) => state.supportingEvidence ?? []),
+        ].map((asset) => [asset.id, asset])).values()],
+      history: stored?.history ?? [
+        {
+          action: "submitted",
+          status: "Submitted",
+          occurredAt: privateReport.submittedAt,
+          update: { en: "Report submitted.", fil: "Isinumite ang ulat." },
+        },
+      ],
+      priority: stored?.priority,
+      destination: stored?.destination,
+      resolutionEvidence: stored?.resolutionEvidence,
     };
   }
   return {
-    async listReports() { const snapshot = await db.collection("privateReports").get(); return Promise.all(snapshot.docs.map((item) => hydrate(item.data() as ResidentReport))); },
-    async getReport(reference) { const item = await db.collection("privateReports").doc(reference).get(); return item.exists ? hydrate(item.data() as ResidentReport) : null; },
-    async saveReport(report) {
-      const batch = db.batch();
-      batch.set(db.collection("moderationReports").doc(report.reference), report);
-      batch.set(db.collection("publicReports").doc(report.reference), {
-        reference: report.reference, category: report.category, publicSummary: report.public.summary, publicArea: report.public.area,
-        publicLocation: report.public.location, media: report.public.media, status: report.status, submittedAt: report.submittedAt,
-        timeline: report.history.filter((event) => event.status).map((event) => ({ status: event.status, occurredAt: event.occurredAt, update: event.update })), outcomeReason: report.public.outcomeReason,
-        canonicalReference: report.public.canonicalReference,
+    async commit(change) {
+      await db.runTransaction(async (transaction) => {
+        const refs = change.reports.map((report) =>
+          db.collection("moderationReports").doc(report.reference),
+        );
+        const current = await transaction.getAll(...refs);
+        for (let index = 0; index < current.length; index++) {
+          if (
+            (current[index].data()?.revision ?? 0) !==
+            (change.reports[index].revision ?? 0)
+          )
+            throw new ModerationConflictError();
+        }
+        const engagements = await Promise.all(
+          change.reports.map((report) =>
+            transaction.get(
+              db
+                .collection("reportEngagements")
+                .where("reference", "==", report.reference),
+            ),
+          ),
+        );
+        if (change.audit.action === "report.assigned") {
+          const configDoc = await transaction.get(
+            db.collection("pilotConfiguration").doc("current"),
+          );
+          const config = (configDoc.data() ??
+            defaultPilotConfiguration) as PilotConfiguration;
+          if (
+            !config.destinations.some(
+              (destination) =>
+                destination.active &&
+                destination.id === change.reports[0].destination,
+            )
+          )
+            throw new ModerationValidationError(
+              "Choose an active internal destination.",
+            );
+        }
+        const resolution =
+          change.audit.action === "report.resolved"
+            ? change.reports[0]
+            : undefined;
+        const requested =
+          resolution?.resolutionEvidence?.filter(
+            (asset) =>
+              !current[0]
+                .data()
+                ?.resolutionEvidence?.some(
+                  (old: { id: string }) => old.id === asset.id,
+                ),
+          ) ?? [];
+        if (
+          resolution &&
+          (!requested.length ||
+            new Set(requested.map((asset) => asset.id)).size !==
+              requested.length ||
+            requested.some((asset) => !/^[a-f0-9]{64}$/.test(asset.id)))
+        )
+          throw new ModerationValidationError(
+            "Attach completed protected resolution uploads.",
+          );
+        const uploads = requested.length
+          ? await transaction.getAll(
+              ...requested.map((asset) =>
+                db.collection("evidenceUploads").doc(asset.id),
+              ),
+            )
+          : [];
+        const verified = await Promise.all(
+          uploads.map(async (doc) => {
+            const record = doc.data() as EvidenceRecord | undefined;
+            if (
+              !record ||
+              record.deleted ||
+              record.attachedTo ||
+              record.residentUid !== change.actorUid ||
+              record.draftKey !== `resolution_${resolution!.reference}` ||
+              Date.now() - Date.parse(record.createdAt) >= 86_400_000 ||
+              !(await getEvidenceBucket().file(record.path).exists())[0]
+            )
+              throw new ModerationValidationError(
+                "Attach completed owned resolution photos for this report.",
+              );
+            return record;
+          }),
+        );
+        if (resolution)
+          resolution.resolutionEvidence = [
+            ...(current[0].data()?.resolutionEvidence ?? []),
+            ...verified.map(evidenceAsset),
+          ];
+        for (let index = 0; index < change.reports.length; index++) {
+          const report = change.reports[index];
+          transaction.set(
+            refs[index],
+            JSON.parse(
+              JSON.stringify({
+                ...report,
+                revision: (report.revision ?? 0) + 1,
+              }),
+            ),
+          );
+          transaction.update(
+            db.collection("privateReports").doc(report.reference),
+            { status: report.status, ...(report.public.canonicalReference ? { canonicalReference: report.public.canonicalReference } : {}) },
+          );
+          const publicRef = db
+            .collection("publicReports")
+            .doc(report.reference);
+          if (
+            report.approved &&
+            !["Submitted", "Rejected", "Duplicate"].includes(report.status)
+          )
+            transaction.set(
+              publicRef,
+              JSON.parse(
+                JSON.stringify({
+                  approved: true,
+                  reference: report.reference,
+                  category: report.category,
+                  publicSummary: report.public.summary,
+                  publicArea: report.public.area,
+                  publicLocation: report.public.location,
+                  media: report.public.media,
+                  status: report.status,
+                  submittedAt: report.submittedAt,
+                  timeline: report.history
+                    .filter(
+                      (event) =>
+                        event.status &&
+                        event.update &&
+                        event.action !== "submitted",
+                    )
+                    .map((event) => ({
+                      status: event.status,
+                      occurredAt: event.occurredAt,
+                      update: event.update,
+                    })),
+                }),
+              ),
+            );
+          else transaction.delete(publicRef);
+        }
+        for (const doc of uploads)
+          transaction.update(doc.ref, { attachedTo: resolution!.reference });
+        if (change.audit.action === "report.merged") {
+          const canonical = change.reports[1];
+          const states = engagements[1].docs.map(
+            (doc) =>
+              doc.data() as {
+                residentUid: string;
+                following: boolean;
+                affected: boolean;
+              },
+          );
+          for (const uid of new Set([
+            ...canonical.followers,
+            ...canonical.affectedResidents,
+          ])) {
+            const existing = states.find((state) => state.residentUid === uid);
+            transaction.set(
+              db
+                .collection("reportEngagements")
+                .doc(documentId(uid, canonical.reference)),
+              {
+                residentUid: uid,
+                reference: canonical.reference,
+                following:
+                  !!existing?.following || canonical.followers.includes(uid),
+                affected:
+                  !!existing?.affected ||
+                  canonical.affectedResidents.includes(uid),
+              },
+              { merge: true },
+            );
+          }
+        }
+        const notifications = new Map(
+          change.notifications.map((notification) => [
+            notification.residentUid,
+            notification,
+          ]),
+        );
+        const template = change.notifications[0];
+        if (template)
+          for (const doc of engagements[0].docs) {
+            const state = doc.data();
+            if (state.following || state.affected)
+              notifications.set(state.residentUid, {
+                ...template,
+                residentUid: state.residentUid,
+              });
+          }
+        for (const notification of notifications.values()) {
+          const id = documentId(
+            notification.residentUid,
+            change.audit.target,
+            String((change.reports[0].revision ?? 0) + 1),
+          );
+          transaction.create(db.collection("residentNotifications").doc(id), {
+            ...notification,
+            id,
+            kind: "report-update",
+            read: false,
+          });
+        }
+        transaction.create(db.collection("auditEvents").doc(), change.audit);
       });
-      for (const residentUid of new Set([...report.followers, ...report.affectedResidents])) batch.set(db.collection("reportEngagements").doc(documentId(residentUid, report.reference)), { residentUid, reference: report.reference, following: report.followers.includes(residentUid), affected: report.affectedResidents.includes(residentUid), supportingEvidence: [] }, { merge: true });
-      await batch.commit();
     },
-    async addNotification(notification: ModerationNotification) { await db.collection("residentNotifications").doc(documentId(notification.residentUid, notification.reference, notification.message)).create({ ...notification, id: documentId(notification.residentUid, notification.reference, notification.message), kind: "report-update", read: false }); },
-    async listNotifications(residentUid) { const snapshot = await db.collection("residentNotifications").where("residentUid", "==", residentUid).get(); return snapshot.docs.map((item) => item.data() as ModerationNotification); },
-    async appendAudit(event: AuditEvent, id = crypto.randomUUID()) { await db.collection("auditEvents").doc(id).create(event); },
-    async listAudit() { const snapshot = await db.collection("auditEvents").get(); return snapshot.docs.map((item) => item.data() as AuditEvent).toSorted((a, b) => a.occurredAt.localeCompare(b.occurredAt)); },
+    async listReports() {
+      const snapshot = await db.collection("privateReports").get();
+      return Promise.all(
+        snapshot.docs.map((item) => hydrate(item.data() as ResidentReport)),
+      );
+    },
+    async getReport(reference) {
+      const item = await db.collection("privateReports").doc(reference).get();
+      return item.exists ? hydrate(item.data() as ResidentReport) : null;
+    },
+    async listNotifications(residentUid) {
+      const snapshot = await db
+        .collection("residentNotifications")
+        .where("residentUid", "==", residentUid)
+        .get();
+      return snapshot.docs.map((item) => item.data() as ModerationNotification);
+    },
+    async appendAudit(event: AuditEvent, id = crypto.randomUUID()) {
+      await db.collection("auditEvents").doc(id).create(event);
+    },
+    async listAudit() {
+      const snapshot = await db.collection("auditEvents").get();
+      return snapshot.docs
+        .map((item) => item.data() as AuditEvent)
+        .toSorted((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+    },
   };
 }
 
@@ -52,11 +341,27 @@ export function getModerationModule() {
   return createModerationModule({
     store: createFirebaseModerationStore(),
     async emailEnabled(residentUid) {
-      const preference = await db.collection("notificationPreferences").doc(residentUid).get();
+      const preference = await db
+        .collection("notificationPreferences")
+        .doc(residentUid)
+        .get();
       return preference.data()?.emailEnabled === true;
     },
     async sendEmail(delivery) {
-      await db.collection("emailDeliveryRequests").doc(documentId(delivery.residentUid, delivery.reference, delivery.message)).create({ ...delivery, createdAt: new Date().toISOString(), status: "pending" });
+      await db
+        .collection("emailDeliveryRequests")
+        .doc(
+          documentId(
+            delivery.residentUid,
+            delivery.reference,
+            delivery.message,
+          ),
+        )
+        .create({
+          ...delivery,
+          createdAt: new Date().toISOString(),
+          status: "pending",
+        });
     },
   });
 }

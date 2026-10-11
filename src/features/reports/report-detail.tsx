@@ -11,7 +11,13 @@ import {
 import { ReportEngagement } from "./report-engagement";
 import { ResolutionResponse } from "./resolution-response";
 
-export function ReportDetail({ report }: { report: PublicReportDetail }) {
+export function ReportDetail({
+  report,
+  privateReceipt = false,
+}: {
+  report: PublicReportDetail;
+  privateReceipt?: boolean;
+}) {
   const { locale } = useLocale();
   const fil = locale === "fil";
   return (
@@ -53,6 +59,21 @@ export function ReportDetail({ report }: { report: PublicReportDetail }) {
             <dd>{formatManilaDate(report.submittedAt, locale, true)}</dd>
           </div>
         </dl>
+        {report.media.length > 0 && (
+          <section
+            aria-label={fil ? "Aprubadong mga litrato" : "Approved photos"}
+            className="evidence-previews"
+          >
+            {report.media.map((asset) => (
+              <figure key={asset.id}>
+                {/* Only individually approved media is served from this public boundary. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={"/api/public-evidence/" + asset.id} alt={asset.alt} />
+                <figcaption>{asset.alt}</figcaption>
+              </figure>
+            ))}
+          </section>
+        )}
         <section className="timeline" aria-labelledby="timeline-title">
           <h2 id="timeline-title">Timeline</h2>
           <ol>
@@ -75,7 +96,15 @@ export function ReportDetail({ report }: { report: PublicReportDetail }) {
         {report.status === "Resolved" && (
           <ResolutionResponse reference={report.reference} fil={fil} />
         )}
-        <ReportEngagement reference={report.reference} />
+        {privateReceipt ? (
+          <p>
+            {fil
+              ? "Pribadong resibo. Sa iyo at awtorisadong operator lamang nakikita ang ulat hanggang aprubahan."
+              : "Private receipt. Only you and authorized operators can view this report until it is approved."}
+          </p>
+        ) : (
+          <ReportEngagement reference={report.reference} />
+        )}
       </article>
     </main>
   );

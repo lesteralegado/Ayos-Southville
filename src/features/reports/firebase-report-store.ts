@@ -89,10 +89,6 @@ function createFirebaseReportStore(): ReportStore {
           report.private,
         );
         transaction.create(
-          db.collection("publicReports").doc(report.public.reference),
-          report.public,
-        );
-        transaction.create(
           db
             .collection("residentNotifications")
             .doc(
@@ -136,7 +132,8 @@ function createFirebaseReportStore(): ReportStore {
         .collection("publicReports")
         .doc(reference)
         .get();
-      return document.exists ? (document.data() as PublicReportDetail) : null;
+      const value = document.data();
+      return document.exists && value?.approved === true && !["Submitted", "Rejected"].includes(value.status) ? (value as PublicReportDetail) : null;
     },
   };
 }
