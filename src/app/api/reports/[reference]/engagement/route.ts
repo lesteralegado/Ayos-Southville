@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
+import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
+import { EvidenceError } from "@/features/reports/evidence-module";
 import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
 import { getEngagementModule } from "@/features/reports/firebase-engagement-store";
 import type { EvidenceAsset } from "@/features/reports/report-module";
@@ -15,12 +18,12 @@ export async function GET(
       { status: 401 },
     );
   const { reference } = await context.params;
-  return NextResponse.json(
-    await getEngagementModule().getResidentState(
-      resident.uid,
-      reference.toUpperCase(),
-    ),
-  );
+  if (!/^[A-Z0-9-]{3,80}$/i.test(reference)) return NextResponse.json({ code: "VALIDATION" }, { status: 422 });
+  try {
+    const state = await getEngagementModule().getResidentState(resident.uid, reference.toUpperCase());
+    return NextResponse.json({ affected: state.affected, following: state.following, supportingEvidence: state.supportingEvidence,
+      uploadOwner: createHash("sha256").update(resident.uid).digest("hex") }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch { return NextResponse.json({ code: "UNAVAILABLE", error: "Choices could not be loaded. Retry." }, { status: 503 }); }
 }
 
 export async function POST(
@@ -44,23 +47,16 @@ export async function POST(
       { status: 403 },
     );
   const { reference } = await context.params;
-  const input = (await request.json()) as {
+  try {
+  if (!/^[A-Z0-9-]{3,80}$/i.test(reference)) throw new EngagementValidationError("Choose a valid report.");
+  const input = (await readBoundedJson(request)) as {
     action?: string;
     active?: boolean;
     evidence?: EvidenceAsset[];
   };
-  // Supporting uploads need a separately scoped attachment workflow. Never
-  // accept client-supplied metadata as proof of a stored private photo.
-  if (Array.isArray(input.evidence) && input.evidence.length)
-    return NextResponse.json(
-      {
-        error:
-          "Submit evidence with a new report. Supporting photo attachments are not available yet.",
-      },
-      { status: 422 },
-    );
+  if (!input || typeof input !== "object" || Array.isArray(input) || (input.evidence !== undefined && !Array.isArray(input.evidence))) throw new EngagementValidationError("Choose a valid action.");
+  // The persistence adapter verifies owned completed uploads and replaces client metadata.
   const engagement = getEngagementModule();
-  try {
     if (input.action === "affected" && typeof input.active === "boolean")
       return NextResponse.json(
         await engagement.setAffected({
@@ -78,13 +74,14 @@ export async function POST(
           active: input.active,
         }),
       );
-  } catch (error) {
-    if (error instanceof EngagementValidationError)
-      return NextResponse.json({ error: error.message }, { status: 422 });
-    throw error;
-  }
   return NextResponse.json(
     { error: "Invalid engagement action." },
     { status: 422 },
   );
+  } catch (error) {
+    const protectedFailure = protectionResponse(error); if (protectedFailure) return protectedFailure;
+    if (error instanceof EngagementValidationError || error instanceof SyntaxError || error instanceof EvidenceError)
+      return NextResponse.json({ code: "VALIDATION", error: "Choose a valid action and completed owned photos." }, { status: error instanceof EvidenceError ? error.status : 422 });
+    return NextResponse.json({ code: "UNAVAILABLE", error: "The update could not be confirmed. Reload and retry." }, { status: 503 });
+  }
 }

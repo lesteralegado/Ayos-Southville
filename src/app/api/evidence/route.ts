@@ -1,4 +1,6 @@
 import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
+import { operationalMonitor } from "@/features/pilot/monitoring";
+import { protectionResponse } from "@/features/pilot/security-module";
 import {
   getEvidenceModule,
   cancelEvidenceUpload,
@@ -34,6 +36,8 @@ export async function DELETE(request: Request) {
   }
 }
 function failure(error: unknown) {
+  const protectedFailure = protectionResponse(error); if (protectedFailure) return protectedFailure;
+  operationalMonitor.record({ operation: "evidence", status: error instanceof EvidenceError ? error.status : 503, code: error instanceof EvidenceError ? "VALIDATION" : "UNAVAILABLE" });
   return Response.json(
     {
       error:

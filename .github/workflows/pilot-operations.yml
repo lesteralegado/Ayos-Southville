@@ -1,0 +1,40 @@
+name: Pilot operations
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: pilot-operations
+  cancel-in-progress: false
+jobs:
+  monitor-and-preview:
+    if: vars.PILOT_OPERATIONS_ENABLED == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_SITE_URL: ${{ vars.PILOT_SITE_URL }}
+      RETENTION_TARGET_PROJECT: ${{ vars.PILOT_FIREBASE_PROJECT }}
+      RETENTION_TARGET_BUCKET: ${{ vars.PILOT_STORAGE_BUCKET }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # reviewed official v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # reviewed official v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: External uptime check
+        run: node scripts/pilot-operations.mjs uptime
+      - name: Authenticated cleanup preview
+        if: always()
+        run: node scripts/pilot-operations.mjs cleanup
+        env:
+          RETENTION_WORKER_SECRET: ${{ secrets.RETENTION_WORKER_SECRET }}
+      - name: Apply only after independent operator enablement
+        if: success() && vars.PILOT_RETENTION_APPLY_ENABLED == 'true'
+        run: node scripts/pilot-operations.mjs cleanup --apply "--project=$RETENTION_TARGET_PROJECT" "--bucket=$RETENTION_TARGET_BUCKET"
+        env:
+          RETENTION_WORKER_SECRET: ${{ secrets.RETENTION_WORKER_SECRET }}

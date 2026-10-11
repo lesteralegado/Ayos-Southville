@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { profileRoles } from "@/features/admin/administration-module";
+import { pilotParticipationClosed } from "@/features/pilot/pilot-expiry";
 
 export const sessionCookieName = "ayos_session";
 export const sessionDurationMs = 5 * 24 * 60 * 60 * 1000;
@@ -16,7 +17,7 @@ export async function getVerifiedResident() {
       .collection("residentProfiles")
       .doc(claims.uid)
       .get();
-    return profile.exists ? claims : null;
+    return profile.exists && profile.data()?.deletionPending !== true ? claims : null;
   } catch {
     return null;
   }
@@ -25,12 +26,14 @@ export async function getVerifiedResident() {
 export async function getVerifiedOperator() {
   const resident = await getVerifiedResident();
   if (!resident) return null;
+  try {
   const profile = await getFirebaseAdmin()
     .db.collection("residentProfiles")
     .doc(resident.uid)
     .get();
   const roles: unknown = profile.data()?.roles;
   return { uid: resident.uid, roles: profileRoles(roles), email: resident.email };
+  } catch { return null; }
 }
 
 export async function hasPilotAccess(resident: {
@@ -38,6 +41,7 @@ export async function hasPilotAccess(resident: {
   email?: string;
   email_verified?: boolean;
 }) {
+  if (await pilotParticipationClosed()) return false;
   const { getAdministrationModule } = await import("@/features/admin/firebase-administration-store");
   return getAdministrationModule().canParticipate({
     uid: resident.uid,

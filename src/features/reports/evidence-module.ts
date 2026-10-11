@@ -13,6 +13,8 @@ export type EvidenceRecord = EvidenceAsset &
     createdAt: string;
     attachedTo?: string;
     deleted?: boolean;
+    rejectedAt?: string;
+    pilotEndedAt?: string;
   };
 export type EvidenceStore = {
   saveOnce(scope: EvidenceScope, photo: PreparedPhoto): Promise<EvidenceRecord>;
@@ -35,6 +37,13 @@ export function validDraftKey(value: unknown): value is string {
 export function evidenceAsset(record: EvidenceRecord): EvidenceAsset {
   const { id, name, type, size, visibility } = record;
   return { id, name, type, size, visibility };
+}
+export function evidenceAvailable(record: EvidenceRecord, now = Date.now()) {
+  const created = Date.parse(record.createdAt);
+  return !record.deleted && Number.isFinite(created)
+    && (Boolean(record.attachedTo) || now - created < 86400000)
+    && (record.rejectedAt === undefined || (Number.isFinite(Date.parse(record.rejectedAt)) && now - Date.parse(record.rejectedAt) < 30 * 86400000))
+    && (record.pilotEndedAt === undefined || (Number.isFinite(Date.parse(record.pilotEndedAt)) && now - Date.parse(record.pilotEndedAt) < 90 * 86400000));
 }
 
 export function createEvidenceModule({
@@ -83,11 +92,9 @@ export function createEvidenceModule({
       const record = await store.get(id);
       if (
         !record ||
-        record.deleted ||
+        !evidenceAvailable(record) ||
         (record.residentUid !== residentUid &&
-          !(operator && record.attachedTo)) ||
-        (!record.attachedTo &&
-          Date.now() - Date.parse(record.createdAt) >= 86_400_000)
+          !(operator && record.attachedTo))
       )
         throw new EvidenceError("Photo not found.", 404);
       return { bytes: await store.read(record), type: record.type };

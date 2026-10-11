@@ -18,6 +18,8 @@ export function getEmailDeliveryModule() {
       return db.runTransaction(async transaction => {
         const ref = jobs.doc(id); const doc = await transaction.get(ref); const job = doc.data() as EmailJob | undefined;
         if (!job || job.status !== "pending" || (job.nextAttemptAt && job.nextAttemptAt > now) || (job.leaseUntil && job.leaseUntil > now)) return null;
+        const profile = await transaction.get(db.collection("residentProfiles").doc(job.residentUid));
+        if (profile.data()?.deletionPending === true) return null;
         const claimed = { ...job, leaseToken: token, leaseUntil: new Date(Date.parse(now) + 120_000).toISOString(), attempts: (job.attempts ?? 0) + 1, firstAttemptAt: job.firstAttemptAt ?? now };
         transaction.update(ref, claimed); return claimed;
       });

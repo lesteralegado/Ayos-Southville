@@ -46,7 +46,8 @@ export type EngagementStore = {
     residentUid: string,
     reference: string,
     state: ResidentReportState,
-  ): Promise<void>;
+    change?: "affected" | "follow",
+  ): Promise<void | ResidentReportState>;
   addNotificationOnce(
     key: string,
     notification: ResidentNotification,
@@ -183,7 +184,7 @@ export function createEngagementModule({
           ? [...current.supportingEvidence, ...input.evidence]
           : [],
       };
-      await store.setResidentState(input.residentUid, input.reference, next);
+      const saved = await store.setResidentState(input.residentUid, input.reference, next, "affected");
       if (input.active)
         await notify(
           input.residentUid,
@@ -191,7 +192,7 @@ export function createEngagementModule({
           "affected",
           "You marked this report as affecting you.",
         );
-      return next;
+      return saved ?? next;
     },
     async setFollow(input: {
       residentUid: string;
@@ -204,7 +205,7 @@ export function createEngagementModule({
       );
       if (current.following === input.active) return current;
       const next = { ...current, following: input.active };
-      await store.setResidentState(input.residentUid, input.reference, next);
+      const saved = await store.setResidentState(input.residentUid, input.reference, next, "follow");
       if (input.active)
         await notify(
           input.residentUid,
@@ -212,7 +213,7 @@ export function createEngagementModule({
           "follow",
           "You are now following this report.",
         );
-      return next;
+      return saved ?? next;
     },
     recordReportEvent: (
       residentUid: string,

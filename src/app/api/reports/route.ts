@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { operationalMonitor } from "@/features/pilot/monitoring";
+import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
 import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
 import { getReportModule } from "@/features/reports/firebase-report-store";
 import {
@@ -35,7 +37,7 @@ export async function POST(request: Request) {
         },
         { status: 403 },
       );
-    const body: unknown = await request.json();
+    const body: unknown = await readBoundedJson(request);
     const fields =
       typeof body === "object" && body !== null && !Array.isArray(body)
         ? body
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
     ).submit({ ...fields, residentUid: resident.uid });
     return NextResponse.json(receipt, { status: receipt.created ? 201 : 200 });
   } catch (error) {
+    const protectedFailure = protectionResponse(error); if (protectedFailure) return protectedFailure;
     if (error instanceof EvidenceError)
       return NextResponse.json(
         {
@@ -67,6 +70,7 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
+    operationalMonitor.record({ operation: "report", status: 503, code: "UNAVAILABLE" });
     return NextResponse.json(
       {
         error: "Submission could not be confirmed. Retry with the same draft.",

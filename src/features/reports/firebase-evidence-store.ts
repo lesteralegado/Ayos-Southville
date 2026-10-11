@@ -1,10 +1,13 @@
 import "server-only";
+import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
+import { assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
 import { createHash, randomUUID } from "node:crypto";
 import { getStorage } from "firebase-admin/storage";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import {
   createEvidenceModule,
   EvidenceError,
+  evidenceAvailable,
   type EvidenceScope,
   type EvidenceRecord,
   type EvidenceStore,
@@ -32,7 +35,9 @@ async function removeOwnedDraftUpload(
 ) {
   const db = getFirebaseAdmin().db;
   const ref = db.collection("evidenceUploads").doc(id);
+  await protectMutation(residentUid, "evidence");
   const removed = await db.runTransaction(async (transaction) => {
+    await assertWritable(transaction, residentUid);
     const doc = await transaction.get(ref);
     const record = doc.data() as EvidenceRecord | undefined;
     if ((!record && !scope) || (record && record.residentUid !== residentUid))
@@ -72,13 +77,16 @@ export function getEvidenceBucket() {
 }
 
 export async function readApprovedPublicEvidence(id: string) {
+  if (await pilotRecordsExpired()) throw new EvidenceError("Photo not found.", 404);
   if (!/^[a-f0-9]{64}$/.test(id))
     throw new EvidenceError("Photo not found.", 404);
   const db = getFirebaseAdmin().db;
   const upload = await db.collection("evidenceUploads").doc(id).get();
   const record = upload.data() as EvidenceRecord | undefined;
-  if (!record || record.deleted || !record.attachedTo)
+  if (!record || !evidenceAvailable(record) || !record.attachedTo)
     throw new EvidenceError("Photo not found.", 404);
+  const owner = await db.collection("residentProfiles").doc(record.residentUid).get();
+  if (owner.data()?.deletionPending === true) throw new EvidenceError("Photo not found.", 404);
   const projection = publicProjection({ ...(
     await db.collection("publicReports").doc(record.attachedTo).get()
   ).data(), reference: record.attachedTo });
@@ -95,16 +103,13 @@ export function getEvidenceModule() {
   const db = getFirebaseAdmin().db;
   const store: EvidenceStore = {
     async saveOnce(scope, photo) {
+      await protectMutation(scope.residentUid, "evidence");
       const id = documentId(scope.residentUid, scope.draftKey, scope.slotId);
       const ref = db.collection("evidenceUploads").doc(id);
       const prior = await ref.get();
       if (prior.exists) {
         const record = prior.data() as EvidenceRecord;
-        if (
-          record.deleted ||
-          (!record.attachedTo &&
-            Date.now() - Date.parse(record.createdAt) >= 86_400_000)
-        )
+        if (!evidenceAvailable(record))
           throw new EvidenceError(
             "This upload is no longer available. Choose the photo again.",
             409,
@@ -133,6 +138,7 @@ export function getEvidenceModule() {
       });
       try {
         const saved = await db.runTransaction(async (transaction) => {
+          await assertWritable(transaction, scope.residentUid);
           const draftRef = db
             .collection("evidenceDrafts")
             .doc(documentId(scope.residentUid, scope.draftKey));
@@ -147,9 +153,8 @@ export function getEvidenceModule() {
           if (current.exists) {
             const value = current.data() as EvidenceRecord;
             if (
-              value.deleted ||
-              value.attachedTo ||
-              Date.now() - Date.parse(value.createdAt) >= 86_400_000
+              !evidenceAvailable(value) ||
+              value.attachedTo
             )
               throw new EvidenceError(
                 "This upload is no longer available. Choose the photo again.",
@@ -157,7 +162,13 @@ export function getEvidenceModule() {
               );
             return value;
           }
-          const ids: string[] = draft.data()?.ids ?? [];
+          const priorIds: string[] = Array.isArray(draft.data()?.ids) ? draft.data()!.ids : [];
+          if (priorIds.length > 5 || priorIds.some(item => typeof item !== "string" || !/^[a-f0-9]{64}$/.test(item))) throw new EvidenceError("Invalid upload draft.");
+          const priorUploads = priorIds.length ? await transaction.getAll(...priorIds.map(item => db.collection("evidenceUploads").doc(item))) : [];
+          const ids = priorUploads.filter(doc => {
+            const value = doc.data() as EvidenceRecord | undefined;
+            return value && value.residentUid === scope.residentUid && value.draftKey === scope.draftKey && evidenceAvailable(value);
+          }).map(doc => doc.id);
           if (ids.length >= 5)
             throw new EvidenceError("Choose up to 5 photos.");
           const count = Number(quota.data()?.count ?? 0);
@@ -171,7 +182,7 @@ export function getEvidenceModule() {
             residentUid: scope.residentUid,
             ids: [...ids, id],
           });
-          transaction.set(quotaRef, { count: count + 1 });
+          transaction.set(quotaRef, { residentUid: scope.residentUid, count: count + 1, expiresAt: new Date(Date.now() + 2 * 86_400_000).toISOString() });
           return record;
         });
         if (saved.path !== path) await file.delete({ ignoreNotFound: true });
@@ -191,15 +202,21 @@ export function getEvidenceModule() {
         .map((doc) => doc.data() as EvidenceRecord)
         .filter(
           (r) =>
-            !r.deleted &&
-            !r.attachedTo &&
-            Date.now() - Date.parse(r.createdAt) < 86_400_000,
+            evidenceAvailable(r) && !r.attachedTo,
         );
     },
     async get(id) {
       if (!/^[a-f0-9]{64}$/.test(id)) return null;
       const doc = await db.collection("evidenceUploads").doc(id).get();
-      return doc.exists ? (doc.data() as EvidenceRecord) : null;
+      if (!doc.exists) return null;
+      const record = doc.data() as EvidenceRecord;
+      const [profile, operations, report] = await Promise.all([
+        db.collection("residentProfiles").doc(record.residentUid).get(),
+        db.collection("pilotOperations").doc("current").get(),
+        record.attachedTo ? db.collection("privateReports").doc(record.attachedTo).get() : Promise.resolve(null),
+      ]);
+      if (profile.data()?.deletionPending === true) return null;
+      return { ...record, ...(operations.data()?.pilotEndedAt ? { pilotEndedAt: operations.data()!.pilotEndedAt } : {}), ...(report?.data()?.status === "Rejected" ? { rejectedAt: report.data()!.rejectedAt ?? "" } : {}) };
     },
     async read(record) {
       const [bytes] = await getEvidenceBucket().file(record.path).download();

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { operationalMonitor } from "@/features/pilot/monitoring";
+import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
 import { getVerifiedOperator, hasPilotAccess } from "@/features/auth/session";
 import { getPublicPilotConfiguration } from "@/features/admin/firebase-administration-store";
 import { getModerationModule } from "@/features/reports/firebase-moderation-store";
@@ -47,7 +49,7 @@ export async function PATCH(request: Request) {
   try {
     if (!(await hasPilotAccess({ uid: actor.uid, email: actor.email, email_verified: true })))
       throw new ModerationForbiddenError();
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = (await readBoundedJson(request)) as Record<string, unknown>;
     if (
       !body ||
       typeof body !== "object" ||
@@ -122,6 +124,7 @@ export async function PATCH(request: Request) {
   }
 }
 function failure(error: unknown) {
+  const protectedFailure = protectionResponse(error); if (protectedFailure) return protectedFailure;
   if (error instanceof ModerationConflictError)
     return NextResponse.json(
       { error: error.message, code: error.code },
@@ -145,6 +148,7 @@ function failure(error: unknown) {
       },
       { status: 422, headers },
     );
+  operationalMonitor.record({ operation: "moderation", status: 503, code: "UNAVAILABLE" });
   return NextResponse.json(
     { error: "The moderation action could not be completed." },
     { status: 503 },

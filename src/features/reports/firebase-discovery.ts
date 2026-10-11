@@ -1,4 +1,5 @@
 import "server-only";
+import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { getPublicPilotConfiguration } from "@/features/admin/firebase-administration-store";
 import { createDiscoveryModule, discoveryLimit, DiscoveryError } from "./discovery-module";
@@ -14,6 +15,7 @@ export function publicCollection() { return discoveryMode() === "demo" ? "demoPu
 export function getDiscoveryModule() {
   const mode = discoveryMode();
   return createDiscoveryModule({ mode, async read() {
+    if (mode === "live" && await pilotRecordsExpired()) return [];
     const snapshot = await getFirebaseAdmin().db.collection(publicCollection()).where("approved", "==", true).limit(discoveryLimit + 1).get();
     return snapshot.docs.map((doc) => ({ ...doc.data(), reference: doc.id }));
   } });
@@ -24,6 +26,7 @@ export async function getDiscoveryCategories() {
 }
 /** No private payload is returned. Redirects terminate only at a currently approved public report. */
 export async function getPublicCanonicalReference(reference: string) {
+  if (await pilotRecordsExpired()) return null;
   if (!/^AS-[A-Z0-9]+$/.test(reference) || discoveryMode() !== "live") return null;
   const db = getFirebaseAdmin().db, seen = new Set<string>();
   let current = reference;

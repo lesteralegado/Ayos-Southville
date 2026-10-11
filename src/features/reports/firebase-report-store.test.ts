@@ -48,6 +48,8 @@ vi.mock("@/lib/firebase/admin", () => {
           refs.map((ref) => snapshot(ref.path)),
         create: (ref: { path: string }, data: Record<string, unknown>) =>
           writes.push(() => fixtures.records.set(ref.path, data)),
+        set: (ref: { path: string }, data: Record<string, unknown>) =>
+          writes.push(() => fixtures.records.set(ref.path, data)),
         update: (ref: { path: string }, data: Record<string, unknown>) =>
           writes.push(() =>
             fixtures.records.set(ref.path, {
@@ -85,6 +87,7 @@ const submission = {
 };
 beforeEach(() => {
   fixtures.records.clear();
+  fixtures.records.set("residentProfiles/r1", { roles: ["Resident"] });
   fixtures.storageExists = true;
   process.env.FIREBASE_STORAGE_BUCKET = "private-test-bucket";
   fixtures.records.set(`evidenceUploads/${assetId}`, {

@@ -1,4 +1,6 @@
 import "server-only";
+import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
+import { assertWritable, minimizedAudit, protectMutation } from "@/features/pilot/firebase-protection";
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import {
@@ -10,7 +12,7 @@ import {
   type ModerationReport,
   type ModerationStore,
 } from "./moderation-module";
-import { evidenceAsset, type EvidenceRecord } from "./evidence-module";
+import { evidenceAsset, evidenceAvailable, type EvidenceRecord } from "./evidence-module";
 import { getEvidenceBucket } from "./firebase-evidence-store";
 import {
   defaultPilotConfiguration,
@@ -98,7 +100,10 @@ function createFirebaseModerationStore(): ModerationStore {
   }
   return {
     async commit(change) {
+      await protectMutation(change.actorUid, "operator");
       await db.runTransaction(async (transaction) => {
+        const allowed = ["report.accepted", "report.rejected", "report.merged"].includes(change.audit.action) ? ["Moderator", "Administrator"] : ["report.assigned", "report.started", "report.resolved"].includes(change.audit.action) ? ["Coordinator", "Administrator"] : undefined;
+        await assertWritable(transaction, change.actorUid, change.reports.flatMap(report => [report.reporterUid, ...report.followers, ...report.affectedResidents]), allowed);
         const refs = change.reports.map((report) =>
           db.collection("moderationReports").doc(report.reference),
         );
@@ -171,11 +176,10 @@ function createFirebaseModerationStore(): ModerationStore {
             const record = doc.data() as EvidenceRecord | undefined;
             if (
               !record ||
-              record.deleted ||
+              !evidenceAvailable(record) ||
               record.attachedTo ||
               record.residentUid !== change.actorUid ||
               record.draftKey !== `resolution_${resolution!.reference}` ||
-              Date.now() - Date.parse(record.createdAt) >= 86_400_000 ||
               !(await getEvidenceBucket().file(record.path).exists())[0]
             )
               throw new ModerationValidationError(
@@ -195,6 +199,7 @@ function createFirebaseModerationStore(): ModerationStore {
         if (template) for (const state of currentStates)
           if (state.following || state.affected) notifications.set(state.residentUid, { ...template, residentUid: state.residentUid });
         const recipientIds = [...notifications.keys()];
+        await assertWritable(transaction, change.actorUid, recipientIds);
         const preferences = recipientIds.length ? await transaction.getAll(...recipientIds.map(uid => db.collection("notificationPreferences").doc(uid))) : [];
         const preferencesByUid = new Map(recipientIds.map((uid, index) => [uid, preferences[index].data()]));
         for (let index = 0; index < change.reports.length; index++) {
@@ -210,7 +215,7 @@ function createFirebaseModerationStore(): ModerationStore {
           );
           transaction.update(
             db.collection("privateReports").doc(report.reference),
-            { status: report.status, ...(report.public.canonicalReference ? { canonicalReference: report.public.canonicalReference } : {}) },
+            { status: report.status, ...(report.status === "Rejected" ? { rejectedAt: change.audit.occurredAt } : {}), ...(report.public.canonicalReference ? { canonicalReference: report.public.canonicalReference } : {}) },
           );
           const publicRef = db
             .collection("publicReports")
@@ -305,16 +310,18 @@ function createFirebaseModerationStore(): ModerationStore {
             nextAttemptAt: notification.createdAt,
           });
         }
-        transaction.create(db.collection("auditEvents").doc(), change.audit);
+        transaction.create(db.collection("auditEvents").doc(), minimizedAudit(change.audit));
       });
     },
     async listReports() {
+      if (await pilotRecordsExpired()) return [];
       const snapshot = await db.collection("privateReports").get();
       return Promise.all(
         snapshot.docs.map((item) => hydrate(item.data() as ResidentReport)),
       );
     },
     async getReport(reference) {
+      if (await pilotRecordsExpired()) return null;
       const item = await db.collection("privateReports").doc(reference).get();
       return item.exists ? hydrate(item.data() as ResidentReport) : null;
     },
@@ -326,12 +333,13 @@ function createFirebaseModerationStore(): ModerationStore {
       return snapshot.docs.map((item) => item.data() as ModerationNotification);
     },
     async appendAudit(event: AuditEvent, id = crypto.randomUUID()) {
-      await db.collection("auditEvents").doc(id).create(event);
+      await db.collection("auditEvents").doc(id).create(minimizedAudit(event));
     },
     async listAudit() {
       const snapshot = await db.collection("auditEvents").get();
       return snapshot.docs
-        .map((item) => item.data() as AuditEvent)
+        .map((item) => minimizedAudit(item.data() as AuditEvent))
+        .filter(event => Date.parse(event.expiresAt) > Date.now())
         .toSorted((a, b) => a.occurredAt.localeCompare(b.occurredAt));
     },
   };

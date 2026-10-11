@@ -65,6 +65,7 @@ export function ResidentPanel({
           <Link className="button button-quiet" href="/account/notifications">
             {message.notifications}
           </Link>
+          <Link className="button button-quiet" href="/account/privacy">{locale === "fil" ? "Privacy at aking datos" : "Privacy and my data"}</Link>
           {roles.some((role) =>
             ["Moderator", "Coordinator", "Administrator"].includes(role),
           ) && (
@@ -73,6 +74,9 @@ export function ResidentPanel({
                 ? "Mga ulat para sa pagsusuri"
                 : "Operator workspace"}
             </Link>
+          )}
+          {roles.includes("Administrator") && (
+            <Link className="button button-quiet" href="/administration/operations">{locale === "fil" ? "Mga operasyon ng privacy" : "Privacy operations"}</Link>
           )}
           {roles.includes("Administrator") && (
             <Link className="button button-quiet" href="/administration">

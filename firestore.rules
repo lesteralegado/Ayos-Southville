@@ -5,15 +5,28 @@ service cloud.firestore {
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;
     }
+    function recordsAvailable() {
+      return !exists(/databases/$(database)/documents/pilotOperations/current)
+        || !('recordsExpireAt' in get(/databases/$(database)/documents/pilotOperations/current).data)
+        || request.time < get(/databases/$(database)/documents/pilotOperations/current).data.recordsExpireAt;
+    }
+    function activeOwner(userId) {
+      return isOwner(userId)
+        && exists(/databases/$(database)/documents/residentProfiles/$(userId))
+        && (!('deletionPending' in get(/databases/$(database)/documents/residentProfiles/$(userId)).data)
+          || get(/databases/$(database)/documents/residentProfiles/$(userId)).data.deletionPending != true);
+    }
 
     match /residentProfiles/{userId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
+        && !exists(/databases/$(database)/documents/deletionLocks/$(userId))
         && request.resource.data.keys().hasOnly(['publicAlias', 'createdAt', 'updatedAt'])
         && request.resource.data.publicAlias is string
         && request.resource.data.publicAlias.size() >= 3
         && request.resource.data.publicAlias.size() <= 32;
       allow update: if isOwner(userId)
+        && (!('deletionPending' in resource.data) || resource.data.deletionPending != true)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['publicAlias', 'updatedAt'])
         && request.resource.data.publicAlias is string
         && request.resource.data.publicAlias.size() >= 3
@@ -22,12 +35,15 @@ service cloud.firestore {
     }
 
     match /publicAliases/{userId} {
-      allow read: if true;
+      // UID-keyed aliases would link public activity back to private identity.
+      allow read: if false;
       allow write: if false;
     }
 
     match /privateReports/{reference} {
-      allow read: if request.auth != null && resource.data.reporterUid == request.auth.uid;
+      allow read: if recordsAvailable() && request.auth != null && resource.data.reporterUid == request.auth.uid
+        && exists(/databases/$(database)/documents/residentProfiles/$(request.auth.uid))
+        && (!('deletionPending' in get(/databases/$(database)/documents/residentProfiles/$(request.auth.uid)).data) || get(/databases/$(database)/documents/residentProfiles/$(request.auth.uid)).data.deletionPending != true);
       allow write: if false;
     }
 
@@ -39,7 +55,7 @@ service cloud.firestore {
     }
 
     match /submissionReceipts/{receiptId} {
-      allow read: if request.auth != null && resource.data.residentUid == request.auth.uid;
+      allow read: if activeOwner(resource.data.residentUid) && recordsAvailable();
       allow write: if false;
     }
 

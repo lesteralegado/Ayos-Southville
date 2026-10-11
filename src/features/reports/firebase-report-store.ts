@@ -1,4 +1,6 @@
 import "server-only";
+import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
+import { assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
 
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
@@ -8,6 +10,7 @@ import { discoveryMode, publicCollection } from "./firebase-discovery";
 import {
   EvidenceError,
   evidenceAsset,
+  evidenceAvailable,
   type EvidenceRecord,
 } from "./evidence-module";
 import { getEvidenceBucket } from "./firebase-evidence-store";
@@ -26,6 +29,7 @@ function createFirebaseReportStore(): ReportStore {
   const db = getFirebaseAdmin().db;
   return {
     async getReceipt(key) {
+      if (await pilotRecordsExpired()) return null;
       const receipt = await db
         .collection("submissionReceipts")
         .doc(receiptId(key))
@@ -35,7 +39,9 @@ function createFirebaseReportStore(): ReportStore {
         : null;
     },
     async submitOnce(key: string, report: StoredReport) {
+      await protectMutation(report.private.reporterUid, "report");
       return db.runTransaction(async (transaction) => {
+        await assertWritable(transaction, report.private.reporterUid);
         const receiptRef = db
           .collection("submissionReceipts")
           .doc(receiptId(key));
@@ -67,9 +73,8 @@ function createFirebaseReportStore(): ReportStore {
               !asset ||
               asset.residentUid !== report.private.reporterUid ||
               asset.draftKey !== draftKey ||
-              asset.deleted ||
-              asset.attachedTo ||
-              Date.now() - Date.parse(asset.createdAt) >= 86_400_000
+              !evidenceAvailable(asset) ||
+              asset.attachedTo
             )
               throw new EvidenceError("Choose completed owned photos.");
             if (!(await getEvidenceBucket().file(asset.path).exists())[0])
@@ -118,6 +123,7 @@ function createFirebaseReportStore(): ReportStore {
       });
     },
     async listByResident(residentUid: string) {
+      if (await pilotRecordsExpired()) return [];
       const snapshot = await db
         .collection("privateReports")
         .where("reporterUid", "==", residentUid)
@@ -129,6 +135,7 @@ function createFirebaseReportStore(): ReportStore {
         );
     },
     async getPublic(reference: string) {
+      if (await pilotRecordsExpired()) return null;
       const document = await db
         .collection(publicCollection())
         .doc(reference)

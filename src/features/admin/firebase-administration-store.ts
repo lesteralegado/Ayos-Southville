@@ -1,4 +1,5 @@
 import "server-only";
+import { assertAdministrator, minimizedAudit, protectMutation } from "@/features/pilot/firebase-protection";
 import { createHash } from "node:crypto";
 import type { DocumentSnapshot } from "firebase-admin/firestore";
 import type { UserRecord } from "firebase-admin/auth";
@@ -74,20 +75,23 @@ function createFirebaseAdministrationStore(): AdministrationStore {
       return doc.exists ? (doc.data() as PilotInvitation) : null;
     },
     async saveInvitation(invitation, event) {
-      const batch = db.batch();
-      batch.set(
-        db.collection("pilotInvitations").doc(invitationId(invitation.email)),
-        invitation,
-      );
-      batch.create(db.collection("auditEvents").doc(), event);
-      await batch.commit();
+      await protectMutation(event.actorUid, "operator");
+      await db.runTransaction(async transaction => {
+        await assertAdministrator(transaction, event.actorUid);
+        transaction.set(db.collection("pilotInvitations").doc(invitationId(invitation.email)), invitation);
+        transaction.create(db.collection("auditEvents").doc(), minimizedAudit(event));
+      });
     },
     async saveUser(user, event, change) {
+      await protectMutation(event.actorUid, "operator");
       await db.runTransaction(async (transaction) => {
+        await assertAdministrator(transaction, event.actorUid);
         const targetRef = db.collection("residentProfiles").doc(user.uid);
         const target = await transaction.get(targetRef);
         if (!target.exists)
           throw new AdministrationValidationError("User was not found.");
+        if (target.data()?.deletionPending === true)
+          throw new AdministrationValidationError("Account deletion is already approved. Complete the deletion workflow before changing access.");
         if (
           change === "roles" &&
           profileUser(target).roles.includes("Administrator") &&
@@ -122,7 +126,7 @@ function createFirebaseAdministrationStore(): AdministrationStore {
             ? { pilotAccess: user.access, updatedAt: event.occurredAt }
             : { roles: user.roles, updatedAt: event.occurredAt },
         );
-        transaction.create(db.collection("auditEvents").doc(), event);
+        transaction.create(db.collection("auditEvents").doc(), minimizedAudit(event));
       });
     },
     async getConfiguration() {
@@ -134,13 +138,12 @@ function createFirebaseAdministrationStore(): AdministrationStore {
         structuredClone(defaultPilotConfiguration)) as PilotConfiguration;
     },
     async saveConfiguration(configuration, event) {
-      const batch = db.batch();
-      batch.set(
-        db.collection("pilotConfiguration").doc("current"),
-        configuration,
-      );
-      batch.create(db.collection("auditEvents").doc(), event);
-      await batch.commit();
+      await protectMutation(event.actorUid, "operator");
+      await db.runTransaction(async transaction => {
+        await assertAdministrator(transaction, event.actorUid);
+        transaction.set(db.collection("pilotConfiguration").doc("current"), configuration);
+        transaction.create(db.collection("auditEvents").doc(), minimizedAudit(event));
+      });
     },
     async listAudit() {
       const snapshot = await db
@@ -148,7 +151,7 @@ function createFirebaseAdministrationStore(): AdministrationStore {
         .orderBy("occurredAt", "desc")
         .limit(100)
         .get();
-      return snapshot.docs.map((doc) => doc.data() as AuditEvent);
+      return snapshot.docs.map((doc) => minimizedAudit(doc.data() as AuditEvent)).filter(event => Date.parse(event.expiresAt) > Date.now());
     },
   };
 }

@@ -36,6 +36,8 @@ const upload = (id: string) => ({ id, name: "evidence.jpg", type: "image/jpeg", 
 const acceptance = { reference, expectedRevision: 0, publicSummary: "Broken light near the court.", publicArea: "Covered court", approvedMedia: [{ id: originalId, alt: "Broken streetlight" }], reason: "Private details removed." };
 beforeEach(() => {
   fixture.records.clear(); fixture.fileExists = true; fixture.failCommit = false; process.env.FIREBASE_STORAGE_BUCKET = "test-private";
+  process.env.AUDIT_PSEUDONYM_SECRET = "synthetic-test-key-not-production-00000000";
+  for (const uid of ["operator", "resident", "duplicate-reporter", "neighbor"]) fixture.records.set("residentProfiles/" + uid, { roles: uid === "operator" ? ["Administrator"] : ["Resident"] });
   fixture.records.set("privateReports/" + reference, { reference, reporterUid: "resident", category: "streetlights", description: "Private 09171234567", nearbyLandmark: "Block 9", evidence: [{ id: originalId, name: "evidence.jpg", type: "image/jpeg", size: 500, visibility: "restricted" }], status: "Submitted", submittedAt: "2026-10-10T02:00:00Z" });
   fixture.records.set("evidenceUploads/" + originalId, { ...upload(originalId), residentUid: "resident", draftKey: "resident-draft", attachedTo: reference });
   fixture.records.set("evidenceUploads/" + resolutionId, upload(resolutionId));

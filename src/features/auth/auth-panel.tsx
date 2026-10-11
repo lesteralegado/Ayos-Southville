@@ -137,6 +137,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
             <label htmlFor={`${mode}-password`}>{copy.password}</label>
             <input id={`${mode}-password`} name="password" type="password" autoComplete={isRegister ? "new-password" : "current-password"} minLength={8} required />
             {isRegister && <p className="privacy-note">{copy.privacy}</p>}
+            {isRegister && <Link href="/privacy">{locale === "fil" ? "Patakaran sa privacy, retention at pagbura" : "Privacy, retention and deletion policy"}</Link>}
             <p className="form-error" role="alert" aria-live="polite">{error}</p>
             <button className="button button-primary auth-submit" type="submit" disabled={pending}>{pending ? copy.pending : isRegister ? copy.registerAction : copy.signInAction}</button>
           </form>

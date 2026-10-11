@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "@/features/i18n/use-locale";
 import type { ResidentReportState } from "./engagement-module";
-import { compressEvidencePhoto, validateEvidenceFiles } from "./media-evidence";
+import { EvidencePicker } from "./evidence-picker";
+import { clearLocalPhotos } from "./evidence-drafts";
+import type { EvidenceAsset } from "./report-module";
 
 const initial: ResidentReportState = { affected: false, following: false, supportingEvidence: [] };
 const engagementCopy = {
@@ -33,31 +35,30 @@ export function ReportEngagement({ reference }: { reference: string }) {
   const [state, setState] = useState(initial);
   const [message, setMessage] = useState<Message>("");
   const [pending, setPending] = useState(false);
+  const [uploadOwner, setUploadOwner] = useState("");
+  const [assets, setAssets] = useState<EvidenceAsset[]>([]), [blocked, setBlocked] = useState(true), [pickerVersion, setPickerVersion] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     fetch(`/api/reports/${reference}/engagement`, { signal: controller.signal }).then(async response => {
       if (response.status === 401 || response.status === 403) return initial;
       if (!response.ok) throw new Error("UNAVAILABLE");
       return response.json();
-    }).then(value => { if (!controller.signal.aborted) setState(value); })
+    }).then(value => { if (!controller.signal.aborted) { setState(value); setUploadOwner(typeof value.uploadOwner === "string" ? value.uploadOwner : ""); } })
       .catch(() => { if (!controller.signal.aborted) setMessage("loadFailure"); });
     return () => controller.abort();
   }, [reference]);
-  async function update(action: "affected" | "follow", active: boolean, evidence: File[] = []) {
+  async function update(action: "affected" | "follow", active: boolean, evidence: EvidenceAsset[] = []) {
     const before = state;
     setState(current => ({ ...current, [action === "affected" ? "affected" : "following"]: active }));
     setPending(true); setMessage("");
     try {
-      const checked = validateEvidenceFiles(evidence);
-      if (checked.issues.length) throw new Error("PHOTOS");
-      const prepared = await Promise.all(checked.files.map(compressEvidencePhoto));
       const response = await fetch(`/api/reports/${reference}/engagement`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, active, evidence: prepared.map(file => ({ id: crypto.randomUUID(), name: file.name, type: file.type, size: file.size, visibility: "restricted" })) }),
+        body: JSON.stringify({ action, active, evidence }),
       });
       if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "PERMISSION" : "FAILURE");
       setState(await response.json() as ResidentReportState);
-      if (prepared.length) setMessage("saved");
+      if (evidence.length) { setMessage("saved"); await clearLocalPhotos(uploadOwner, `support_${reference}`).catch(() => undefined); setAssets([]); setPickerVersion(value => value + 1); }
     } catch (error) {
       setState(before);
       setMessage(error instanceof Error && error.message === "PERMISSION" ? "permission" : error instanceof Error && error.message === "PHOTOS" ? "photos" : "failure");
@@ -69,7 +70,8 @@ export function ReportEngagement({ reference }: { reference: string }) {
       <button type="button" className="button button-dark" aria-pressed={state.affected} disabled={pending} onClick={() => void update("affected", !state.affected)}>{state.affected ? copy.withdraw : copy.affected}</button>
       <button type="button" className="button button-quiet" aria-pressed={state.following} disabled={pending} onClick={() => void update("follow", !state.following)}>{state.following ? copy.unfollow : copy.follow}</button>
     </div>
-    {state.affected && <label className="evidence-add">{copy.add}<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={pending} onChange={event => void update("affected", true, Array.from(event.target.files ?? []))} /></label>}
+    {state.affected && uploadOwner && <div className="supporting-evidence"><h3>{copy.add}</h3><EvidencePicker key={pickerVersion} owner={uploadOwner} draftKey={`support_${reference}`} locale={locale} onAssets={setAssets} onBlocked={setBlocked} />
+      <button className="button button-dark" disabled={pending || blocked || !assets.length} onClick={() => void update("affected", true, assets)}>{locale === "fil" ? "Ilakip ang nakumpirmang mga litrato" : "Attach confirmed photos"}</button></div>}
     <p role="status" aria-live="polite">{pending ? copy.saving : message ? copy[message] : ""}</p>
   </section>;
 }

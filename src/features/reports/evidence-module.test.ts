@@ -12,6 +12,19 @@ const scope = {
 const prepare = async () => ({ bytes: photo, type: "image/jpeg" as const });
 
 describe("private evidence journey", () => {
+  it("denies malformed and expired evidence consistently", async () => {
+    const store = createMemoryEvidenceStore(), evidence = createEvidenceModule({ store, prepare });
+    const asset = await evidence.upload({ ...scope, bytes: photo, type: "image/jpeg" });
+    const record = (await store.get(asset.id))!;
+    record.createdAt = "invalid";
+    await expect(evidence.read("r1", asset.id, false)).rejects.toMatchObject({ status: 404 });
+    record.createdAt = new Date(Date.now() - 86400000).toISOString();
+    await expect(evidence.read("r1", asset.id, false)).rejects.toMatchObject({ status: 404 });
+    record.attachedTo = "AS-600001";
+    expect(await evidence.read("r1", asset.id, false)).toMatchObject({ type: "image/jpeg" });
+    record.rejectedAt = new Date(Date.now() - 30 * 86400000).toISOString();
+    await expect(evidence.read("r1", asset.id, false)).rejects.toMatchObject({ status: 404 });
+  });
   it("stores a real private file and recovers the same upload after an ambiguous response", async () => {
     const evidence = createEvidenceModule({
       store: createMemoryEvidenceStore(),

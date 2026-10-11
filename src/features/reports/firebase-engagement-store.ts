@@ -1,4 +1,10 @@
 import "server-only";
+import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
+import { assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
+import { ProtectionError } from "@/features/pilot/security-module";
+import { publicProjection } from "./public-projection";
+import { EvidenceError, evidenceAsset, evidenceAvailable, type EvidenceRecord } from "./evidence-module";
+import { getEvidenceBucket } from "./firebase-evidence-store";
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { getDiscoveryModule } from "./firebase-discovery";
@@ -49,22 +55,44 @@ function createFirebaseEngagementStore(): EngagementStore {
         ? (document.data() as ResidentReportState)
         : { affected: false, following: false, supportingEvidence: [] };
     },
-    async setResidentState(residentUid, reference, state) {
-      await db
-        .collection("reportEngagements")
-        .doc(documentId(residentUid, reference))
-        .set({
-          ...state,
-          residentUid,
-          reference,
-          updatedAt: new Date().toISOString(),
-        });
+    async setResidentState(residentUid, reference, state, change) {
+      await protectMutation(residentUid, "engagement");
+      return db.runTransaction(async transaction => {
+        await assertWritable(transaction, residentUid);
+        const publicDoc = await transaction.get(db.collection("publicReports").doc(reference));
+        if (!publicProjection({ ...publicDoc.data(), reference })) throw new ProtectionError("FORBIDDEN", 403);
+        const privateDoc = await transaction.get(db.collection("privateReports").doc(reference));
+        if (!privateDoc.exists) throw new ProtectionError("FORBIDDEN", 403);
+        await assertWritable(transaction, residentUid, [String(privateDoc.data()!.reporterUid)]);
+        const ref = db.collection("reportEngagements").doc(documentId(residentUid, reference));
+        const current = (await transaction.get(ref)).data() as ResidentReportState | undefined;
+        const oldAssets = current?.supportingEvidence ?? [];
+        const requested = change === "affected" && state.affected ? state.supportingEvidence.filter(asset => !oldAssets.some(old => old.id === asset.id)) : [];
+        if (requested.some(asset => !/^[a-f0-9]{64}$/.test(asset.id)) || new Set(requested.map(asset => asset.id)).size !== requested.length || oldAssets.length + requested.length > 5) throw new EvidenceError("Choose up to 5 completed owned supporting photos.");
+        const uploads = requested.length ? await transaction.getAll(...requested.map(asset => db.collection("evidenceUploads").doc(asset.id))) : [];
+        const verified = await Promise.all(uploads.map(async doc => {
+          const asset = doc.data() as EvidenceRecord | undefined;
+          if (!asset || !evidenceAvailable(asset) || asset.residentUid !== residentUid || asset.draftKey !== `support_${reference}` || (asset.attachedTo && asset.attachedTo !== reference) || !(await getEvidenceBucket().file(asset.path).exists())[0]) throw new EvidenceError("Choose completed owned supporting photos for this report.");
+          return evidenceAsset(asset);
+        }));
+        const next = { affected: change === "affected" ? state.affected : current?.affected ?? false,
+          following: change === "follow" ? state.following : current?.following ?? false,
+          supportingEvidence: change === "affected" && state.affected ? [...oldAssets, ...verified] : oldAssets };
+        // Withdrawing the signal does not silently delete already submitted evidence.
+        transaction.set(ref, { ...next, residentUid, reference, updatedAt: new Date().toISOString() });
+        for (const doc of uploads) transaction.update(doc.ref, { attachedTo: reference });
+        return next;
+      });
     },
     async addNotificationOnce(key, notification) {
       const ref = db.collection("residentNotifications").doc(documentId(key));
-      if (!(await ref.get()).exists) await ref.create(notification);
+      await db.runTransaction(async transaction => {
+        await assertWritable(transaction, notification.residentUid);
+        if (!(await transaction.get(ref)).exists) transaction.create(ref, notification);
+      });
     },
     async listNotifications(residentUid) {
+      if (await pilotRecordsExpired()) return [];
       const snapshot = await db
         .collection("residentNotifications")
         .where("residentUid", "==", residentUid)
@@ -84,14 +112,17 @@ function createFirebaseEngagementStore(): EngagementStore {
       return notices.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
     async markNotificationRead(residentUid, id) {
+      await protectMutation(residentUid, "engagement");
       const snapshot = await db
         .collection("residentNotifications")
         .where("residentUid", "==", residentUid)
         .where("id", "==", id)
         .get();
-      await Promise.all(
-        snapshot.docs.map((document) => document.ref.update({ read: true })),
-      );
+      for (const doc of snapshot.docs) await db.runTransaction(async transaction => {
+        await assertWritable(transaction, residentUid);
+        const current = await transaction.get(doc.ref);
+        if (current.exists && current.data()?.residentUid === residentUid) transaction.update(doc.ref, { read: true });
+      });
     },
     async getPreferences(residentUid) {
       const document = await db
@@ -103,10 +134,11 @@ function createFirebaseEngagementStore(): EngagementStore {
         : null;
     },
     async setPreferences(residentUid, preferences) {
-      await db
-        .collection("notificationPreferences")
-        .doc(residentUid)
-        .set(preferences);
+      await protectMutation(residentUid, "engagement");
+      await db.runTransaction(async transaction => {
+        await assertWritable(transaction, residentUid);
+        transaction.set(db.collection("notificationPreferences").doc(residentUid), preferences);
+      });
     },
   };
 }

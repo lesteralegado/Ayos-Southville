@@ -128,6 +128,7 @@ export function AdministrationWorkspace({
           <a href="#invitations">{t("Invitations", "Mga imbitasyon")}</a>
           <a href="#configuration">{t("Configuration", "Mga setting")}</a>
           <a href="#audit">{t("Audit history", "Kasaysayan ng audit")}</a>
+          <Link href="/administration/operations">{t("Privacy operations", "Mga operasyon ng privacy")}</Link>
         </nav>
         <div className="admin-continuity" role="status">
           {administrators >= 2

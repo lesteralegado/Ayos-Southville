@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
 import { getVerifiedResident } from "@/features/auth/session";
 import { getEngagementModule } from "@/features/reports/firebase-engagement-store";
 import { EngagementValidationError, type NotificationPreferences } from "@/features/reports/engagement-module";
@@ -20,7 +21,7 @@ export async function PATCH(request: Request) {
   try {
     const resident = await getVerifiedResident();
     if (!resident) return NextResponse.json({ code: "AUTH", error: "Sign in before updating notifications." }, { status: 401, headers });
-    const input = await request.json() as { notificationId?: string; preferences?: NotificationPreferences };
+    const input = await readBoundedJson(request) as { notificationId?: string; preferences?: NotificationPreferences };
     if (!input || typeof input !== "object" || (!!input.notificationId === !!input.preferences)) throw new EngagementValidationError("Choose one notification action.");
     const engagement = getEngagementModule();
     if (input.notificationId !== undefined) {
@@ -29,6 +30,7 @@ export async function PATCH(request: Request) {
     } else await engagement.setPreferences(resident.uid, input.preferences!);
     return NextResponse.json({ ok: true }, { headers });
   } catch (error) {
+    const protectedFailure = protectionResponse(error); if (protectedFailure) return protectedFailure;
     const invalid = error instanceof EngagementValidationError || error instanceof SyntaxError;
     return NextResponse.json({ code: invalid ? "VALIDATION" : "UNAVAILABLE", error: invalid ? "Choose valid notification settings." : "The update could not be confirmed. Reload and retry." }, { status: invalid ? 422 : 503, headers });
   }

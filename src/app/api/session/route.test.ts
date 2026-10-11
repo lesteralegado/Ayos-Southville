@@ -1,14 +1,17 @@
+// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const verifyIdToken = vi.fn();
 const createSessionCookie = vi.fn();
 const profileGet = vi.fn();
 const aliasSet = vi.fn();
+vi.mock("server-only", () => ({}));
 
 vi.mock("@/lib/firebase/admin", () => ({
   getFirebaseAdmin: () => ({
     auth: { verifyIdToken, createSessionCookie },
     db: {
+      runTransaction: async (operation: (transaction: unknown) => Promise<unknown>) => operation({ get: async () => ({ data: () => ({ count: 0 }) }), set: () => undefined }),
       collection: (name: string) => ({
         doc: () => name === "residentProfiles" ? { get: profileGet } : { set: aliasSet },
       }),
@@ -37,7 +40,7 @@ describe("verified resident sessions", () => {
   });
 
   it("issues a protected session cookie after a recent verified sign-in", async () => {
-    verifyIdToken.mockResolvedValue({ email_verified: true, auth_time: Math.floor(Date.now() / 1000) });
+    verifyIdToken.mockResolvedValue({ uid: "resident", email_verified: true, auth_time: Math.floor(Date.now() / 1000) });
     createSessionCookie.mockResolvedValue("firebase-session");
 
     const response = await POST(sessionRequest());
@@ -45,7 +48,7 @@ describe("verified resident sessions", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("set-cookie")).toContain("ayos_session=firebase-session");
     expect(response.headers.get("set-cookie")).toContain("HttpOnly");
-    expect(aliasSet).toHaveBeenCalledWith({ publicAlias: "Mapagmasid" });
+    expect(aliasSet).not.toHaveBeenCalled();
   });
 
   it("rejects a session for an unverified email", async () => {

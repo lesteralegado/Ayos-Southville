@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { operationalMonitor } from "@/features/pilot/monitoring";
+import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
 import { getVerifiedOperator } from "@/features/auth/session";
 import { getAdministrationModule } from "@/features/admin/firebase-administration-store";
 import {
@@ -42,7 +44,7 @@ export async function PATCH(request: Request) {
       { status: 401 },
     );
   try {
-    const body = await request.json();
+    const body = await readBoundedJson(request) as { action?: string; input?: object };
     if (
       !body ||
       typeof body !== "object" ||
@@ -55,13 +57,13 @@ export async function PATCH(request: Request) {
       );
     const administration = getAdministrationModule();
     if (body.action === "set-roles")
-      await administration.setRoles(actor, body.input);
+      await administration.setRoles(actor, body.input as Parameters<typeof administration.setRoles>[1]);
     else if (body.action === "set-access")
-      await administration.setAccess(actor, body.input);
+      await administration.setAccess(actor, body.input as Parameters<typeof administration.setAccess>[1]);
     else if (body.action === "set-invitation")
-      await administration.setInvitation(actor, body.input);
+      await administration.setInvitation(actor, body.input as Parameters<typeof administration.setInvitation>[1]);
     else if (body.action === "update-configuration")
-      await administration.updateConfiguration(actor, body.input);
+      await administration.updateConfiguration(actor, body.input as Parameters<typeof administration.updateConfiguration>[1]);
     else
       throw new AdministrationValidationError(
         "Choose a supported administration action.",
@@ -72,6 +74,7 @@ export async function PATCH(request: Request) {
   }
 }
 function failure(error: unknown) {
+  const protectedFailure = protectionResponse(error); if (protectedFailure) return protectedFailure;
   if (error instanceof AdministrationForbiddenError)
     return NextResponse.json(
       { error: error.message, code: "FORBIDDEN" },
@@ -88,6 +91,7 @@ function failure(error: unknown) {
       },
       { status: 422 },
     );
+  operationalMonitor.record({ operation: "administration", status: 503, code: "UNAVAILABLE" });
   return NextResponse.json(
     {
       error: "Administration request failed. Refresh and retry.",
