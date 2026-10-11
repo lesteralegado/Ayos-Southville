@@ -3,6 +3,8 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { getPublicPilotConfiguration } from "@/features/admin/firebase-administration-store";
+import { publicProjection } from "./public-projection";
+import { discoveryMode, publicCollection } from "./firebase-discovery";
 import {
   EvidenceError,
   evidenceAsset,
@@ -11,7 +13,6 @@ import {
 import { getEvidenceBucket } from "./firebase-evidence-store";
 import {
   createReportModule,
-  type PublicReportDetail,
   type ReportStore,
   type ResidentReport,
   type StoredReport,
@@ -129,11 +130,11 @@ function createFirebaseReportStore(): ReportStore {
     },
     async getPublic(reference: string) {
       const document = await db
-        .collection("publicReports")
+        .collection(publicCollection())
         .doc(reference)
         .get();
       const value = document.data();
-      return document.exists && value?.approved === true && !["Submitted", "Rejected"].includes(value.status) ? (value as PublicReportDetail) : null;
+      return document.exists ? publicProjection({ ...value, reference }, discoveryMode()) : null;
     },
   };
 }

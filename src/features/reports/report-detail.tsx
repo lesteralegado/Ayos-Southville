@@ -15,10 +15,14 @@ export function ReportDetail({
   report,
   privateReceipt = false,
   canRespond = false,
+  categoryLabel,
+  demonstration = false,
 }: {
   report: PublicReportDetail;
   privateReceipt?: boolean;
   canRespond?: boolean;
+  categoryLabel?: { en: string; fil: string };
+  demonstration?: boolean;
 }) {
   const { locale } = useLocale();
   const fil = locale === "fil";
@@ -33,13 +37,14 @@ export function ReportDetail({
         </Link>
       </header>
       <article className="detail-card">
+        {demonstration && <p className="privacy-note">{fil ? "Demonstration mode — gawa-gawang ulat." : "Demonstration mode — synthetic report."}</p>}
         <div className="receipt-banner">
           <strong>{fil ? "Reference ng ulat" : "Report reference"}</strong>
           <span>{report.reference}</span>
         </div>
         <div className="report-card__topline">
           <span>
-            {reportCategoryLabels[locale][report.category] ??
+            {categoryLabel?.[locale] ?? reportCategoryLabels[locale][report.category] ??
               (fil ? "Ulat ng komunidad" : "Community report")}
           </span>
           <span className="status status-review">
@@ -104,7 +109,7 @@ export function ReportDetail({
               ? "Pribadong resibo. Sa iyo at awtorisadong operator lamang nakikita ang ulat hanggang aprubahan."
               : "Private receipt. Only you and authorized operators can view this report until it is approved."}
           </p>
-        ) : (
+        ) : demonstration ? null : (
           <ReportEngagement reference={report.reference} />
         )}
       </article>

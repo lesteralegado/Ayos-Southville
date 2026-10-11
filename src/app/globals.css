@@ -330,3 +330,28 @@ h1 em { display: block; color: var(--green); font-weight: 450; }
 .resolution-panel .button:disabled{opacity:.55;box-shadow:none;cursor:not-allowed}
 .communication-nav select:focus-visible,.resolution-panel textarea:focus-visible,.notifications-page input:focus-visible{outline:3px solid var(--green);outline-offset:3px}
 @media(max-width:560px){.notifications-layout{width:calc(100% - 28px);margin-block:28px}.communication-nav{gap:10px}.notification-list .button{width:100%}.resolution-panel{padding:16px}.notifications-page .composer-header{gap:14px;flex-wrap:wrap}}
+/* Live discovery retains the field-ledger surfaces and a complete non-map path. */
+.discovery-toolbar { flex-wrap: wrap; align-items: end; }
+.discovery-toolbar label { min-width: 0; flex: 1 1 140px; }
+.discovery-toolbar select { font-size: 1rem; width: 100%; min-height: 44px; }
+.discovery-note { color: var(--muted, #5f6c65); max-width: 75ch; line-height: 1.6; }
+.discovery-pagination { display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 28px; }
+.discovery-pagination span { font-variant-numeric: tabular-nums; }
+.report-card { min-width: 0; overflow-wrap: anywhere; }
+.report-card h3 a { color: inherit; text-underline-offset: .18em; }
+.report-card footer { flex-wrap: wrap; gap: 10px; color: #5f6c65; font-size: .875rem; }
+.report-section .button-quiet, .account-page .button-quiet { display: inline-flex; }
+.report-section .view-switch button { min-height: 44px; }
+.public-map-section .maplibregl-popup-content { font: 1rem/1.5 "Segoe UI", Arial, sans-serif; color: #17231d; max-height: 240px; overflow: auto; }
+.public-map-section .maplibregl-popup-content a { color: #124632; display: block; padding: 6px; }
+.public-community-map { height: 380px; width: 100%; border-radius: 20px; overflow: hidden; margin-block: 20px; }
+.public-map-marker { background: #1f674b; color: #fff; min-width: 44px; min-height: 44px; display: grid; place-items: center; border-radius: 50%; font-weight: 700; text-decoration: none; border: 2px solid #fffdf7; }
+.public-map-marker:focus-visible { outline: 3px solid #17231d; outline-offset: 3px; }
+.public-community-map .maplibregl-ctrl button { width: 44px; height: 44px; }
+.public-community-map .maplibregl-ctrl-attrib { color: #17231d; background: #fffdf7; font-size: .875rem; }
+.public-community-map .maplibregl-ctrl-attrib a { color: #124632; }
+.insights-definitions { max-width: 75ch; line-height: 1.65; margin-block: 28px; }
+.public-insights-page > section { width: min(100% - 40px, 1040px); margin: 40px auto 80px; }
+.public-insights-page h1 { font-size: 2.5rem; line-height: 1.15; letter-spacing: -.025em; }
+.public-insights-page h2 { font-size: 1.5rem; margin-top: 32px; }
+@media (max-width: 560px) { .discovery-toolbar { gap: 14px; } .public-community-map { height: 300px; } .site-header nav { flex-wrap: wrap; } }

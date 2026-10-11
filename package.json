@@ -15,7 +15,8 @@
     "verify:administration": "node scripts/verify-administration-browser.mjs",
     "verify:intake": "node scripts/verify-intake-browser.mjs",
     "verify:operator": "node scripts/verify-operator-browser.mjs",
-    "verify:communication": "node scripts/verify-communication-browser.mjs"
+    "verify:communication": "node scripts/verify-communication-browser.mjs",
+    "verify:discovery": "node scripts/verify-discovery-browser.mjs"
   },
   "dependencies": {
     "firebase": "^13.0.0",

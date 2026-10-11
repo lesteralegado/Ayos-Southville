@@ -18,3 +18,7 @@ export function formatManilaDate(value: string, locale: Locale, includeTime = fa
     timeZone: "Asia/Manila",
   }).format(new Date(value));
 }
+
+export function reportStatusLabel(status: ReportStatus, locale: Locale) {
+  return reportStatusLabels[locale][status];
+}

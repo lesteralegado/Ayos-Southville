@@ -10,6 +10,7 @@ import {
   type EvidenceStore,
 } from "./evidence-module";
 import { prepareEvidencePhoto } from "./prepare-evidence-photo";
+import { publicProjection } from "./public-projection";
 
 const documentId = (...parts: string[]) =>
   createHash("sha256").update(JSON.stringify(parts)).digest("hex");
@@ -78,12 +79,11 @@ export async function readApprovedPublicEvidence(id: string) {
   const record = upload.data() as EvidenceRecord | undefined;
   if (!record || record.deleted || !record.attachedTo)
     throw new EvidenceError("Photo not found.", 404);
-  const projection = (
+  const projection = publicProjection({ ...(
     await db.collection("publicReports").doc(record.attachedTo).get()
-  ).data();
+  ).data(), reference: record.attachedTo });
   if (
-    projection?.approved !== true ||
-    ["Submitted", "Rejected", "Duplicate"].includes(projection.status) ||
+    !projection ||
     !projection.media?.some((asset: { id: string }) => asset.id === id)
   )
     throw new EvidenceError("Photo not found.", 404);

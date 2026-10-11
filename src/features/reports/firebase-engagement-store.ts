@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
+import { getDiscoveryModule } from "./firebase-discovery";
 import {
   createEngagementModule,
   type EngagementStore,
@@ -17,10 +18,8 @@ function createFirebaseEngagementStore(): EngagementStore {
   const db = getFirebaseAdmin().db;
   return {
     async listSuggestionReports() {
-      const snapshot = await db.collection("publicReports").get();
-      return snapshot.docs.flatMap((document): SuggestionReport[] => {
-        const value = document.data();
-        if (value.approved !== true || !["Under review", "Assigned", "In progress"].includes(value.status))
+      return (await getDiscoveryModule().all()).flatMap((value): SuggestionReport[] => {
+        if (!["Under review", "Assigned", "In progress"].includes(value.status))
           return [];
         // Construct an allowlisted projection; never spread a stored document.
         return [
