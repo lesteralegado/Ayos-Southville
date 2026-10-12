@@ -5,6 +5,7 @@ import type {
 } from "@/features/reports/moderation-module";
 import { coverageToValidate, eligibleOperator, isResuming, defaultPilotOperations, OperatingControlError, type PilotOperations } from "./pilot-operations";
 import { consentReceipt, consentVersion, enrollmentApproved, ParticipationError, type ConsentInput, type ConsentReceipt } from "@/features/pilot/participation-consent";
+import { validReviewCalendar } from "@/features/reports/review-calendar";
 
 export type PilotUser = {
   uid: string;
@@ -276,6 +277,8 @@ export function createAdministrationModule({
     async updateOperations(actor: Operator, input: { operations: PilotOperations; expectedRevision: number; recoveryConfirmed: boolean }) {
       requireAdmin(actor);
       const value = input?.operations;
+      if (value?.reviewCalendar !== undefined && !validReviewCalendar(value.reviewCalendar))
+        throw new AdministrationValidationError("Provide valid owner-reviewed dates, holiday inputs and calendar source.");
       if (!value || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0 ||
         ["intakePaused", "invitationsPaused", "publicRestricted", "backupAffirmed"].some(key => typeof value[key as keyof PilotOperations] !== "boolean") ||
         typeof value.primaryUid !== "string" || typeof value.backupUid !== "string" ||
@@ -310,6 +313,7 @@ export function createAdministrationModule({
         invitationsPaused: value.invitationsPaused, publicRestricted: value.publicRestricted,
         explanation: { en: value.explanation.en.trim(), fil: value.explanation.fil.trim() },
         resumesAt: value.resumesAt,
+        ...(value.reviewCalendar ? { reviewCalendar: structuredClone(value.reviewCalendar) } : {}),
       }, input.expectedRevision, {
         ...audit(actor, "pilot.operations-updated", "pilot", "Operating controls updated."),
         operatingChange: {

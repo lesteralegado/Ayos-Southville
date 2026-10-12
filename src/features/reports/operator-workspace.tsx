@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
 import { useLocale } from "@/features/i18n/use-locale";
 import { EvidencePicker } from "./evidence-picker";
+import { OperatorReviewPanel } from "./operator-review-panel";
+import { reviewCopy } from "./review-copy";
 import type { EvidenceAsset } from "./report-module";
 import type { ModerationReport, Operator } from "./moderation-module";
 import {
@@ -29,6 +31,7 @@ export function OperatorWorkspace({
   const [selected, setSelected] = useState(initialReports.find((report) => ["Submitted", "Under review", "Assigned", "In progress"].includes(report.status))?.reference ?? initialReports[0]?.reference ?? "");
   const [filter, setFilter] = useState("active");
   const [pending, setPending] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const busy = useRef(false);
@@ -37,6 +40,7 @@ export function OperatorWorkspace({
   const shown = reports.filter(
     (report) =>
       filter === "all" ||
+      (filter === "overdue" && report.reviewExpectation?.overdue) ||
       (filter === "active"
         ? ["Submitted", "Under review", "Assigned", "In progress"].includes(
             report.status,
@@ -63,6 +67,7 @@ export function OperatorWorkspace({
         );
       const next = await response.json();
       setReports(next.reports);
+      setUnconfirmed(false);
       setNotice(
         t(
           "Latest reports loaded. Review the current state before retrying.",
@@ -84,6 +89,7 @@ export function OperatorWorkspace({
   async function mutate(action: string, input: Record<string, unknown>) {
     if (busy.current) return;
     busy.current = true;
+    setUnconfirmed(true);
     setPending(true);
     setError("");
     setNotice("");
@@ -95,7 +101,8 @@ export function OperatorWorkspace({
         signal: AbortSignal.timeout(30000),
       });
       const result = await response.json();
-      if (!response.ok)
+      if (!response.ok) {
+        setUnconfirmed(false);
         throw new Error(
           locale === "en"
             ? result.error
@@ -105,6 +112,7 @@ export function OperatorWorkspace({
                 ? "Wala kang pahintulot. Bumalik sa account at mag-sign in muli."
                 : "Suriin ang mga detalye, dalawang wika, at nakumpirmang mga upload. Subukang muli.",
         );
+      }
       // A separate refresh can fail after a successful mutation. Never invite blind retry.
       const current = await fetch("/api/moderation", {
         cache: "no-store",
@@ -118,6 +126,7 @@ export function OperatorWorkspace({
           ),
         );
       setReports((await current.json()).reports);
+      setUnconfirmed(false);
       setNotice(
         t(
           "Change saved. The workspace is up to date.",
@@ -182,6 +191,7 @@ export function OperatorWorkspace({
                 {t("Actionable reports", "Mga ulat na kailangan ng aksyon")}
               </option>
               <option value="all">{t("All reports", "Lahat ng ulat")}</option>
+              <option value="overdue">{reviewCopy[locale].overdueFilter}</option>
               {Object.entries(reportStatusLabels[locale]).map(
                 ([value, label]) => (
                   <option key={value} value={value}>
@@ -239,6 +249,7 @@ export function OperatorWorkspace({
                 >
                   <strong>{report.reference}</strong>
                   <span>{reportStatusLabels[locale][report.status]}</span>
+                  {report.reviewExpectation?.overdue && <strong>{reviewCopy[locale].overdue}</strong>}
                   <span>
                     {reportCategoryLabels[locale][report.category] ??
                       report.category}
@@ -266,7 +277,7 @@ export function OperatorWorkspace({
                 actor={actor}
                 destinations={destinations}
                 locale={locale}
-                pending={pending}
+                pending={pending || unconfirmed}
                 mutate={mutate}
               />
             </section>
@@ -375,6 +386,7 @@ function OperatorReport({
   }
   return (
     <>
+      <OperatorReviewPanel report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />
       <section className="operator-private">
         <h3>
           {t("Private resident details", "Pribadong detalye ng residente")}
@@ -733,6 +745,9 @@ function OperatorReport({
                 <strong>
                   {event.status
                     ? reportStatusLabels[locale][event.status]
+                    : event.action === "review-acknowledged" ? reviewCopy[locale].acknowledged
+                    : event.action === "external-follow-up" ? reviewCopy[locale].external
+                    : event.action === "review-takeover" ? reviewCopy[locale].takeover
                     : event.action}
                 </strong>
                 <time dateTime={event.occurredAt}>

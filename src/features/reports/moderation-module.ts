@@ -1,3 +1,5 @@
+import { defaultPilotOperations, type PilotOperations } from "@/features/admin/pilot-operations";
+import { reviewDeadline } from "./review-calendar";
 import type {
   EvidenceAsset,
   ExactLocation,
@@ -39,6 +41,8 @@ export type ModerationNotification = {
   update?: BilingualUpdate;
 };
 export type TimelineEvent = {
+  operationId?: string;
+  actorUid?: string;
   action: string;
   status?: ModerationStatus;
   occurredAt: string;
@@ -46,6 +50,11 @@ export type TimelineEvent = {
   update?: BilingualUpdate;
 };
 export type ModerationReport = {
+  reviewTakeoverAvailable?: boolean;
+  externalFollowUp?: { phase: "forwarded" | "acknowledged" | "accepted" | "resolved"; organization: string; correspondence: string; occurredAt: string; actorUid: string; operationId: string }[];
+  reviewOwnerUid?: string;
+  reviewExpectation?: { dueAt: string | null; overdue: boolean; acknowledged: boolean; operatingRevision: number };
+  review?: { acknowledgedAt: string; nextStep: string; actorUid: string };
   reference: string;
   reporterUid: string;
   category: ReportCategory;
@@ -74,6 +83,7 @@ export type ModerationReport = {
   history: TimelineEvent[];
 };
 export type ModerationCommit = {
+  operatingRevision?: number;
   reports: ModerationReport[];
   audit: AuditEvent;
   notifications: ModerationNotification[];
@@ -179,11 +189,13 @@ export function createModerationModule({
   now = () => new Date(),
   emailEnabled = async () => false,
   sendEmail = async () => undefined,
+  operations = async () => defaultPilotOperations,
 }: {
   store: ModerationStore;
   now?: () => Date;
   emailEnabled?: (residentUid: string) => Promise<boolean>;
   sendEmail?: (delivery: EmailDelivery) => Promise<void>;
+  operations?: () => Promise<PilotOperations>;
 }) {
   async function findReport(reference: string) {
     if (typeof reference !== "string" || !/^[A-Z0-9-]{3,80}$/.test(reference))
@@ -199,6 +211,7 @@ export function createModerationModule({
     reason: string,
     update?: BilingualUpdate,
     notifiedReport = reports[0],
+    operatingRevision?: number,
   ) {
     const occurredAt = now().toISOString();
     const notifications = update
@@ -213,6 +226,7 @@ export function createModerationModule({
         }))
       : [];
     await store.commit({
+      ...(operatingRevision !== undefined ? { operatingRevision } : {}),
       actorUid: actor.uid,
       reports,
       notifications,
@@ -237,9 +251,61 @@ export function createModerationModule({
     }
   }
   return {
+    async recordExternalFollowUp(actor: Operator, input: { reference: string; expectedRevision: number; operationId: string; phase: "forwarded" | "acknowledged" | "accepted" | "resolved"; organization: string; correspondence: string }) {
+      requireRole(actor, ["Coordinator", "Administrator"]);
+      const report = await findReport(input.reference);
+      const operationId = requireText(input.operationId, "Operation reference");
+      if (report.externalFollowUp?.some(event => event.operationId === operationId && event.actorUid === actor.uid)) return;
+      requireRevision(report, input.expectedRevision);
+      if (!["forwarded", "acknowledged", "accepted", "resolved"].includes(input.phase)) throw new ModerationValidationError("Choose the actual outside response stage.");
+      if ((report.externalFollowUp?.length ?? 0) >= 100) throw new ModerationValidationError("Follow-up record limit reached.");
+      const event = { phase: input.phase, organization: requireText(input.organization, "Outside organization"), correspondence: requireText(input.correspondence, "Private correspondence"), occurredAt: now().toISOString(), actorUid: actor.uid, operationId };
+      report.externalFollowUp = [...(report.externalFollowUp ?? []), event];
+      report.history.push({ action: "external-follow-up", operationId, actorUid: actor.uid, occurredAt: event.occurredAt });
+      await finish(actor, [report], "report.external-follow-up", "Private external follow-up recorded; lifecycle unchanged.");
+    },
+    async acknowledgeReview(actor: Operator, input: { reference: string; expectedRevision: number; operationId: string; nextStep: string }) {
+      requireRole(actor, operatorRoles);
+      const report = await findReport(input.reference);
+      const operationId = requireText(input.operationId, "Operation reference");
+      if (report.history.some(event => event.operationId === operationId && event.actorUid === actor.uid && event.action === "review-acknowledged")) return;
+      requireRevision(report, input.expectedRevision);
+      if (report.review || !["Submitted", "Under review", "Assigned", "In progress"].includes(report.status)) throw new ModerationValidationError("Review already acknowledged or report inactive.");
+      report.review = { acknowledgedAt: now().toISOString(), nextStep: requireText(input.nextStep, "Next-step decision"), actorUid: actor.uid };
+      report.reviewOwnerUid = actor.uid;
+      report.history.push({ action: "review-acknowledged", operationId, actorUid: actor.uid, occurredAt: report.review.acknowledgedAt });
+      await finish(actor, [report], "report.review-acknowledged", "Actual review acknowledgement and next step recorded.");
+    },
+
+    async takeOverReview(actor: Operator, input: { reference: string; expectedRevision: number; expectedOperatingRevision: number; operationId: string; privacyReviewed: boolean; update: BilingualUpdate }) {
+      requireRole(actor, operatorRoles);
+      const operating = await operations();
+      if (!operating.backupAffirmed || !operating.backupUid || actor.uid !== operating.backupUid) throw new ModerationForbiddenError();
+      if (input.expectedOperatingRevision !== operating.revision) throw new ModerationConflictError();
+      const report = await findReport(input.reference);
+      const operationId = requireText(input.operationId, "Operation reference");
+      if (report.history.some(event => event.operationId === operationId && event.actorUid === actor.uid && event.action === "review-takeover")) return;
+      requireRevision(report, input.expectedRevision);
+      const dueAt = reviewDeadline(report.submittedAt, operating.reviewCalendar);
+      if (!dueAt || now().getTime() <= Date.parse(dueAt) || report.review || !["Submitted", "Under review", "Assigned", "In progress"].includes(report.status))
+        throw new ModerationValidationError("Takeover requires a confirmed overdue review without acknowledgement.");
+      if (report.reviewOwnerUid === actor.uid) return;
+      if (input.privacyReviewed !== true) throw new ModerationValidationError("Explicitly review the English and Filipino delay update for privacy.");
+      const update = requireUpdate(input.update);
+      if (Object.values(update).some(text => /https?:|@|\d{5}|\b(?:block|lot)\s*\d/i.test(text))) throw new ModerationValidationError("Omit contacts, correspondence and household locations from updates.");
+      report.reviewOwnerUid = actor.uid;
+      report.history.push({ action: "review-takeover", operationId, actorUid: actor.uid, occurredAt: now().toISOString(), status: report.status, update });
+      await finish(actor, [report], "report.review-takeover", "Backup accepted overdue review responsibility.", update, report, operating.revision);
+    },
     async listWorkspace(actor: Operator) {
       requireRole(actor, operatorRoles);
-      return store.listReports();
+      const [reports, operating] = await Promise.all([store.listReports(), operations()]);
+      return reports.map(report => {
+        const dueAt = reviewDeadline(report.submittedAt, operating.reviewCalendar);
+        const acknowledged = !!report.review?.acknowledgedAt || ["Rejected", "Duplicate", "Resolved", "Resident confirmed"].includes(report.status);
+        const overdue = !acknowledged && !!dueAt && now().getTime() > Date.parse(dueAt);
+        return { ...report, reviewTakeoverAvailable: overdue && operating.backupAffirmed && operating.backupUid === actor.uid && report.reviewOwnerUid !== actor.uid, reviewExpectation: { dueAt, acknowledged, overdue, operatingRevision: operating.revision } };
+      });
     },
     async listQueue(actor: Operator) {
       requireRole(actor, operatorRoles);

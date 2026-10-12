@@ -76,7 +76,13 @@ export async function PATCH(request: Request) {
         "Provide English and Filipino updates.",
       );
     const moderation = getModerationModule();
-    if (body.action === "accept")
+    if (body.action === "acknowledge-review")
+      await moderation.acknowledgeReview(actor, body.input as Parameters<typeof moderation.acknowledgeReview>[1]);
+    else if (body.action === "take-over-review")
+      await moderation.takeOverReview(actor, body.input as Parameters<typeof moderation.takeOverReview>[1]);
+    else if (body.action === "external-follow-up")
+      await moderation.recordExternalFollowUp(actor, body.input as Parameters<typeof moderation.recordExternalFollowUp>[1]);
+    else if (body.action === "accept")
       await moderation.accept(
         actor,
         body.input as Parameters<typeof moderation.accept>[1],

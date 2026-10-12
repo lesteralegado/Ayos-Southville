@@ -42,6 +42,7 @@ export type EvidenceAsset = {
 };
 
 export type ResidentReport = {
+  reviewExpectation?: { dueAt: string | null; acknowledgedAt: string | null };
   canonicalReference?: string;
   reference: string;
   reporterUid: string;

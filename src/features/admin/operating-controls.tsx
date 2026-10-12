@@ -3,6 +3,7 @@ import { operatingCopy, type OperatingCopyKey } from "@/features/i18n/operating-
 import { useState, type FormEvent } from "react";
 import type { PilotUser } from "./administration-module";
 import { eligibleOperator, type PilotOperations } from "./pilot-operations";
+import { ReviewCalendarFields } from "./review-calendar-fields";
 
 export function OperatingControls({ confirmed, users, pending, locale, save }: {
   confirmed: PilotOperations; users: PilotUser[]; pending: boolean; locale: "en" | "fil";
@@ -55,6 +56,7 @@ export function OperatingControls({ confirmed, users, pending, locale, save }: {
         </label>
         <p>{t("leaveUnknownTimesBlankReviewResumptionIsNot")}</p>
         <label className="admin-check"><input name="recovery" type="checkbox" />{t("beforeResumingIConfirmCoverageIsRestoredOr")}</label>
+        <ReviewCalendarFields value={draft.reviewCalendar} locale={locale} change={reviewCalendar => setDraft(current => ({ ...current, reviewCalendar }))} />
         <button type="submit" className="button button-primary">{t("saveOperatingControls")}</button>
       </fieldset>
     </form>

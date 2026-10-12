@@ -1,4 +1,6 @@
 import "server-only";
+import { pilotOperations } from "@/features/admin/pilot-operations";
+import { reviewDeadline } from "./review-calendar";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
 import { assertIntakeOpen, assertParticipant, assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
 
@@ -130,8 +132,12 @@ function createFirebaseReportStore(): ReportStore {
         .collection("privateReports")
         .where("reporterUid", "==", residentUid)
         .get();
+      const operating = pilotOperations((await db.collection("pilotOperations").doc("current").get()).data());
       return snapshot.docs
-        .map((document) => document.data() as ResidentReport)
+        .map((document) => {
+          const data = document.data() as ResidentReport & { reviewAcknowledgedAt?: string };
+          return { ...data, reviewExpectation: { dueAt: reviewDeadline(data.submittedAt, operating.reviewCalendar), acknowledgedAt: data.reviewAcknowledgedAt ?? null } };
+        })
         .toSorted((left, right) =>
           right.submittedAt.localeCompare(left.submittedAt),
         );

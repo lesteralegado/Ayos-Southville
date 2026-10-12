@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, vi } from "vitest";
-const fixture = vi.hoisted(() => ({ records: new Map<string, Record<string, unknown>>(), files: new Set<string>(), uid: "resident", verified: true, signedIn: true, revokeOnReceiptRead: false, removeConsentOnSave: false }));
+const fixture = vi.hoisted(() => ({ records: new Map<string, Record<string, unknown>>(), files: new Set<string>(), uid: "resident", verified: true, signedIn: true, revokeOnReceiptRead: false, removeConsentOnSave: false, changeCoverageOnUserRead: false }));
 vi.mock("firebase-admin/storage", () => ({ getStorage: () => ({ bucket: () => ({ file: (path: string) => ({
   exists: async () => [fixture.files.has(path)], download: async () => [Buffer.from([1])],
   save: async () => { fixture.files.add(path); if (fixture.removeConsentOnSave) fixture.records.delete("pilotConsents/resident"); },
@@ -31,7 +31,13 @@ vi.mock("@/lib/firebase/admin", async () => {
   }) as typeof db.collection;
   return { getFirebaseAdmin: () => ({ db, auth: {
     verifySessionCookie: async () => ({ uid: fixture.uid, email: "synthetic@example.test", email_verified: fixture.verified }),
-    getUser: async (uid: string) => ({ uid, email: "synthetic@example.test", emailVerified: fixture.verified, disabled: false }),
+    getUser: async (uid: string) => {
+      if (uid === "backup" && fixture.changeCoverageOnUserRead) {
+        fixture.records.set("pilotOperations/current", { ...fixture.records.get("pilotOperations/current"), revision: 1, backupUid: "" });
+        fixture.changeCoverageOnUserRead = false;
+      }
+      return { uid, email: "synthetic@example.test", emailVerified: fixture.verified, disabled: false };
+    },
   } }) };
 });
 import { POST as submit, GET as mine } from "@/app/api/reports/route";
@@ -42,13 +48,56 @@ import sharp from "sharp";
 import { POST as requestDeletion } from "@/app/api/privacy/route";
 import { PATCH as processReport } from "@/app/api/moderation/route";
 import { getEngagementModule } from "@/features/reports/firebase-engagement-store";
+import { GET as operatorWorkspace } from "@/app/api/moderation/route";
+import { getModerationModule } from "@/features/reports/firebase-moderation-store";
+import { defaultPilotOperations } from "./pilot-operations";
+it("refuses backup takeover when coverage changes after the initial API checks", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-30T01:00:00Z"));
+  try {
+    fixture.records.set("pilotOperations/current", { ...defaultPilotOperations, primaryUid: "primary", backupUid: "backup", backupAffirmed: true, reviewCalendar: { from: "2026-10-01", through: "2026-12-31", holidays: ["2026-11-02"], source: "Synthetic confirmed calendar", ownerConfirmed: true } });
+    await accept(request("participation", choice));
+    const reference = (await (await submit(request("reports", report))).json()).reference;
+    fixture.records.set("residentProfiles/backup", { roles: ["Administrator"] }); fixture.uid = "backup";
+    vi.setSystemTime(new Date("2026-11-04T11:00:01Z")); fixture.changeCoverageOnUserRead = true;
+    const result = await processReport(new Request("https://isolated.test/api/moderation", { method: "PATCH", headers: { origin: "https://isolated.test", "content-type": "application/json" }, body: JSON.stringify({ action: "take-over-review", input: { reference, expectedRevision: 0, expectedOperatingRevision: 0, operationId: "synthetic-raced", privacyReviewed: true, update: { en: "Review delayed.", fil: "Naantala ang review." } } }) }));
+    expect(result.status).toBe(409);
+    expect((await getModerationModule().getPrivateReport({ uid: "backup", roles: ["Administrator"] }, reference)).history).not.toEqual(expect.arrayContaining([expect.objectContaining({ action: "review-takeover" })]));
+    expect((await getModerationModule().listNotifications("resident")).filter(n => n.message.includes("Review delayed"))).toHaveLength(0);
+  } finally { vi.useRealTimers(); }
+});
+it("persists overdue backup responsibility, one delay notice, actual acknowledgement and private external follow-up through the API journey", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-30T01:00:00Z"));
+  try {
+    fixture.records.set("pilotOperations/current", { ...defaultPilotOperations, primaryUid: "primary", backupUid: "backup", backupAffirmed: true, reviewCalendar: { from: "2026-10-01", through: "2026-12-31", holidays: ["2026-11-02"], source: "Synthetic confirmed calendar", ownerConfirmed: true } });
+    await accept(request("participation", choice));
+    const reference = (await (await submit(request("reports", report))).json()).reference;
+    expect((await (await mine()).json()).reports[0].reviewExpectation).toMatchObject({ dueAt: "2026-11-04T11:00:00.000Z" });
+    fixture.records.set("residentProfiles/backup", { roles: ["Administrator"] }); fixture.uid = "backup";
+    vi.setSystemTime(new Date("2026-11-04T11:00:01Z"));
+    expect((await (await operatorWorkspace()).json()).reports[0].reviewExpectation.overdue).toBe(true);
+    const change = (action: string, input: object) => processReport(new Request("https://isolated.test/api/moderation", { method: "PATCH", headers: { origin: "https://isolated.test", "content-type": "application/json" }, body: JSON.stringify({ action, input: { reference, ...input } }) }));
+    const takeover = { expectedRevision: 0, expectedOperatingRevision: 0, operationId: "synthetic-takeover", privacyReviewed: true, update: { en: "Review delayed; backup checking the next step.", fil: "Naantala ang review; sinusuri ng backup ang susunod na hakbang." } };
+    expect((await change("take-over-review", takeover)).status).toBe(200);
+    expect((await change("take-over-review", takeover)).status).toBe(200);
+    expect((await getModerationModule().listNotifications("resident")).filter(notice => notice.message.includes("Review delayed"))).toHaveLength(1);
+    expect((await change("acknowledge-review", { expectedRevision: 1, operationId: "synthetic-ack", nextStep: "Review evidence and choose the internal desk." })).status).toBe(200);
+    expect((await change("accept", { expectedRevision: 2, publicSummary: "Safe synthetic concern.", publicArea: "Synthetic court", approvedMedia: [], reason: "Privacy reviewed.", update: { en: "Reviewed.", fil: "Sinuri." } })).status).toBe(200);
+    expect((await change("external-follow-up", { expectedRevision: 3, operationId: "synthetic-contact", phase: "forwarded", organization: "Private organization", correspondence: "Private alice@example.test Block 9 Lot 12" })).status).toBe(200);
+    expect(JSON.stringify(await getModerationModule().getPublicReport(reference))).not.toMatch(/alice|Block 9|Private organization|actorUid/);
+    const privateReport = await getModerationModule().getPrivateReport({ uid: "backup", roles: ["Administrator"] }, reference);
+    expect(privateReport).toMatchObject({ status: "Under review", reviewOwnerUid: "backup", externalFollowUp: [expect.objectContaining({ phase: "forwarded" })] });
+    fixture.uid = "resident";
+    expect((await (await mine()).json()).reports[0].reviewExpectation.acknowledgedAt).toBe("2026-11-04T11:00:01.000Z");
+    expect(JSON.stringify(await getModerationModule().listNotifications("resident"))).not.toMatch(/alice|Block 9|Private organization/);
+  } finally { vi.useRealTimers(); }
+});
 const choice = { version: "southville-adult-pilot-2026-10-12", adultAcknowledged: true, consent: true, locale: "en" };
 const report = { idempotencyKey: "synthetic-draft-123456", category: "streetlights", description: "Synthetic streetlight concern for an isolated consent test.", nearbyLandmark: "Synthetic court", isEmergency: false, confirmNonEmergency: true, confirmPublicSummary: true, evidence: [] };
 function request(path: string, body: unknown, origin = "https://isolated.test") {
   return new Request("https://isolated.test/api/" + path, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
 }
 beforeEach(() => {
-  fixture.records.clear(); fixture.files.clear(); fixture.uid = "resident"; fixture.verified = true; fixture.signedIn = true; fixture.revokeOnReceiptRead = false; fixture.removeConsentOnSave = false;
+  fixture.records.clear(); fixture.files.clear(); fixture.uid = "resident"; fixture.verified = true; fixture.signedIn = true; fixture.revokeOnReceiptRead = false; fixture.removeConsentOnSave = false; fixture.changeCoverageOnUserRead = false;
   fixture.records.set("residentProfiles/resident", { roles: ["Resident"], pilotAccess: "approved" });
   process.env.AUDIT_PSEUDONYM_SECRET = "isolated-consent-audit-key-00000000000000";
   process.env.FIREBASE_STORAGE_BUCKET = "isolated-consent-test";

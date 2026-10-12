@@ -1,4 +1,6 @@
+import type { ReviewCalendar } from "@/features/reports/review-calendar";
 export type PilotOperations = {
+  reviewCalendar?: ReviewCalendar;
   revision: number;
   primaryUid: string;
   backupUid: string;

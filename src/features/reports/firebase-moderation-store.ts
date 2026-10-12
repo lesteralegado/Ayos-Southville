@@ -1,5 +1,7 @@
 import "server-only";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
+import { pilotOperations } from "@/features/admin/pilot-operations";
+import { reviewDeadline } from "./review-calendar";
 import { assertParticipant, assertWritable, minimizedAudit, protectMutation } from "@/features/pilot/firebase-protection";
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
@@ -96,19 +98,30 @@ function createFirebaseModerationStore(): ModerationStore {
       priority: stored?.priority,
       destination: stored?.destination,
       resolutionEvidence: stored?.resolutionEvidence,
+      review: stored?.review,
+      reviewOwnerUid: stored?.reviewOwnerUid,
+      externalFollowUp: stored?.externalFollowUp,
     };
   }
   return {
     async commit(change) {
       await protectMutation(change.actorUid, "operator");
       await db.runTransaction(async (transaction) => {
-        const allowed = ["report.accepted", "report.rejected", "report.merged"].includes(change.audit.action) ? ["Moderator", "Administrator"] : ["report.assigned", "report.started", "report.resolved"].includes(change.audit.action) ? ["Coordinator", "Administrator"] : undefined;
+        const allowed = ["report.accepted", "report.rejected", "report.merged"].includes(change.audit.action) ? ["Moderator", "Administrator"] : ["report.assigned", "report.started", "report.resolved", "report.external-follow-up"].includes(change.audit.action) ? ["Coordinator", "Administrator"] : ["report.review-acknowledged", "report.review-takeover"].includes(change.audit.action) ? ["Moderator", "Coordinator", "Administrator"] : undefined;
         await assertWritable(transaction, change.actorUid, change.reports.flatMap(report => [report.reporterUid, ...report.followers, ...report.affectedResidents]), allowed);
         if (["report.resident-confirmed", "report.resident-disputed"].includes(change.audit.action)) await assertParticipant(transaction, change.actorUid);
+        if (["report.review-acknowledged", "report.review-takeover", "report.external-follow-up"].includes(change.audit.action)) await assertParticipant(transaction, change.actorUid, false);
         const refs = change.reports.map((report) =>
           db.collection("moderationReports").doc(report.reference),
         );
         const current = await transaction.getAll(...refs);
+        if (change.audit.action === "report.review-takeover") {
+          const operating = pilotOperations((await transaction.get(db.collection("pilotOperations").doc("current"))).data());
+          const dueAt = reviewDeadline(change.reports[0].submittedAt, operating.reviewCalendar);
+          if (operating.revision !== change.operatingRevision) throw new ModerationConflictError();
+          if (!operating.backupAffirmed || operating.backupUid !== change.actorUid || !dueAt || Date.now() <= Date.parse(dueAt) || current[0].data()?.review)
+            throw new ModerationValidationError("Current coverage and overdue review must be confirmed before takeover.");
+        }
         for (let index = 0; index < current.length; index++) {
           if (
             (current[index].data()?.revision ?? 0) !==
@@ -216,7 +229,7 @@ function createFirebaseModerationStore(): ModerationStore {
           );
           transaction.update(
             db.collection("privateReports").doc(report.reference),
-            { status: report.status, ...(report.status === "Rejected" ? { rejectedAt: change.audit.occurredAt } : {}), ...(report.public.canonicalReference ? { canonicalReference: report.public.canonicalReference } : {}) },
+            { status: report.status, ...(report.review ? { reviewAcknowledgedAt: report.review.acknowledgedAt } : {}), ...(report.status === "Rejected" ? { rejectedAt: change.audit.occurredAt } : {}), ...(report.public.canonicalReference ? { canonicalReference: report.public.canonicalReference } : {}) },
           );
           const publicRef = db
             .collection("publicReports")
@@ -349,5 +362,6 @@ function createFirebaseModerationStore(): ModerationStore {
 export function getModerationModule() {
   return createModerationModule({
     store: createFirebaseModerationStore(),
+    operations: async () => pilotOperations((await getFirebaseAdmin().db.collection("pilotOperations").doc("current").get()).data()),
   });
 }
