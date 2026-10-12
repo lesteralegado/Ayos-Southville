@@ -1,12 +1,12 @@
 import { createAdministrationModule, createMemoryAdministrationStore } from './administration-module';
 it('persists inspectable owner-confirmed review calendar inputs and refuses invalid dates', async () => {
   const admin = { uid: 'admin', roles: ['Administrator'] as ('Administrator')[], emailVerified: true };
-  const module = createAdministrationModule({ store: createMemoryAdministrationStore({ users: [admin] }) });
-  const initial = await module.getOperations(admin);
+  const administration = createAdministrationModule({ store: createMemoryAdministrationStore({ users: [admin] }) });
+  const initial = await administration.getOperations(admin);
   const reviewCalendar = { from: '2026-10-01', through: '2026-12-31', holidays: ['2026-11-02'], source: 'Synthetic confirmed calendar', ownerConfirmed: true };
-  await module.updateOperations(admin, { expectedRevision: 0, operations: { ...initial, reviewCalendar }, recoveryConfirmed: false });
-  expect((await module.getOperations(admin)).reviewCalendar).toEqual(reviewCalendar);
-  await expect(module.updateOperations(admin, { expectedRevision: 1, operations: { ...initial, reviewCalendar: { ...reviewCalendar, holidays: ['2026-11-31'] } }, recoveryConfirmed: false })).rejects.toMatchObject({ code: 'VALIDATION' });
+  await administration.updateOperations(admin, { expectedRevision: 0, operations: { ...initial, reviewCalendar }, recoveryConfirmed: false });
+  expect((await administration.getOperations(admin)).reviewCalendar).toEqual(reviewCalendar);
+  await expect(administration.updateOperations(admin, { expectedRevision: 1, operations: { ...initial, reviewCalendar: { ...reviewCalendar, holidays: ['2026-11-31'] } }, recoveryConfirmed: false })).rejects.toMatchObject({ code: 'VALIDATION' });
 });
 
 it('records independent intake and invitation pauses with revision protection', async () => {

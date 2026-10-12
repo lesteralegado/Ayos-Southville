@@ -743,11 +743,10 @@ function OperatorReport({
             {report.history.map((event, index) => (
               <li key={index}>
                 <strong>
-                  {event.status
-                    ? reportStatusLabels[locale][event.status]
-                    : event.action === "review-acknowledged" ? reviewCopy[locale].acknowledged
+                  {event.action === "review-acknowledged" ? reviewCopy[locale].acknowledged
                     : event.action === "external-follow-up" ? reviewCopy[locale].external
-                    : event.action === "review-takeover" ? reviewCopy[locale].takeover
+                    : event.action === "review-takeover" ? reviewCopy[locale].takeoverRecorded
+                    : event.status ? reportStatusLabels[locale][event.status]
                     : event.action}
                 </strong>
                 <time dateTime={event.occurredAt}>

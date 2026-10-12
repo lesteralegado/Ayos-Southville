@@ -28,6 +28,10 @@ const report: ModerationReport = {
   supportingEvidence: [],
   history: [],
 };
+it("names a recorded takeover without pretending the report changed lifecycle status", () => {
+  render(<OperatorWorkspace initialReports={[{ ...report, status: "Submitted", history: [{ action: "review-takeover", status: "Submitted", occurredAt: "2026-10-14T11:00:01Z" }] }]} actor={{ uid: "operator", roles: ["Coordinator"] }} destinations={[]} />);
+  expect(screen.getAllByText("Backup review responsibility accepted").some(element => element.tagName === "STRONG")).toBe(true);
+});
 it("preserves input and offers refresh when an operator encounters a stale report", async () => {
   vi.stubGlobal(
     "fetch",
