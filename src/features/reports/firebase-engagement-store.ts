@@ -1,6 +1,6 @@
 import "server-only";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
-import { assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
+import { assertParticipant, assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
 import { ProtectionError } from "@/features/pilot/security-module";
 import { publicProjection } from "./public-projection";
 import { EvidenceError, evidenceAsset, evidenceAvailable, type EvidenceRecord } from "./evidence-module";
@@ -59,6 +59,7 @@ function createFirebaseEngagementStore(): EngagementStore {
       await protectMutation(residentUid, "engagement");
       return db.runTransaction(async transaction => {
         await assertWritable(transaction, residentUid);
+        await assertParticipant(transaction, residentUid);
         const publicDoc = await transaction.get(db.collection("publicReports").doc(reference));
         if (!publicProjection({ ...publicDoc.data(), reference })) throw new ProtectionError("FORBIDDEN", 403);
         const privateDoc = await transaction.get(db.collection("privateReports").doc(reference));

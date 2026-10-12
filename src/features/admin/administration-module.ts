@@ -4,6 +4,7 @@ import type {
   AuditEvent,
 } from "@/features/reports/moderation-module";
 import { coverageToValidate, eligibleOperator, isResuming, defaultPilotOperations, OperatingControlError, type PilotOperations } from "./pilot-operations";
+import { consentReceipt, consentVersion, ParticipationError, type ConsentInput, type ConsentReceipt } from "@/features/pilot/participation-consent";
 
 export type PilotUser = {
   uid: string;
@@ -36,6 +37,8 @@ export type PilotConfiguration = {
   emergency: EmergencyGuidance;
 };
 export type AdministrationStore = {
+  getConsent(uid: string): Promise<ConsentReceipt | null>;
+  acceptConsent(resident: PilotResident, receipt: ConsentReceipt): Promise<ConsentReceipt>;
   getOperations(): Promise<PilotOperations>;
   saveOperations(value: PilotOperations, expectedRevision: number, audit: AuditEvent): Promise<void>;
   listUsers(): Promise<PilotUser[]>;
@@ -232,6 +235,13 @@ export function createAdministrationModule({
   store: AdministrationStore;
   now?: () => Date;
 }) {
+  async function canEnroll(resident: PilotResident) {
+    if (!resident.emailVerified) return false;
+    const user = await store.getUser(resident.uid);
+    if (!user || user.access === "revoked") return false;
+    if (user.access === "approved" || user.roles.some(role => ["Administrator", "Moderator", "Coordinator"].includes(role))) return true;
+    return resident.email ? (await store.getInvitation(resident.email.trim().toLowerCase()))?.active === true : false;
+  }
   function audit(
     actor: Operator,
     action: string,
@@ -247,6 +257,18 @@ export function createAdministrationModule({
     };
   }
   return {
+    canEnroll,
+    async getConsent(resident: PilotResident) {
+      if (!resident.emailVerified) throw new ParticipationError("FORBIDDEN");
+      return store.getConsent(resident.uid);
+    },
+    async acceptConsent(resident: PilotResident, input: ConsentInput) {
+      if (!input || input.version !== consentVersion) throw new ParticipationError("VERSION_CHANGED", 409);
+      if (input.adultAcknowledged !== true || input.consent !== true || !["en", "fil"].includes(String(input.locale)))
+        throw new ParticipationError("VALIDATION", 422);
+      if (!(await canEnroll(resident))) throw new ParticipationError("PILOT_ACCESS_REQUIRED");
+      return store.acceptConsent(resident, { id: crypto.randomUUID(), version: consentVersion, consentedAt: now().toISOString(), adultAcknowledged: true, locale: input.locale as "en" | "fil" });
+    },
     async getOperations(actor: Operator) {
       requireAdmin(actor);
       return store.getOperations();
@@ -299,20 +321,7 @@ export function createAdministrationModule({
       });
     },
     async canParticipate(resident: PilotResident) {
-      if (!resident.emailVerified) return false;
-      const user = await store.getUser(resident.uid);
-      if (!user || user.access === "revoked") return false;
-      if (
-        user.access === "approved" ||
-        user.roles.some((role) =>
-          ["Administrator", "Moderator", "Coordinator"].includes(role),
-        )
-      )
-        return true;
-      return resident.email
-        ? (await store.getInvitation(resident.email.trim().toLowerCase()))
-            ?.active === true
-        : false;
+      return await canEnroll(resident) && !!consentReceipt(await store.getConsent(resident.uid));
     },
     async listInvitations(actor: Operator) {
       requireAdmin(actor);
@@ -435,6 +444,7 @@ export function createMemoryAdministrationStore(
     invitations?: PilotInvitation[];
     configuration?: PilotConfiguration;
     operations?: PilotOperations;
+    consents?: { residentUid: string; receipt: ConsentReceipt }[];
   } = {},
 ): AdministrationStore {
   const users = new Map(
@@ -444,6 +454,7 @@ export function createMemoryAdministrationStore(
     seed.configuration ?? defaultPilotConfiguration,
   );
   const audit: AuditEvent[] = [];
+  const consents = new Map((seed.consents ?? []).map(value => [value.residentUid, structuredClone(value.receipt)]));
   let operations = structuredClone(seed.operations ?? defaultPilotOperations);
   const invitations = new Map(
     (seed.invitations ?? []).map((invitation) => [
@@ -452,6 +463,16 @@ export function createMemoryAdministrationStore(
     ]),
   );
   return {
+    async getConsent(uid) { return structuredClone(consents.get(uid) ?? null); },
+    async acceptConsent(resident, receipt) {
+      const user = users.get(resident.uid);
+      if (!resident.emailVerified || !user || user.access === "revoked" ||
+        !(user.access === "approved" || user.roles.some(role => ["Administrator", "Moderator", "Coordinator"].includes(role)) ||
+          (resident.email && invitations.get(resident.email.trim().toLowerCase())?.active))) throw new ParticipationError("PILOT_ACCESS_REQUIRED");
+      const existing = consents.get(resident.uid);
+      if (existing) return structuredClone(existing);
+      consents.set(resident.uid, structuredClone(receipt)); return structuredClone(receipt);
+    },
     async getOperations() { return structuredClone(operations); },
     async saveOperations(value, revision, event) {
       if (operations.revision !== revision) throw new OperatingControlError("CONFLICT");

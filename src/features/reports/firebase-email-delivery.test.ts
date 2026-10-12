@@ -2,7 +2,7 @@
 import { vi } from "vitest";
 const state = vi.hoisted(() => ({ records: new Map<string, Record<string, unknown>>(), consent: true }));
 vi.mock("server-only", () => ({}));
-vi.mock("@/features/auth/session", () => ({ hasPilotAccess: async () => true }));
+vi.mock("@/features/auth/session", () => ({ hasPilotEligibility: async () => true }));
 vi.mock("@/lib/firebase/admin", () => {
   const doc = (key: string) => ({ key, get: async () => ({ data: () => structuredClone(state.records.get(key)) }) });
   const query = (name: string) => {

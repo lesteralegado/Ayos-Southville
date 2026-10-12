@@ -26,12 +26,25 @@ import sharp from "sharp";
 import { defaultPilotOperations } from "./pilot-operations";
 import { pilotParticipationClosed } from "@/features/pilot/pilot-expiry";
 const admin = { uid: "admin", roles: ["Administrator"] as ["Administrator"] };
+it("persists one private affirmative consent receipt despite concurrent retries", async () => {
+  fixture.records.delete("pilotConsents/admin");
+  const administration = getAdministrationModule();
+  const resident = { uid: "admin", emailVerified: true };
+  const input = { version: "southville-adult-pilot-2026-10-12", adultAcknowledged: true, consent: true, locale: "fil" };
+  expect(await administration.canParticipate(resident)).toBe(false);
+  const receipts = await Promise.all([administration.acceptConsent(resident, input), administration.acceptConsent(resident, input)]);
+  expect(receipts[1]).toEqual(receipts[0]);
+  expect(await getAdministrationModule().getConsent(resident)).toEqual(receipts[0]);
+  expect(await administration.canParticipate(resident)).toBe(true);
+  expect(JSON.stringify(receipts[0])).not.toContain("admin");
+});
 beforeEach(() => {
   fixture.records.clear();
   fixture.files.clear(); fixture.pauseOnSave = false;
   fixture.authUnavailable = false;
   fixture.records.set("residentProfiles/admin", { roles: ["Administrator"] });
   fixture.records.set("residentProfiles/backup", { roles: ["Coordinator"] });
+  fixture.records.set("pilotConsents/admin", { residentUid: "admin", id: "11111111-1111-4111-8111-111111111111", version: "southville-adult-pilot-2026-10-12", consentedAt: "2026-10-12T00:00:00Z", adultAcknowledged: true, locale: "en" });
   process.env.AUDIT_PSEUDONYM_SECRET = "a".repeat(32);
   process.env.FIREBASE_STORAGE_BUCKET = "isolated-test";
 });

@@ -18,7 +18,7 @@ it('requires affirmed coverage and recovery confirmation to resume, without clai
   await administration.updateOperations(admin, { expectedRevision: 0, operations: { ...initial, intakePaused: true, invitationsPaused: true, explanation: { en: 'Coverage is unavailable.', fil: 'Walang operator na available.' } }, recoveryConfirmed: false });
   await expect(administration.setInvitation(admin, { email: 'neighbor@example.test', active: true, reason: 'Joined' })).rejects.toMatchObject({ code: 'INVITATIONS_PAUSED' });
   const paused = await administration.getOperations(admin);
-  expect(await administration.canParticipate({ uid: 'resident', emailVerified: true })).toBe(true);
+  expect(await administration.canEnroll({ uid: 'resident', emailVerified: true })).toBe(true);
   await expect(administration.updateOperations(admin, { expectedRevision: 1, operations: { ...paused, intakePaused: false }, recoveryConfirmed: false })).rejects.toMatchObject({ code: 'VALIDATION' });
   await administration.updateOperations(admin, { expectedRevision: 1, operations: { ...paused, intakePaused: false, primaryUid: 'admin', backupUid: 'backup', backupAffirmed: true }, recoveryConfirmed: true });
   expect(await administration.getOperations(admin)).toMatchObject({ intakePaused: false, invitationsPaused: true, backupAffirmed: true });

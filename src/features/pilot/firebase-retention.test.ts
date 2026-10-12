@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, expect, it, vi } from "vitest";
 import sharp from "sharp";
-const fixture = vi.hoisted(() => ({ records: new Map<string, Record<string, unknown>>(), files: new Map<string, boolean>(), failStorage: false, users: new Map<string, { uid: string; email: string; disabled?: boolean }>() }));
+const fixture = vi.hoisted(() => ({ records: new Map<string, Record<string, unknown>>(), files: new Map<string, boolean>(), failStorage: false, users: new Map<string, { uid: string; email: string; disabled?: boolean; emailVerified?: boolean }>() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/firebase/admin", async () => {
   const { firebaseBoundary } = await import("@/test/firebase-boundary"); const db = firebaseBoundary(fixture.records);
@@ -18,7 +18,8 @@ vi.mock("firebase-admin/storage", () => ({ getStorage: () => ({ bucket: () => ({
     save: async () => { fixture.files.set(path, true); },
     delete: async () => { if (fixture.failStorage) throw new Error("Storage unavailable"); fixture.files.delete(path); } }),
 }) }) }));
-vi.mock("@/features/admin/firebase-administration-store", () => ({ getPublicPilotConfiguration: async () => ({ categories: [{ id: "streetlights", active: true }] }) }));
+vi.mock("@/features/admin/firebase-administration-store", async importOriginal => ({ ...await importOriginal<typeof import("@/features/admin/firebase-administration-store")>(), getPublicPilotConfiguration: async () => ({ categories: [{ id: "streetlights", active: true }] }) }));
+import { getAdministrationModule } from "@/features/admin/firebase-administration-store";
 import { getPrivacyModule } from "./firebase-privacy";
 import { runRetention } from "./firebase-retention";
 import { POST as retentionPost } from "@/app/api/internal/retention/route";
@@ -51,13 +52,16 @@ beforeEach(() => {
   fixture.records.clear(); fixture.files.clear(); fixture.users.clear(); fixture.failStorage = false;
   Object.assign(process.env, { AUDIT_PSEUDONYM_SECRET: "isolated-synthetic-audit-key-000000000", RETENTION_APPLY_ENABLED: "true", RETENTION_TARGET_PROJECT: "isolated-pilot-test", NEXT_PUBLIC_FIREBASE_PROJECT_ID: "isolated-pilot-test", RETENTION_TARGET_BUCKET: "isolated-test-bucket", FIREBASE_STORAGE_BUCKET: "isolated-test-bucket" });
   fixture.records.set("residentProfiles/admin", { roles: ["Administrator"] });
-  fixture.records.set("residentProfiles/resident", { roles: ["Resident"] });
-  fixture.users.set("resident", { uid: "resident", email: "synthetic@example.test" });
+  fixture.records.set("residentProfiles/resident", { roles: ["Resident"], pilotAccess: "approved" });
+  fixture.records.set("pilotConsents/resident", { residentUid: "resident", id: "11111111-1111-4111-8111-111111111111", version: "southville-adult-pilot-2026-10-12", consentedAt: "2026-10-12T00:00:00Z", adultAcknowledged: true, locale: "en" });
+  fixture.users.set("resident", { uid: "resident", email: "synthetic@example.test", emailVerified: true });
   fixture.records.set("privateReports/AS-600001", { reporterUid: "resident", reference: "AS-600001", evidence: [{ id }], status: "Submitted", category: "streetlights", description: "Private household description", submittedAt: "2026-10-10T00:00:00Z" });
   fixture.records.set("evidenceUploads/" + id, { id, residentUid: "resident", attachedTo: "AS-600001", path, createdAt: new Date().toISOString(), type: "image/jpeg", deleted: false });
   fixture.files.set(path, true);
 });
 it("requires a matching dry-run plan and deletes the approved account journey without private output", async () => {
+  fixture.records.set("pilotConsents/resident", { residentUid: "resident", id: "11111111-1111-4111-8111-111111111111", version: "southville-adult-pilot-2026-10-12", consentedAt: "2026-10-12T00:00:00Z", adultAcknowledged: true, locale: "en" });
+  expect(await getAdministrationModule().getConsent({ uid: "resident", emailVerified: true })).not.toBeNull();
   const privacy = getPrivacyModule(), request = await privacy.request("resident", true);
   await privacy.decide(actor, request.id, "approved");
   await expect(runRetention(true)).rejects.toMatchObject({ code: "DRY_RUN_REQUIRED" });
@@ -65,6 +69,7 @@ it("requires a matching dry-run plan and deletes the approved account journey wi
   expect(await (await getReportModule()).listMine("resident")).toHaveLength(1);
   const result = await runRetention(true); expect(result.deletedAccounts).toBe(1);
   expect(await (await getReportModule()).listMine("resident")).toEqual([]);
+  expect(await getAdministrationModule().getConsent({ uid: "resident", emailVerified: true })).toBeNull();
   await expect(getEvidenceModule().read("resident", id, false)).rejects.toMatchObject({ status: 404 });
   expect((await privacy.list(actor))[0]).toMatchObject({ id: request.id, status: "complete" });
   expect(JSON.stringify(await privacy.list(actor))).not.toContain("residentUid");

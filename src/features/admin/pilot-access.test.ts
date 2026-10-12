@@ -3,6 +3,18 @@ import {
   createMemoryAdministrationStore,
 } from "./administration-module";
 const admin = { uid: "admin", roles: ["Administrator"] as const };
+it("requires affirmative adult consent in addition to verified approval, and returns the same private receipt on retry", async () => {
+  const resident = { uid: "adult", emailVerified: true };
+  const administration = createAdministrationModule({ store: createMemoryAdministrationStore({ users: [{ uid: "adult", roles: ["Resident"], access: "approved" }] }) });
+  expect(await administration.canParticipate(resident)).toBe(false);
+  const input = { version: "southville-adult-pilot-2026-10-12", adultAcknowledged: true, consent: true, locale: "en" as const };
+  await expect(administration.acceptConsent(resident, { ...input, adultAcknowledged: false })).rejects.toMatchObject({ code: "VALIDATION" });
+  const receipt = await administration.acceptConsent(resident, input);
+  expect(receipt).toMatchObject({ version: input.version, adultAcknowledged: true, locale: "en" });
+  expect(await administration.acceptConsent(resident, input)).toEqual(receipt);
+  expect(await administration.getConsent(resident)).toEqual(receipt);
+  expect(await administration.canParticipate(resident)).toBe(true);
+});
 it("invites a verified resident and immediately denies revoked access", async () => {
   const administration = createAdministrationModule({
     store: createMemoryAdministrationStore({
@@ -17,19 +29,19 @@ it("invites a verified resident and immediately denies revoked access", async ()
     email: "neighbor@example.test",
     emailVerified: true,
   };
-  expect(await administration.canParticipate(resident)).toBe(false);
+  expect(await administration.canEnroll(resident)).toBe(false);
   await administration.setInvitation(admin, {
     email: "Neighbor@example.test",
     active: true,
     reason: "Invited pilot tester",
   });
-  expect(await administration.canParticipate(resident)).toBe(true);
+  expect(await administration.canEnroll(resident)).toBe(true);
   await administration.setAccess(admin, {
     uid: resident.uid,
     access: "revoked",
     reason: "Resident left the pilot",
   });
-  expect(await administration.canParticipate(resident)).toBe(false);
+  expect(await administration.canEnroll(resident)).toBe(false);
   expect(await administration.listAudit(admin)).toHaveLength(2);
 });
 
@@ -43,10 +55,10 @@ it("preserves legacy operator roles and denies unverified and revoked participan
     }),
   });
   expect(
-    await administration.canParticipate({ uid: "admin", emailVerified: true }),
+    await administration.canEnroll({ uid: "admin", emailVerified: true }),
   ).toBe(true);
   expect(
-    await administration.canParticipate({ uid: "admin", emailVerified: false }),
+    await administration.canEnroll({ uid: "admin", emailVerified: false }),
   ).toBe(false);
   await administration.setAccess(admin, {
     uid: "resident",
@@ -54,7 +66,7 @@ it("preserves legacy operator roles and denies unverified and revoked participan
     reason: "Joined",
   });
   expect(
-    await administration.canParticipate({
+    await administration.canEnroll({
       uid: "resident",
       emailVerified: true,
     }),
@@ -65,7 +77,7 @@ it("preserves legacy operator roles and denies unverified and revoked participan
     reason: "Left",
   });
   expect(
-    await administration.canParticipate({
+    await administration.canEnroll({
       uid: "resident",
       emailVerified: true,
     }),
@@ -94,14 +106,14 @@ it("revokes an email invitation without granting access to unregistered or unver
     reason: "Invited",
   });
   expect(
-    await administration.canParticipate({
+    await administration.canEnroll({
       uid: "resident",
       email: "neighbor@example.test",
       emailVerified: false,
     }),
   ).toBe(false);
   expect(
-    await administration.canParticipate({
+    await administration.canEnroll({
       uid: "missing",
       email: "neighbor@example.test",
       emailVerified: true,
@@ -113,7 +125,7 @@ it("revokes an email invitation without granting access to unregistered or unver
     reason: "Revoked",
   });
   expect(
-    await administration.canParticipate({
+    await administration.canEnroll({
       uid: "resident",
       email: "neighbor@example.test",
       emailVerified: true,

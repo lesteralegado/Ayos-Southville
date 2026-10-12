@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
+import { getVerifiedResident, hasPilotEligibility } from "@/features/auth/session";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { ResidentPanel } from "@/features/auth/resident-panel";
 
@@ -21,7 +21,7 @@ export default async function AccountPage() {
     <ResidentPanel
       publicAlias={typeof publicAlias === "string" ? publicAlias : "neighbor"}
       roles={roles}
-      approved={await hasPilotAccess(resident)}
+      approved={await hasPilotEligibility(resident)}
     />
   );
 }

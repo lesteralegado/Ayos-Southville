@@ -1,6 +1,6 @@
 import "server-only";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
-import { hasPilotAccess } from "@/features/auth/session";
+import { hasPilotEligibility } from "@/features/auth/session";
 import { createEmailDeliveryModule, type EmailDeliveryStore, type EmailJob } from "./email-delivery-module";
 import { createResendEmailAdapter } from "./resend-email-adapter";
 
@@ -44,7 +44,7 @@ export function getEmailDeliveryModule() {
         if ((error as { code?: string }).code === "auth/user-not-found") return null;
         throw error;
       }
-      if (user.disabled || !user.emailVerified || !user.email || !(await hasPilotAccess({ uid: user.uid, email: user.email, email_verified: true }))) return null;
+      if (user.disabled || !user.emailVerified || !user.email || !(await hasPilotEligibility({ uid: user.uid, email: user.email, email_verified: true }))) return null;
       return user.email;
     },
   });

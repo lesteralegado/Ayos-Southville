@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { operationalMonitor } from "@/features/pilot/monitoring";
 import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
-import { getVerifiedOperator, hasPilotAccess } from "@/features/auth/session";
+import { getVerifiedOperator, hasPilotEligibility, hasPilotAccess } from "@/features/auth/session";
 import { getPublicPilotConfiguration } from "@/features/admin/firebase-administration-store";
 import { getModerationModule } from "@/features/reports/firebase-moderation-store";
 import {
@@ -24,7 +24,7 @@ export async function GET() {
       { status: 401 },
     );
   try {
-    if (!(await hasPilotAccess({ uid: actor.uid, email: actor.email, email_verified: true })))
+    if (!(await hasPilotEligibility({ uid: actor.uid, email: actor.email, email_verified: true })))
       throw new ModerationForbiddenError();
     return NextResponse.json(
       { reports: await getModerationModule().listWorkspace(actor) },
@@ -47,7 +47,7 @@ export async function PATCH(request: Request) {
       { status: 401 },
     );
   try {
-    if (!(await hasPilotAccess({ uid: actor.uid, email: actor.email, email_verified: true })))
+    if (!(await hasPilotEligibility({ uid: actor.uid, email: actor.email, email_verified: true })))
       throw new ModerationForbiddenError();
     const body = (await readBoundedJson(request)) as Record<string, unknown>;
     if (
@@ -109,11 +109,13 @@ export async function PATCH(request: Request) {
         actor,
         body.input as Parameters<typeof moderation.transition>[1],
       );
-    else if (body.action === "respond-to-resolution")
+    else if (body.action === "respond-to-resolution") {
+      if (!(await hasPilotAccess({ uid: actor.uid, email: actor.email, email_verified: true }))) return Response.json({ code: "CONSENT_REQUIRED" }, { status: 403, headers });
       await moderation.respondToResolution(
         actor,
         body.input as Parameters<typeof moderation.respondToResolution>[1],
       );
+    }
     else
       throw new ModerationValidationError(
         "Choose a supported moderation action.",

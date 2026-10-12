@@ -69,7 +69,7 @@ vi.mock("@/lib/firebase/admin", () => {
       return result;
     },
   };
-  return { getFirebaseAdmin: () => ({ db }) };
+  return { getFirebaseAdmin: () => ({ db, auth: { getUser: async (uid: string) => ({ uid, emailVerified: true, disabled: false }) } }) };
 });
 import { getReportModule } from "./firebase-report-store";
 const assetId = "a".repeat(64);
@@ -94,7 +94,8 @@ const submission = {
 };
 beforeEach(() => {
   fixtures.records.clear();
-  fixtures.records.set("residentProfiles/r1", { roles: ["Resident"] });
+  fixtures.records.set("residentProfiles/r1", { roles: ["Resident"], pilotAccess: "approved" });
+  fixtures.records.set("pilotConsents/r1", { residentUid: "r1", id: "11111111-1111-4111-8111-111111111111", version: "southville-adult-pilot-2026-10-12", consentedAt: "2026-10-12T00:00:00Z", adultAcknowledged: true, locale: "en" });
   fixtures.storageExists = true;
   fixtures.pauseOnReceiptRead = false;
   process.env.FIREBASE_STORAGE_BUCKET = "private-test-bucket";

@@ -49,3 +49,8 @@ export async function hasPilotAccess(resident: {
     emailVerified: resident.email_verified === true,
   });
 }
+export async function hasPilotEligibility(resident: { uid: string; email?: string; email_verified?: boolean }) {
+  if (await pilotParticipationClosed()) return false;
+  const { getAdministrationModule } = await import("@/features/admin/firebase-administration-store");
+  return getAdministrationModule().canEnroll({ uid: resident.uid, email: resident.email, emailVerified: resident.email_verified === true });
+}

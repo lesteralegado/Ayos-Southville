@@ -6,7 +6,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Provide English/Filipino disclosure of the independent trial, lack of guaranteed repair, public/private information boundaries, retention and deletion process.
 - [ ] Capture minimal affirmative, versioned consent and adult eligibility acknowledgement. Registration, invitation and email verification alone do not constitute participation consent.

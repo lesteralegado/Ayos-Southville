@@ -1,6 +1,6 @@
 import "server-only";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
-import { assertWritable, minimizedAudit, protectMutation } from "@/features/pilot/firebase-protection";
+import { assertParticipant, assertWritable, minimizedAudit, protectMutation } from "@/features/pilot/firebase-protection";
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import {
@@ -104,6 +104,7 @@ function createFirebaseModerationStore(): ModerationStore {
       await db.runTransaction(async (transaction) => {
         const allowed = ["report.accepted", "report.rejected", "report.merged"].includes(change.audit.action) ? ["Moderator", "Administrator"] : ["report.assigned", "report.started", "report.resolved"].includes(change.audit.action) ? ["Coordinator", "Administrator"] : undefined;
         await assertWritable(transaction, change.actorUid, change.reports.flatMap(report => [report.reporterUid, ...report.followers, ...report.affectedResidents]), allowed);
+        if (["report.resident-confirmed", "report.resident-disputed"].includes(change.audit.action)) await assertParticipant(transaction, change.actorUid);
         const refs = change.reports.map((report) =>
           db.collection("moderationReports").doc(report.reference),
         );

@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/features/auth/session", () => ({
   getVerifiedResident: mocks.resident,
   getVerifiedOperator: mocks.operator,
-  hasPilotAccess: mocks.access,
+  hasPilotEligibility: mocks.access,
 }));
 vi.mock("@/features/reports/firebase-evidence-store", () => ({
   getEvidenceModule: () => ({ read: mocks.read, remove: mocks.remove }),

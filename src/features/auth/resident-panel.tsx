@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 import { useLocale } from "@/features/i18n/use-locale";
+import { ConsentPanel } from "@/features/pilot/consent-panel";
 
 const copy = {
   en: {
@@ -32,11 +33,12 @@ export function ResidentPanel({
   roles?: string[];
   approved?: boolean;
 }) {
-  const { locale } = useLocale();
+  const { locale, chooseLocale } = useLocale();
   const message = copy[locale];
   return (
     <main className="message-page">
       <div className="message-card">
+        <button type="button" className="language-button" onClick={() => chooseLocale(locale === "en" ? "fil" : "en")}>{locale === "en" ? "Filipino" : "English"}</button>
         <h1>
           {message.greeting}, {publicAlias}.
         </h1>
@@ -51,11 +53,9 @@ export function ResidentPanel({
         <div className="account-actions">
           <Link
             className="button button-primary"
-            href={approved ? "/reports/new" : "/"}
+            href="/"
           >
-            {approved
-              ? message.newReport
-              : locale === "fil"
+            {locale === "fil"
                 ? "Tingnan ang mga ulat"
                 : "Browse reports"}
           </Link>
@@ -84,6 +84,7 @@ export function ResidentPanel({
             </Link>
           )}
         </div>
+        <ConsentPanel />
         <SignOutButton />
       </div>
     </main>

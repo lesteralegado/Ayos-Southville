@@ -1,12 +1,13 @@
 import { operationalMonitor } from "./monitoring";
 import { operatingControlResponse } from "@/features/admin/pilot-operations";
+import { ParticipationError } from "./participation-consent";
 export class ProtectionError extends Error {
   constructor(readonly code: "RATE_LIMIT" | "TOO_LARGE" | "FORBIDDEN" | "UNAVAILABLE", readonly status: number) {
     super(code === "RATE_LIMIT" ? "Too many requests. Wait before retrying." : code === "TOO_LARGE" ? "The request is too large." : "The operation is unavailable. Reload and retry.");
   }
 }
-export type SensitiveOperation = "report" | "evidence" | "engagement" | "operator" | "session" | "privacy";
-const limits: Record<SensitiveOperation, number> = { report: 10, evidence: 50, engagement: 120, operator: 120, session: 20, privacy: 10 };
+export type SensitiveOperation = "report" | "evidence" | "engagement" | "operator" | "session" | "privacy" | "consent";
+const limits: Record<SensitiveOperation, number> = { report: 10, evidence: 50, engagement: 120, operator: 120, session: 20, privacy: 10, consent: 20 };
 export function createMutationProtection({ consume, now = () => new Date() }: {
   consume(key: string, limit: number, expiresAt: string): Promise<boolean>;
   now?: () => Date;
@@ -37,6 +38,8 @@ export async function readBoundedJson(request: Request, limit = 32_768): Promise
   } finally { clearTimeout(timer); reader.releaseLock(); }
 }
 export function protectionResponse(error: unknown) {
+  if (error instanceof ParticipationError)
+    return Response.json({ code: error.code }, { status: error.status, headers: { "Cache-Control": "private, no-store" } });
   const operatingFailure = operatingControlResponse(error);
   if (operatingFailure) return operatingFailure;
   if (!(error instanceof ProtectionError)) return null;

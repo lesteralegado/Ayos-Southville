@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/features/auth/session", () => ({
   getVerifiedOperator: async () => state.actor,
   hasPilotAccess: async () => state.access,
+  hasPilotEligibility: async () => state.access,
 }));
 vi.mock("@/features/reports/firebase-moderation-store", () => ({
   getModerationModule: () => state.moderation,

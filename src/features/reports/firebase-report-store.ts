@@ -1,6 +1,6 @@
 import "server-only";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
-import { assertIntakeOpen, assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
+import { assertIntakeOpen, assertParticipant, assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
 
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
@@ -53,6 +53,7 @@ function createFirebaseReportStore(): ReportStore {
           };
         }
         const requestedIds = report.private.evidence.map((asset) => asset.id);
+        await assertParticipant(transaction, report.private.reporterUid);
         await assertIntakeOpen(transaction);
         if (
           new Set(requestedIds).size !== requestedIds.length ||

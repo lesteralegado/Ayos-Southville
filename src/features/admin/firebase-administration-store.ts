@@ -1,5 +1,7 @@
 import "server-only";
-import { assertAdministrator, minimizedAudit, protectMutation } from "@/features/pilot/firebase-protection";
+import { assertAdministrator, assertParticipant, assertWritable, minimizedAudit, protectMutation } from "@/features/pilot/firebase-protection";
+import { consentReceipt } from "@/features/pilot/participation-consent";
+import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
 import { createHash } from "node:crypto";
 import type { DocumentSnapshot } from "firebase-admin/firestore";
 import type { UserRecord } from "firebase-admin/auth";
@@ -36,6 +38,22 @@ const profileUser = (doc: DocumentSnapshot): PilotUser => {
 function createFirebaseAdministrationStore(): AdministrationStore {
   const { db, auth } = getFirebaseAdmin();
   return {
+    async getConsent(uid) {
+      if (await pilotRecordsExpired()) return null;
+      return consentReceipt((await db.collection("pilotConsents").doc(uid).get()).data());
+    },
+    async acceptConsent(resident, receipt) {
+      await protectMutation(resident.uid, "consent");
+      return db.runTransaction(async transaction => {
+        await assertWritable(transaction, resident.uid);
+        await assertParticipant(transaction, resident.uid, false);
+        const ref = db.collection("pilotConsents").doc(resident.uid);
+        const previous = consentReceipt((await transaction.get(ref)).data());
+        if (previous) return previous;
+        transaction.set(ref, { ...receipt, residentUid: resident.uid });
+        return receipt;
+      });
+    },
     async getOperations() {
       return pilotOperations((await db.collection("pilotOperations").doc("current").get()).data());
     },

@@ -1,7 +1,7 @@
 import {
   getVerifiedResident,
   getVerifiedOperator,
-  hasPilotAccess,
+  hasPilotEligibility,
 } from "@/features/auth/session";
 import { getEvidenceModule } from "@/features/reports/firebase-evidence-store";
 import { EvidenceError } from "@/features/reports/evidence-module";
@@ -37,7 +37,7 @@ export async function GET(
         operator?.roles.some((role) =>
           ["Moderator", "Coordinator", "Administrator"].includes(role),
         ),
-      ) && (await hasPilotAccess(resident));
+      ) && (await hasPilotEligibility(resident));
     const photo = await getEvidenceModule().read(
       resident.uid,
       (await context.params).id,
