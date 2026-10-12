@@ -1,4 +1,5 @@
 "use client";
+import { operatingCopy } from "@/features/i18n/operating-copy";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -205,6 +206,7 @@ export function ReportComposer({
   const [submitError, setSubmitError] = useState("");
   const [pending, setPending] = useState(false);
   const [availability, setAvailability] = useState(operatingStatus);
+  const [availabilityConfirmed, setAvailabilityConfirmed] = useState(!!operatingStatus);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
   const [resumed, setResumed] = useState(false);
@@ -222,9 +224,10 @@ export function ReportComposer({
       const response = await fetch("/api/pilot-status", { cache: "no-store" });
       if (!response.ok) throw new Error("Unavailable");
       setAvailability(await response.json());
+      setAvailabilityConfirmed(true);
       setSubmitError("");
     } catch {
-      setSubmitError(fil ? "Hindi makumpirma ang availability. Nananatili ang draft; kumonekta at subukan muli." : "Availability could not be confirmed. Your draft remains; reconnect and retry.");
+      setSubmitError(operatingCopy(locale, "availabilityCouldNotBeConfirmedYourDraftRemains"));
     } finally { setCheckingAvailability(false); }
   }
   useEffect(() => {
@@ -396,8 +399,10 @@ export function ReportComposer({
       };
       if (result.code === "INTAKE_PAUSED") {
         setAvailability({ intakePaused: true, explanation: { en: "", fil: "" }, resumesAt: "" });
+        setAvailabilityConfirmed(false);
         setAmbiguous(false);
         setSubmitError("");
+        await refreshAvailability();
         return;
       }
       if (response.status === 422) {
@@ -496,11 +501,11 @@ export function ReportComposer({
           aria-label={fil ? "Form ng ulat" : "Report form"}
         >
           {availability?.intakePaused && <div className="draft-banner" role="status">
-            <h2>{fil ? "Pansamantalang sarado ang bagong ulat" : "New reports are paused"}</h2>
-            <p>{availability.explanation[locale] || (fil ? "Nananatili ang draft. Subukan muli kapag bukas na ang bagong ulat." : "Your draft remains. Retry after intake resumes.")}</p>
-            <p>{availability.resumesAt ? (fil ? "Inaasahang pagbubukas: " : "Expected resumption: ") + new Date(availability.resumesAt).toLocaleString(locale === "fil" ? "fil-PH" : "en-PH", { timeZone: "Asia/Manila" }) : fil ? "Wala pang tiyak na oras ng pagbubukas." : "Resumption time is not yet known."}</p>
-            <p>{fil ? "Hindi ito deadline ng pagkukumpuni. Available pa rin ang kasalukuyang mga ulat, tugon at pagbura." : "This is not a repair deadline. Existing reports, responses and deletion remain available."}</p>
-            <button type="button" className="button button-quiet" disabled={checkingAvailability || pending} onClick={() => void refreshAvailability()}>{checkingAvailability ? (fil ? "Sinusuri…" : "Checking…") : fil ? "Suriin ang availability" : "Check availability"}</button>
+            <h2>{operatingCopy(locale, "newReportsArePaused")}</h2>
+            <p>{availability.explanation[locale] || (operatingCopy(locale, "yourDraftRemainsRetryAfterIntakeResumes"))}</p>
+            <p>{availability.resumesAt ? (operatingCopy(locale, "expectedResumption")) + new Date(availability.resumesAt).toLocaleString(locale === "fil" ? "fil-PH" : "en-PH", { timeZone: "Asia/Manila" }) : !availabilityConfirmed ? (operatingCopy(locale, "resumptionDetailsCouldNotBeConfirmedCheckAvailability")) : operatingCopy(locale, "resumptionTimeIsNotYetKnown")}</p>
+            <p>{operatingCopy(locale, "thisIsNotARepairDeadlineExistingReports")}</p>
+            <button type="button" className="button button-quiet" disabled={checkingAvailability || pending} onClick={() => void refreshAvailability()}>{checkingAvailability ? (operatingCopy(locale, "checking")) : operatingCopy(locale, "checkAvailability")}</button>
           </div>}
           {savedDraft &&
             savedDraft.idempotencyKey !== draft.idempotencyKey &&

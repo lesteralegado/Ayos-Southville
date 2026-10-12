@@ -23,6 +23,13 @@ export type AuditEvent = {
   action: string;
   target: string;
   reason: string;
+  operatingChange?: {
+    before: { intakePaused: boolean; invitationsPaused: boolean; publicRestricted: boolean; backupAffirmed: boolean };
+    after: { intakePaused: boolean; invitationsPaused: boolean; publicRestricted: boolean; backupAffirmed: boolean };
+    recoveryConfirmed: boolean;
+    primaryChanged: boolean;
+    backupChanged: boolean;
+  };
 };
 export type ModerationNotification = {
   residentUid: string;

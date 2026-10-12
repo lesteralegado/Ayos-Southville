@@ -22,7 +22,9 @@ const emergencyGuidance = {
 
 describe("report composer", () => {
   it("keeps the draft and its retry key when the server pauses an in-flight submission", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ code: "INTAKE_PAUSED" }, { status: 409 })));
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/api/pilot-status"
+      ? Response.json({ intakePaused: true, explanation: { en: "Coverage is under review.", fil: "Sinusuri ang coverage." }, resumesAt: "2026-10-15T11:00:00Z" })
+      : Response.json({ code: "INTAKE_PAUSED" }, { status: 409 })));
     render(<ReportComposer emergencyGuidance={emergencyGuidance} />);
     const user = userEvent.setup();
     await user.selectOptions(screen.getByLabelText(/category/i), "streetlights");
@@ -33,6 +35,8 @@ describe("report composer", () => {
     const before = localStorage.getItem("ayos-report-draft-v1");
     await user.click(screen.getByRole("button", { name: "Submit report" }));
     await waitFor(() => expect(screen.getByText(/New reports are paused/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Coverage is under review.")).toBeInTheDocument());
+    expect(screen.getByText(/Expected resumption:/)).toBeInTheDocument();
     expect(localStorage.getItem("ayos-report-draft-v1")).toBe(before);
     expect(push).not.toHaveBeenCalled();
   });

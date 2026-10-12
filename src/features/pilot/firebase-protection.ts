@@ -15,7 +15,26 @@ export function minimizedAudit(event: AuditEvent) {
   const expiresAt = new Date(Date.parse(event.occurredAt) + 365 * 86_400_000).toISOString();
   return { actorUid: /^anon:[a-f0-9]{64}$/.test(event.actorUid) ? event.actorUid : pseudonym(event.actorUid), occurredAt: event.occurredAt,
     action: /^[a-z][a-z.-]{1,60}$/.test(event.action) ? event.action : "operation.recorded",
-    target: /^anon:[a-f0-9]{64}$/.test(event.target) ? event.target : pseudonym(event.target), reason: "Private content omitted.", expiresAt };
+    target: /^anon:[a-f0-9]{64}$/.test(event.target) ? event.target : pseudonym(event.target), reason: "Private content omitted.", expiresAt,
+    ...(event.action === "pilot.operations-updated" && event.operatingChange ? {
+      operatingChange: {
+        before: safeOperatingAuditState(event.operatingChange.before),
+        after: safeOperatingAuditState(event.operatingChange.after),
+        recoveryConfirmed: event.operatingChange.recoveryConfirmed === true,
+        primaryChanged: event.operatingChange.primaryChanged === true,
+        backupChanged: event.operatingChange.backupChanged === true,
+      },
+    } : {}),
+  };
+}
+function safeOperatingAuditState(value: unknown) {
+  const state = value as Record<string, unknown> | undefined;
+  return {
+    intakePaused: state?.intakePaused === true,
+    invitationsPaused: state?.invitationsPaused === true,
+    publicRestricted: state?.publicRestricted === true,
+    backupAffirmed: state?.backupAffirmed === true,
+  };
 }
 // Reads precede every transaction's writes. These locks prevent stale requests
 // from re-creating data while retention/account deletion is in progress.

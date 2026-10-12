@@ -1,4 +1,5 @@
 "use client";
+import { operatingCopy } from "@/features/i18n/operating-copy";
 
 import { useEffect, useRef, useState } from "react";
 import type { EvidenceAsset } from "./report-module";
@@ -229,7 +230,7 @@ export function EvidencePicker({
         );
     } catch (error) {
       if (error instanceof Error && error.message === "INTAKE_PAUSED")
-        setMessage(fil ? "Naka-pause ang bagong ulat. Nananatili ang pribadong litrato sa device; subukan kapag bukas na." : "New reports are paused. Your private photo remains on this device; retry after intake resumes.");
+        setMessage(operatingCopy(locale, "newReportsArePausedYourPrivatePhotoRemains"));
       if (mounted.current)
         setPhotos((items) =>
           items.map((item) =>

@@ -1,4 +1,5 @@
 "use client";
+import { operatingCopy, type OperatingCopyKey } from "@/features/i18n/operating-copy";
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
@@ -27,7 +28,7 @@ export function AdministrationWorkspace({
   initial: AdministrationSnapshot;
 }) {
   const { locale, chooseLocale } = useLocale();
-  const t = (en: string, fil: string) => (locale === "fil" ? fil : en);
+  const t = (key: OperatingCopyKey) => operatingCopy(locale, key);
   const [snapshot, setSnapshot] = useState(initial);
   const [configuration, setConfiguration] = useState(initial.configuration);
   const [pending, setPending] = useState(false);
@@ -54,9 +55,9 @@ export function AdministrationWorkspace({
             : result.code === "FORBIDDEN"
               ? "Wala kang pahintulot. Mag-sign in muli."
               : result.code === "CONFLICT"
-                ? "Nagbago ang mga setting. I-refresh bago subukang muli."
+                ? t("conflict")
               : result.code === "INVITATIONS_PAUSED"
-                ? "Naka-pause ang imbitasyon. Nananatili ang kasalukuyang access."
+                ? t("invitationsPaused")
               : result.code === "VALIDATION"
                 ? "Suriin ang mga detalye. Kailangan ang dahilan, tamang mga tungkulin, aktibong destinasyon, at HTTPS na emergency source."
                 : "Hindi makumpleto ang pagbabago. Subukang muli.";
@@ -65,26 +66,20 @@ export function AdministrationWorkspace({
       const updated = await fetch("/api/administration", { cache: "no-store" });
       if (!updated.ok)
         throw new Error(
-          t(
-            "Change saved, but access or refresh failed. Return to your account and refresh before retrying.",
-            "Nai-save ang pagbabago, ngunit hindi ma-refresh. Bumalik sa iyong account bago subukang muli.",
-          ),
+          t("changeSavedButAccessOrRefreshFailedReturn"),
         );
       const next = (await updated.json()) as AdministrationSnapshot;
       setSnapshot(next);
       if (action === "update-configuration")
         setConfiguration(next.configuration);
-      setNotice(t("Changes saved.", "Nai-save ang mga pagbabago."));
+      setNotice(t("changesSaved"));
     } catch (failure) {
       setError(
         failure instanceof TypeError
-          ? t(
-              "Connection lost. Refresh to check whether the change saved before retrying.",
-              "Nawala ang koneksyon. I-refresh muna upang tingnan kung nai-save bago subukang muli.",
-            )
+          ? t("connectionLostRefreshToCheckWhetherTheChange")
           : failure instanceof Error
             ? failure.message
-            : t("Please retry.", "Subukang muli."),
+            : t("pleaseRetry"),
       );
     } finally {
       setPending(false);
@@ -107,10 +102,10 @@ export function AdministrationWorkspace({
     setPending(true); setError(""); setNotice("");
     try {
       const response = await fetch("/api/administration", { cache: "no-store" });
-      if (!response.ok) throw new Error(t("Access or refresh failed. Sign in and retry.", "Hindi ma-refresh o walang access. Mag-sign in at subukan muli."));
+      if (!response.ok) throw new Error(t("accessOrRefreshFailedSignInAndRetry"));
       setSnapshot(await response.json());
     } catch {
-      setError(t("Refresh could not be confirmed. Keep your edits, reconnect and retry.", "Hindi makumpirma ang refresh. Panatilihin ang mga pagbabago, kumonekta at subukan muli."));
+      setError(t("refreshCouldNotBeConfirmedKeepYourEdits"));
     } finally { setPending(false); }
   }
   return (
@@ -120,7 +115,7 @@ export function AdministrationWorkspace({
           Ayos Southville
         </Link>
         <div className="admin-header-actions">
-          <Link href="/account">{t("My account", "Aking account")}</Link>
+          <Link href="/account">{t("myAccount")}</Link>
           <button
             className="language-button"
             onClick={() => chooseLocale(locale === "en" ? "fil" : "en")}
@@ -130,68 +125,53 @@ export function AdministrationWorkspace({
         </div>
       </header>
       <div className="admin-shell">
-        <h1>{t("Pilot administration", "Pamamahala ng pilot")}</h1>
+        <h1>{t("pilotAdministration")}</h1>
         <p className="admin-intro">
-          {t(
-            "Invite neighbors, protect access, and keep report routing clear. This is an independent resident-led pilot; destinations are internal pilot desks.",
-            "Mag-imbita ng kapitbahay, pamahalaan ang access, at linawin ang ruta ng mga ulat. Independent na pilot ito ng mga residente; internal na pilot desk ang mga destinasyon.",
-          )}
+          {t("inviteNeighborsProtectAccessAndKeepReportRouting")}
         </p>
         <nav
           className="admin-section-nav"
-          aria-label={t("Administration sections", "Mga seksyon ng pamamahala")}
+          aria-label={t("administrationSections")}
         >
-          <a href="#people">{t("People", "Mga tao")}</a>
-          <a href="#coverage">{t("Coverage", "Mga operator")}</a>
-          <a href="#invitations">{t("Invitations", "Mga imbitasyon")}</a>
-          <a href="#configuration">{t("Configuration", "Mga setting")}</a>
-          <a href="#audit">{t("Audit history", "Kasaysayan ng audit")}</a>
-          <Link href="/administration/operations">{t("Privacy operations", "Mga operasyon ng privacy")}</Link>
+          <a href="#people">{t("people")}</a>
+          <a href="#coverage">{t("coverage")}</a>
+          <a href="#invitations">{t("invitationsLabel")}</a>
+          <a href="#configuration">{t("configuration")}</a>
+          <a href="#audit">{t("auditHistory")}</a>
+          <Link href="/administration/operations">{t("privacyOperations")}</Link>
         </nav>
         <div className="admin-continuity" role="status">
           {administrators >= 2
-            ? t(
-                "Two administrator accounts are verified; backup coverage still needs demonstration.",
-                "Verified ang dalawang administrator; kailangan pa ring patunayan ang backup coverage.",
-              )
-            : t(
-                "Before launch, add a second verified administrator.",
-                "Bago ilunsad, magdagdag ng pangalawang verified administrator.",
-              )}{" "}
+            ? t("twoAdministratorAccountsAreVerifiedBackupCoverageStill")
+            : t("beforeLaunchAddASecondVerifiedAdministrator")}{" "}
           {administrators}{" "}
-          {t("verified administrators", "verified na administrator")}.
+          {t("verifiedAdministrators")}.
         </div>
         <p className="admin-feedback" role="status" aria-live="polite">
           {pending
-            ? t("Saving…", "Sine-save…")
+            ? t("saving")
             : notice
-              ? t("Changes saved.", "Nai-save ang mga pagbabago.")
+              ? t("changesSaved")
               : ""}
         </p>
         {error && (
           <div className="admin-error" role="alert">
             {error}{" "}
-            <button type="button" className="button button-quiet" disabled={pending} onClick={() => void refreshControls()}>{t("Refresh operating controls", "I-refresh ang mga kontrol sa operasyon")}</button>{" "}
+            <button type="button" className="button button-quiet" disabled={pending} onClick={() => void refreshControls()}>{t("refreshOperatingControls")}</button>{" "}
             <Link href="/account">
-              {t("Return to account", "Bumalik sa account")}
+              {t("returnToAccount")}
             </Link>
           </div>
         )}
         <OperatingControls key={snapshot.operations?.revision ?? 0} confirmed={snapshot.operations ?? defaultPilotOperations} users={snapshot.users} pending={pending} locale={locale} save={input => mutate("update-operations", input)} />
         <section id="people" className="admin-section">
-          <h2>{t("People and access", "Mga tao at access")}</h2>
+          <h2>{t("peopleAndAccess")}</h2>
           <p>
-            {t(
-              "Approval allows reporting. Roles grant operational capabilities. Revoking pilot access stops resident submissions even for an invited email.",
-              "Ang approval ay nagpapahintulot ng pag-uulat. Ang tungkulin ay nagbibigay ng kakayahan sa pamamahala. Ang pagbawi ng access ay humihinto sa pagsumite kahit may imbitasyon.",
-            )}
+            {t("approvalAllowsReportingRolesGrantOperationalCapabilitiesRevoking")}
           </p>
           {snapshot.users.length === 0 ? (
             <p>
-              {t(
-                "Residents appear here after creating an account.",
-                "Lalabas dito ang mga residente matapos gumawa ng account.",
-              )}
+              {t("residentsAppearHereAfterCreatingAnAccount")}
             </p>
           ) : (
             snapshot.users.map((user) => (
@@ -200,20 +180,14 @@ export function AdministrationWorkspace({
                 <p className="admin-private-detail">
                   {user.email || user.uid} ·{" "}
                   {user.emailVerified
-                    ? t("Verified email", "Verified na email")
-                    : t(
-                        "Email not verified",
-                        "Hindi pa verified ang email",
-                      )}{" "}
+                    ? t("verifiedEmail")
+                    : t("emailNotVerified")}{" "}
                   ·{" "}
                   {user.access === "revoked"
-                    ? t("Access revoked", "Binawi ang access")
+                    ? t("accessRevoked")
                     : user.access === "approved"
-                      ? t("Approved", "Aprubado")
-                      : t(
-                          "Invitation or operator access",
-                          "Access ayon sa imbitasyon o tungkulin",
-                        )}
+                      ? t("approved")
+                      : t("invitationOrOperatorAccess")}
                 </p>
                 <div className="admin-person-forms">
                   <form
@@ -226,27 +200,27 @@ export function AdministrationWorkspace({
                     }
                   >
                     <fieldset disabled={pending}>
-                      <legend>{t("Pilot access", "Access sa pilot")}</legend>
+                      <legend>{t("pilotAccess")}</legend>
                       <label>
-                        {t("Access decision", "Desisyon sa access")}
+                        {t("accessDecision")}
                         <select
                           name="access"
                           defaultValue={user.access ?? "approved"}
                         >
                           <option value="approved">
-                            {t("Approve", "Aprubahan")}
+                            {t("approve")}
                           </option>
                           <option value="revoked">
-                            {t("Revoke", "Bawiin")}
+                            {t("revoke")}
                           </option>
                         </select>
                       </label>
                       <label>
-                        {t("Access reason", "Dahilan sa access")}
+                        {t("accessReason")}
                         <input name="reason" required maxLength={500} />
                       </label>
                       <button className="button button-dark" type="submit">
-                        {t("Save access", "I-save ang access")}
+                        {t("saveAccess")}
                       </button>
                     </fieldset>
                   </form>
@@ -260,7 +234,7 @@ export function AdministrationWorkspace({
                     }
                   >
                     <fieldset disabled={pending}>
-                      <legend>{t("Capabilities", "Mga kakayahan")}</legend>
+                      <legend>{t("capabilities")}</legend>
                       <div className="admin-role-options">
                         {roles.map((role) => (
                           <label key={role}>
@@ -271,24 +245,21 @@ export function AdministrationWorkspace({
                               defaultChecked={user.roles.includes(role)}
                             />
                             {role === "Resident"
-                              ? t("Resident", "Residente")
+                              ? t("resident")
                               : role === "Moderator"
-                                ? t("Moderator", "Tagasuri")
+                                ? t("moderator")
                                 : role === "Coordinator"
-                                  ? t("Coordinator", "Tagapag-ugnay")
-                                  : t("Administrator", "Tagapamahala")}
+                                  ? t("coordinator")
+                                  : t("administrator")}
                           </label>
                         ))}
                       </div>
                       <label>
-                        {t(
-                          "Role change reason",
-                          "Dahilan ng pagbabago sa tungkulin",
-                        )}
+                        {t("roleChangeReason")}
                         <input name="reason" required maxLength={500} />
                       </label>
                       <button className="button button-dark" type="submit">
-                        {t("Save roles", "I-save ang mga tungkulin")}
+                        {t("saveRoles")}
                       </button>
                     </fieldset>
                   </form>
@@ -298,12 +269,9 @@ export function AdministrationWorkspace({
           )}
         </section>
         <section id="invitations" className="admin-section">
-          <h2>{t("Invite a resident", "Mag-imbita ng residente")}</h2>
+          <h2>{t("inviteAResident")}</h2>
           <p>
-            {t(
-              "Add the email they will verify during registration. This approves access; it does not send an invitation email. Share the registration link personally.",
-              "Idagdag ang email na kanilang ibe-verify sa pagpaparehistro. Nagbibigay ito ng access; walang ipinapadalang email. Personal na ibahagi ang link sa pagpaparehistro.",
-            )}
+            {t("addTheEmailTheyWillVerifyDuringRegistration")}
           </p>
           <form
             onSubmit={(event) =>
@@ -316,10 +284,10 @@ export function AdministrationWorkspace({
           >
             <fieldset className="admin-invite-form" disabled={pending || snapshot.operations?.invitationsPaused}>
               <legend className="sr-only">
-                {t("Invitation details", "Mga detalye ng imbitasyon")}
+                {t("invitationDetails")}
               </legend>
               <label>
-                {t("Email address", "Email address")}
+                {t("emailAddress")}
                 <input
                   type="email"
                   name="email"
@@ -329,20 +297,17 @@ export function AdministrationWorkspace({
                 />
               </label>
               <label>
-                {t("Invitation reason", "Dahilan ng imbitasyon")}
+                {t("invitationReason")}
                 <input name="reason" required maxLength={500} />
               </label>
               <button className="button button-primary" type="submit">
-                {t("Invite resident", "Imbitahan ang residente")}
+                {t("inviteResident")}
               </button>
             </fieldset>
           </form>
           {snapshot.invitations.length === 0 ? (
             <p>
-              {t(
-                "No invitations yet. Add your first pilot participant above.",
-                "Wala pang imbitasyon. Idagdag sa itaas ang unang kalahok.",
-              )}
+              {t("noInvitationsYetAddYourFirstPilotParticipant")}
             </p>
           ) : (
             <ul className="admin-invitations">
@@ -351,8 +316,8 @@ export function AdministrationWorkspace({
                   <span>
                     {invitation.email} ·{" "}
                     {invitation.active
-                      ? t("Active", "Aktibo")
-                      : t("Revoked", "Binawi")}
+                      ? t("active")
+                      : t("revoked")}
                   </span>
                   <form
                     onSubmit={(event) =>
@@ -365,13 +330,13 @@ export function AdministrationWorkspace({
                   >
                     <fieldset disabled={pending}>
                       <label>
-                        {t("Change reason", "Dahilan ng pagbabago")}
+                        {t("changeReason")}
                         <input name="reason" required maxLength={500} />
                       </label>
                       <button className="button button-quiet" type="submit">
                         {invitation.active
-                          ? t("Revoke invitation", "Bawiin ang imbitasyon")
-                          : t("Restore invitation", "Ibalik ang imbitasyon")}
+                          ? t("revokeInvitation")
+                          : t("restoreInvitation")}
                       </button>
                     </fieldset>
                   </form>
@@ -381,12 +346,9 @@ export function AdministrationWorkspace({
           )}
         </section>
         <section id="configuration" className="admin-section">
-          <h2>{t("Reporting configuration", "Mga setting ng pag-uulat")}</h2>
+          <h2>{t("reportingConfiguration")}</h2>
           <p>
-            {t(
-              "Keep identifiers stable. Deactivate entries instead of renaming identifiers used by existing reports. Changes apply after saving.",
-              "Panatilihin ang mga identifier. I-deactivate ang mga entry sa halip na palitan ang identifier na ginagamit na sa mga ulat. Magkakabisa matapos i-save.",
-            )}
+            {t("keepIdentifiersStableDeactivateEntriesInsteadOfRenaming")}
           </p>
           <form
             onSubmit={(event) =>
@@ -398,13 +360,13 @@ export function AdministrationWorkspace({
           >
             <fieldset disabled={pending}>
               <legend className="sr-only">
-                {t("Configuration", "Mga setting")}
+                {t("configuration")}
               </legend>
-              <h3>{t("Responsible destinations", "Mga destinasyon")}</h3>
+              <h3>{t("responsibleDestinations")}</h3>
               {configuration.destinations.map((destination, index) => (
                 <div className="admin-config-row" key={index}>
                   <label>
-                    {t("Identifier", "Identifier")}
+                    {t("identifier")}
                     <input
                       required
                       value={destination.id}
@@ -422,7 +384,7 @@ export function AdministrationWorkspace({
                     />
                   </label>
                   <label>
-                    {t("Destination name", "Pangalan ng destinasyon")}
+                    {t("destinationName")}
                     <input
                       required
                       value={destination.name}
@@ -455,7 +417,7 @@ export function AdministrationWorkspace({
                         }))
                       }
                     />
-                    {t("Active", "Aktibo")}
+                    {t("active")}
                   </label>
                 </div>
               ))}
@@ -472,16 +434,16 @@ export function AdministrationWorkspace({
                   }))
                 }
               >
-                {t("Add destination", "Magdagdag ng destinasyon")}
+                {t("addDestination")}
               </button>
-              <h3>{t("Report categories", "Mga kategorya ng ulat")}</h3>
+              <h3>{t("reportCategories")}</h3>
               {configuration.categories.map((category, index) => (
                 <div
                   className="admin-config-row admin-category-row"
                   key={index}
                 >
                   <label>
-                    {t("Category identifier", "Identifier ng kategorya")}
+                    {t("categoryIdentifier")}
                     <input
                       required
                       value={category.id}
@@ -501,8 +463,8 @@ export function AdministrationWorkspace({
                   {(["en", "fil"] as const).map((language) => (
                     <label key={language}>
                       {language === "en"
-                        ? t("English label", "Label sa English")
-                        : t("Filipino label", "Label sa Filipino")}
+                        ? t("englishLabel")
+                        : t("filipinoLabel")}
                       <input
                         required
                         value={category.label[language]}
@@ -527,7 +489,7 @@ export function AdministrationWorkspace({
                     </label>
                   ))}
                   <label>
-                    {t("Destination", "Destinasyon")}
+                    {t("destination")}
                     <select
                       value={category.destinationId}
                       onChange={(event) =>
@@ -568,7 +530,7 @@ export function AdministrationWorkspace({
                         }))
                       }
                     />
-                    {t("Active", "Aktibo")}
+                    {t("active")}
                   </label>
                 </div>
               ))}
@@ -590,13 +552,10 @@ export function AdministrationWorkspace({
                   }))
                 }
               >
-                {t("Add category", "Magdagdag ng kategorya")}
+                {t("addCategory")}
               </button>
               <h3>
-                {t(
-                  "Verified emergency guidance",
-                  "Verified na gabay sa emergency",
-                )}
+                {t("verifiedEmergencyGuidance")}
               </h3>
               <div className="admin-emergency-grid">
                 {(["en", "fil"] as const).map((language) => (
@@ -606,13 +565,10 @@ export function AdministrationWorkspace({
                       (field) => (
                         <label key={field}>
                           {field === "message"
-                            ? t("Emergency message", "Mensahe sa emergency")
+                            ? t("emergencyMessage")
                             : field === "phone"
-                              ? t("Emergency phone", "Telepono sa emergency")
-                              : t(
-                                  "Verified HTTPS source",
-                                  "Verified na HTTPS source",
-                                )}
+                              ? t("emergencyPhone")
+                              : t("verifiedHttpsSource")}
                           <input
                             required
                             type={field === "sourceUrl" ? "url" : "text"}
@@ -637,32 +593,23 @@ export function AdministrationWorkspace({
                 ))}
               </div>
               <label>
-                {t(
-                  "Configuration change reason",
-                  "Dahilan ng pagbabago sa mga setting",
-                )}
+                {t("configurationChangeReason")}
                 <input required name="reason" maxLength={500} />
               </label>
               <button className="button button-primary" type="submit">
-                {t("Save configuration", "I-save ang mga setting")}
+                {t("saveConfiguration")}
               </button>
             </fieldset>
           </form>
         </section>
         <section id="audit" className="admin-section">
-          <h2>{t("Audit history", "Kasaysayan ng audit")}</h2>
+          <h2>{t("auditHistory")}</h2>
           <p>
-            {t(
-              "Latest 100 privileged actions. Private to administrators.",
-              "Pinakabagong 100 aksyon sa pamamahala. Pribado para sa mga administrator.",
-            )}
+            {t("latestPrivilegedActionsPrivateToAdministrators")}
           </p>
           {snapshot.audit.length === 0 ? (
             <p>
-              {t(
-                "Saved administrative changes will appear here.",
-                "Lalabas dito ang mga nai-save na pagbabago sa pamamahala.",
-              )}
+              {t("savedAdministrativeChangesWillAppearHere")}
             </p>
           ) : (
             <ol className="admin-audit">
@@ -677,8 +624,8 @@ export function AdministrationWorkspace({
                   </time>
                   <p>{event.reason}</p>
                   <small>
-                    {t("Actor", "Gumawa")}: {event.actorUid} ·{" "}
-                    {t("Target", "Pakay")}: {event.target}
+                    {t("actor")}: {event.actorUid} ·{" "}
+                    {t("target")}: {event.target}
                   </small>
                 </li>
               ))}

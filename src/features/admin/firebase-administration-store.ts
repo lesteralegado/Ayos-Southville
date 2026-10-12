@@ -15,7 +15,7 @@ import {
   type PilotInvitation,
 } from "./administration-module";
 import type { AuditEvent } from "@/features/reports/moderation-module";
-import { pilotOperations, OperatingControlError } from "./pilot-operations";
+import { coverageToValidate, eligibleOperator, pilotOperations, OperatingControlError } from "./pilot-operations";
 
 const invitationId = (email: string) =>
   createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
@@ -47,15 +47,12 @@ function createFirebaseAdministrationStore(): AdministrationStore {
         const current = await transaction.get(ref);
         if (pilotOperations(current.data()).revision !== revision) throw new OperatingControlError("CONFLICT");
         const previous = pilotOperations(current.data());
-        const resuming = (previous.intakePaused && !value.intakePaused) || (previous.invitationsPaused && !value.invitationsPaused) || (previous.publicRestricted && !value.publicRestricted);
-        const coverage = [value.primaryUid, value.backupUid].filter(Boolean);
+        const coverage = coverageToValidate(previous, value);
         for (const uid of coverage) {
-          if (value.intakePaused && !resuming && [previous.primaryUid, previous.backupUid].includes(uid)) continue;
           const profile = await transaction.get(db.collection("residentProfiles").doc(uid));
           const user = await auth.getUser(uid);
-          if (!profile.exists || profile.data()?.deletionPending || profile.data()?.pilotAccess === "revoked" ||
-            !profileRoles(profile.data()?.roles).some(role => ["Administrator", "Moderator", "Coordinator"].includes(role)) ||
-            !user.emailVerified || user.disabled)
+          if (!profile.exists || profile.data()?.deletionPending || user.disabled ||
+            !eligibleOperator({ roles: profileRoles(profile.data()?.roles), access: profile.data()?.pilotAccess, emailVerified: user.emailVerified }))
             throw new AdministrationValidationError("Coverage requires a current verified operator.");
         }
         transaction.set(ref, value, { merge: true });

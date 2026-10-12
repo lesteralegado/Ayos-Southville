@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, vi } from "vitest";
-const fixture = vi.hoisted(() => ({ records: new Map<string, Record<string, unknown>>(), files: new Map<string, Uint8Array>(), pauseOnSave: false }));
+const fixture = vi.hoisted(() => ({ records: new Map<string, Record<string, unknown>>(), files: new Map<string, Uint8Array>(), pauseOnSave: false, authUnavailable: false }));
 vi.mock("server-only", () => ({}));
 vi.mock("firebase-admin/storage", () => ({ getStorage: () => ({ bucket: () => ({ file: (path: string) => ({
   save: async (bytes: Uint8Array) => {
@@ -14,7 +14,10 @@ vi.mock("@/lib/firebase/admin", async () => {
   const { firebaseBoundary } = await import("@/test/firebase-boundary");
   return { getFirebaseAdmin: () => ({ db: firebaseBoundary(fixture.records), auth: {
     getUser: async (uid: string) => ({ uid, emailVerified: true, disabled: false }),
-    getUsers: async (ids: { uid: string }[]) => ({ users: ids.map(({ uid }) => ({ uid, emailVerified: true, disabled: false })) }),
+    getUsers: async (ids: { uid: string }[]) => {
+      if (fixture.authUnavailable) throw new Error("Auth bulk lookup unavailable");
+      return { users: ids.map(({ uid }) => ({ uid, emailVerified: true, disabled: false })) };
+    },
   } }) };
 });
 import { getAdministrationModule } from "./firebase-administration-store";
@@ -26,6 +29,7 @@ const admin = { uid: "admin", roles: ["Administrator"] as ["Administrator"] };
 beforeEach(() => {
   fixture.records.clear();
   fixture.files.clear(); fixture.pauseOnSave = false;
+  fixture.authUnavailable = false;
   fixture.records.set("residentProfiles/admin", { roles: ["Administrator"] });
   fixture.records.set("residentProfiles/backup", { roles: ["Coordinator"] });
   process.env.AUDIT_PSEUDONYM_SECRET = "a".repeat(32);
@@ -67,6 +71,8 @@ it("commits one concurrent operating update and preserves unrelated retention fi
   expect(await pilotParticipationClosed()).toBe(true);
   const audits = await administration.listAudit(admin);
   expect(audits).toHaveLength(1);
+  expect(audits[0].operatingChange).toMatchObject({ before: { intakePaused: false }, after: { intakePaused: true }, recoveryConfirmed: false });
+  expect(JSON.stringify(audits)).not.toContain("Coverage unavailable.");
   expect(JSON.stringify(audits)).not.toContain("admin");
 });
 it("rejects stale administrator capabilities at commit time", async () => {
@@ -86,5 +92,12 @@ it("allows immediate safety suspension when previously assigned backup coverage 
   fixture.records.set("residentProfiles/backup", { roles: ["Resident"] });
   const administration = getAdministrationModule(), operations = await administration.getOperations(admin);
   await administration.updateOperations(admin, { expectedRevision: 0, operations: { ...operations, intakePaused: true, publicRestricted: true, explanation: { en: "Privacy review is underway.", fil: "Sinusuri ang privacy." } }, recoveryConfirmed: false });
+  expect(await administration.getOperations(admin)).toMatchObject({ intakePaused: true, publicRestricted: true });
+});
+it("can suspend existing coverage even when unrelated account-directory lookups are unavailable", async () => {
+  fixture.records.set("pilotOperations/current", { ...defaultPilotOperations, primaryUid: "admin", backupUid: "backup", backupAffirmed: true });
+  const administration = getAdministrationModule(), operations = await administration.getOperations(admin);
+  fixture.authUnavailable = true;
+  await administration.updateOperations(admin, { expectedRevision: 0, operations: { ...operations, intakePaused: true, publicRestricted: true, explanation: { en: "Safety review is underway.", fil: "Sinusuri ang kaligtasan." } }, recoveryConfirmed: false });
   expect(await administration.getOperations(admin)).toMatchObject({ intakePaused: true, publicRestricted: true });
 });

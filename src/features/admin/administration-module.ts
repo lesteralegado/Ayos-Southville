@@ -3,7 +3,7 @@ import type {
   OperatorRole,
   AuditEvent,
 } from "@/features/reports/moderation-module";
-import { defaultPilotOperations, OperatingControlError, type PilotOperations } from "./pilot-operations";
+import { coverageToValidate, eligibleOperator, isResuming, defaultPilotOperations, OperatingControlError, type PilotOperations } from "./pilot-operations";
 
 export type PilotUser = {
   uid: string;
@@ -116,6 +116,10 @@ function requireAdmin(actor: Operator) {
     throw new AdministrationForbiddenError(
       "Administrator capability is required.",
     );
+}
+function operatingAuditState(value: PilotOperations) {
+  const { intakePaused, invitationsPaused, publicRestricted, backupAffirmed } = value;
+  return { intakePaused, invitationsPaused, publicRestricted, backupAffirmed };
 }
 function text(value: string, label: string) {
   if (typeof value !== "string" || !value.trim() || value.length > 1000)
@@ -259,11 +263,11 @@ export function createAdministrationModule({
         throw new AdministrationValidationError("Choose different primary and backup operators.");
       const previous = await store.getOperations();
       if (previous.revision !== input.expectedRevision) throw new OperatingControlError("CONFLICT");
-      const resuming = (previous.intakePaused && !value.intakePaused) || (previous.invitationsPaused && !value.invitationsPaused) || (previous.publicRestricted && !value.publicRestricted);
-      const users = await store.listUsers();
-      for (const uid of [value.primaryUid, value.backupUid].filter(Boolean))
-        if (!(value.intakePaused && !resuming && [previous.primaryUid, previous.backupUid].includes(uid)) &&
-          !users.some(user => user.uid === uid && user.emailVerified && user.access !== "revoked" && user.roles.some(role => ["Administrator", "Moderator", "Coordinator"].includes(role))))
+      const resuming = isResuming(previous, value);
+      const coverage = coverageToValidate(previous, value);
+      const users = coverage.length ? await store.listUsers() : [];
+      for (const uid of coverage)
+        if (!users.some(user => user.uid === uid && eligibleOperator(user)))
           throw new AdministrationValidationError("Coverage requires a verified, authorized operator.");
       if (value.backupAffirmed && !value.backupUid)
         throw new AdministrationValidationError("Choose a backup before affirming coverage.");
@@ -284,7 +288,15 @@ export function createAdministrationModule({
         invitationsPaused: value.invitationsPaused, publicRestricted: value.publicRestricted,
         explanation: { en: value.explanation.en.trim(), fil: value.explanation.fil.trim() },
         resumesAt: value.resumesAt,
-      }, input.expectedRevision, audit(actor, "pilot.operations-updated", "pilot", "Operating controls updated."));
+      }, input.expectedRevision, {
+        ...audit(actor, "pilot.operations-updated", "pilot", "Operating controls updated."),
+        operatingChange: {
+          before: operatingAuditState(previous), after: operatingAuditState(value),
+          recoveryConfirmed: input.recoveryConfirmed === true,
+          primaryChanged: previous.primaryUid !== value.primaryUid,
+          backupChanged: previous.backupUid !== value.backupUid,
+        },
+      });
     },
     async canParticipate(resident: PilotResident) {
       if (!resident.emailVerified) return false;
