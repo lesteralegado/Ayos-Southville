@@ -9,7 +9,7 @@ Six-ticket breakdown approved by the owner on 2026-10-12 (Asia/Manila). Scope is
 | [01 Coverage and pause controls](issues/01-coverage-and-pause-controls.md) | None | resolved | Local implementation verified; both code-review axes clear; release gates remain open |
 | [02 Consented pilot participation](issues/02-consented-participation.md) | None | resolved | Local implementation verified; both review axes clear; release gates remain open |
 | [03 Accountable report handling](issues/03-accountable-report-handling.md) | 01 | resolved | Local implementation verified; optional Standards maintenance advisory; human/provider release gates remain open |
-| [04 Truthful pilot measurement](issues/04-truthful-pilot-measurement.md) | None | ready-for-agent | Implementation |
+| [04 Truthful pilot measurement](issues/04-truthful-pilot-measurement.md) | None | resolved | Local measurement capabilities verified; four optional Standards advisories; real trial and provider release gates remain open |
 | [05 Verify operational release readiness](issues/05-verify-operational-release.md) | 01, 02, 03, 04 | ready-for-agent | Agent-assisted; human/provider gates |
 | [06 Run and evaluate the controlled pilot](issues/06-run-and-evaluate-pilot.md) | 05 + explicit release approval | ready-for-agent | Human-led; real four-week observations |
 
