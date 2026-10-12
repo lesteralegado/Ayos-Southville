@@ -5,7 +5,7 @@ import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import type { AuditEvent } from "@/features/reports/moderation-module";
 import { createMutationProtection, ProtectionError, type SensitiveOperation } from "./security-module";
 import { OperatingControlError } from "@/features/admin/pilot-operations";
-import { consentReceipt, ParticipationError } from "./participation-consent";
+import { consentReceipt, enrollmentApproved, ParticipationError } from "./participation-consent";
 
 export async function assertParticipant(transaction: Transaction, uid: string, requireConsent = true) {
   const { db, auth } = getFirebaseAdmin();
@@ -14,10 +14,10 @@ export async function assertParticipant(transaction: Transaction, uid: string, r
   const profile = await transaction.get(db.collection("residentProfiles").doc(uid));
   const data = profile.data();
   if (!profile.exists || data?.deletionPending || data?.pilotAccess === "revoked") throw new ParticipationError("PILOT_ACCESS_REQUIRED");
-  const operator = Array.isArray(data?.roles) && data.roles.some((role: string) => ["Moderator", "Coordinator", "Administrator"].includes(role));
-  if (data?.pilotAccess !== "approved" && !operator) {
+  const eligibility = { access: data?.pilotAccess, roles: data?.roles };
+  if (!enrollmentApproved(eligibility)) {
     const invitation = user.email ? await transaction.get(db.collection("pilotInvitations").doc(createHash("sha256").update(user.email.trim().toLowerCase()).digest("hex"))) : null;
-    if (invitation?.data()?.active !== true) throw new ParticipationError("PILOT_ACCESS_REQUIRED");
+    if (!enrollmentApproved(eligibility, invitation?.data()?.active === true)) throw new ParticipationError("PILOT_ACCESS_REQUIRED");
   }
   if (requireConsent && !consentReceipt((await transaction.get(db.collection("pilotConsents").doc(uid))).data()))
     throw new ParticipationError("CONSENT_REQUIRED");

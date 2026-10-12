@@ -22,7 +22,7 @@ export function ConsentPanel() {
       if (value.version !== consentVersion) throw new Error("changed");
       const confirmed = consentReceipt(value.receipt);
       if (value.receipt && !confirmed) throw new Error("failure");
-      if (active) { setReceipt(confirmed); setEligible(value.eligible === true); setStatusConfirmed(true); setNotice(""); }
+      if (active) { setReceipt(confirmed); if (confirmed) setDeclined(false); setEligible(value.eligible === true); setStatusConfirmed(true); setNotice(""); }
     }).catch(error => { if (active) setNotice(error.message === "permission" ? "permission" : error.message === "changed" ? "changed" : "failure"); })
       .finally(() => { clearTimeout(timer); if (active) setLoading(false); });
     return () => { active = false; clearTimeout(timer); controller.abort(); };
@@ -52,7 +52,7 @@ export function ConsentPanel() {
       <p>{copy.trial}</p><p>{copy.boundaries}</p><p>{copy.retention}</p><p>{copy.deletion}</p><p>{copy.recruitment}</p>
       <p><Link href="/privacy" className="text-link">{copy.privacy}</Link></p>
     </div>
-    <p role="status" aria-live="polite">{loading ? copy.loading : pending ? copy.pending : declined ? copy.declined : !receipt && !notice ? copy.noConsent : ""}</p>
+    <p role="status" aria-live="polite">{loading ? copy.loading : pending ? copy.pending : !receipt && statusConfirmed && !notice ? declined ? copy.declined : copy.noConsent : ""}</p>
     {notice && <p id="consent-error" className="form-error" role="alert">{copy[notice]}</p>}
     {!loading && !eligible && !notice && <p>{copy.permission}</p>}
     {receipt ? <div className="consent-receipt">
@@ -60,9 +60,9 @@ export function ConsentPanel() {
       <dl><dt>{copy.id}</dt><dd>{receipt.id}</dd><dt>{copy.version}</dt><dd>{receipt.version}</dd><dt>{copy.date}</dt><dd><time dateTime={receipt.consentedAt}>{new Date(receipt.consentedAt).toLocaleString(locale === "fil" ? "fil-PH" : "en-PH", { timeZone: "Asia/Manila" })}</time></dd><dt>{copy.language}</dt><dd>{receipt.locale === "fil" ? "Filipino" : "English"}</dd></dl>
       {eligible && <Link className="button button-primary" href="/reports/new">{copy.continue}</Link>}
     </div> : !declined && <form onSubmit={event => void submit(event)} aria-describedby="consent-disclosure">
-      <fieldset disabled={loading || pending || !eligible || notice === "permission" || notice === "changed"}>
+      <fieldset disabled={loading || pending || !statusConfirmed || !eligible || notice === "permission" || notice === "changed"}>
         <legend>{copy.title}</legend>
-        <label className="consent-check"><input type="checkbox" checked={adult} onChange={event => setAdult(event.target.checked)} aria-invalid={notice === "validation" && !adult} aria-describedby="consent-adult-help" />{copy.adult}</label>
+        <label className="consent-check"><input type="checkbox" checked={adult} onChange={event => setAdult(event.target.checked)} aria-invalid={notice === "validation" && !adult} aria-describedby={notice === "validation" && !adult ? "consent-adult-help consent-error" : "consent-adult-help"} />{copy.adult}</label>
         <p id="consent-adult-help">{copy.adultHelp}</p>
         <label className="consent-check"><input type="checkbox" checked={agreed} onChange={event => setAgreed(event.target.checked)} aria-invalid={notice === "validation" && !agreed} aria-describedby={notice === "validation" ? "consent-error" : undefined} />{copy.agree}</label>
         <button className="button button-primary" type="submit" disabled={pending || loading}>{pending ? copy.pending : copy.submit}</button>
@@ -70,7 +70,7 @@ export function ConsentPanel() {
     </form>}
     <div className="consent-actions">
       {!receipt && <button type="button" className="button button-quiet" disabled={pending || loading || !statusConfirmed} onClick={() => { setDeclined(current => !current); setAdult(false); setAgreed(false); setNotice(""); }}>{declined ? copy.reconsider : copy.decline}</button>}
-      {!loading && <button type="button" className="button button-quiet" disabled={pending} onClick={() => { setLoading(true); setAttempt(value => value + 1); }}>{copy.retry}</button>}
+      {!loading && <button type="button" className="button button-quiet" disabled={pending} onClick={() => { setStatusConfirmed(false); setLoading(true); setAttempt(value => value + 1); }}>{copy.retry}</button>}
     </div>
   </section>;
 }

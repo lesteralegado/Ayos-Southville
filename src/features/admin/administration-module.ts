@@ -4,7 +4,7 @@ import type {
   AuditEvent,
 } from "@/features/reports/moderation-module";
 import { coverageToValidate, eligibleOperator, isResuming, defaultPilotOperations, OperatingControlError, type PilotOperations } from "./pilot-operations";
-import { consentReceipt, consentVersion, ParticipationError, type ConsentInput, type ConsentReceipt } from "@/features/pilot/participation-consent";
+import { consentReceipt, consentVersion, enrollmentApproved, ParticipationError, type ConsentInput, type ConsentReceipt } from "@/features/pilot/participation-consent";
 
 export type PilotUser = {
   uid: string;
@@ -239,8 +239,8 @@ export function createAdministrationModule({
     if (!resident.emailVerified) return false;
     const user = await store.getUser(resident.uid);
     if (!user || user.access === "revoked") return false;
-    if (user.access === "approved" || user.roles.some(role => ["Administrator", "Moderator", "Coordinator"].includes(role))) return true;
-    return resident.email ? (await store.getInvitation(resident.email.trim().toLowerCase()))?.active === true : false;
+    if (enrollmentApproved(user)) return true;
+    return enrollmentApproved(user, resident.email ? (await store.getInvitation(resident.email.trim().toLowerCase()))?.active === true : false);
   }
   function audit(
     actor: Operator,
@@ -466,10 +466,9 @@ export function createMemoryAdministrationStore(
     async getConsent(uid) { return structuredClone(consents.get(uid) ?? null); },
     async acceptConsent(resident, receipt) {
       const user = users.get(resident.uid);
-      if (!resident.emailVerified || !user || user.access === "revoked" ||
-        !(user.access === "approved" || user.roles.some(role => ["Administrator", "Moderator", "Coordinator"].includes(role)) ||
-          (resident.email && invitations.get(resident.email.trim().toLowerCase())?.active))) throw new ParticipationError("PILOT_ACCESS_REQUIRED");
-      const existing = consents.get(resident.uid);
+      if (!resident.emailVerified || !enrollmentApproved(user ?? null,
+        resident.email ? invitations.get(resident.email.trim().toLowerCase())?.active === true : false)) throw new ParticipationError("PILOT_ACCESS_REQUIRED");
+      const existing = consentReceipt(consents.get(resident.uid));
       if (existing) return structuredClone(existing);
       consents.set(resident.uid, structuredClone(receipt)); return structuredClone(receipt);
     },

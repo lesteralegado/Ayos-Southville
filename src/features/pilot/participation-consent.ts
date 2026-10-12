@@ -1,4 +1,8 @@
 export const consentVersion = "southville-adult-pilot-2026-10-12";
+export function enrollmentApproved(profile: { access?: unknown; roles?: unknown } | null, invited = false) {
+  return !!profile && profile.access !== "revoked" && (profile.access === "approved" || invited ||
+    (Array.isArray(profile.roles) && profile.roles.some(role => ["Administrator", "Moderator", "Coordinator"].includes(role))));
+}
 export type ConsentReceipt = { id: string; version: string; consentedAt: string; adultAcknowledged: true; locale: "en" | "fil" };
 export type ConsentInput = { version: unknown; adultAcknowledged: unknown; consent: unknown; locale: unknown };
 export class ParticipationError extends Error {
