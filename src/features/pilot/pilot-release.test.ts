@@ -24,8 +24,8 @@ describe("pilot operations boundary", () => {
   it("authorizes and records pseudonymous pilot sessions", async () => {
     const measurement = createPilotMeasurement(createMemoryPilotMeasurementStore());
     await expect(measurement.record({ uid: "resident", roles: ["Resident"] }, { participantCode: "P11", submitted: true, assisted: false, understoodStatus: true, foundDuplicate: true, completedLifecycle: false })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await measurement.record({ uid: "admin", roles: ["Administrator"] }, { participantCode: "P11", submitted: true, assisted: false, understoodStatus: true, foundDuplicate: true, completedLifecycle: false });
-    expect(await measurement.summary({ uid: "admin", roles: ["Administrator"] })).toEqual({ participants: 1, submissions: 1, unassistedSubmissionRate: 100, statusComprehensionRate: 100, duplicateDiscoveryRate: 100, lifecycleCompletionRate: 0 });
+    await measurement.record({ uid: "admin", roles: ["Administrator"] }, { participantCode: "P11", source: "exercise", expectedRevision: 0, submitted: true, assisted: false, understoodStatus: true, foundDuplicate: true, completedLifecycle: false });
+    expect(await measurement.summary({ uid: "admin", roles: ["Administrator"] })).toMatchObject({ real: { participants: 0 }, exercise: { participants: 1, submissions: 1, unassistedSubmissionRate: 100, statusComprehensionRate: 100, duplicateDiscoveryRate: 100, lifecycleCompletionRate: 0, sampleSufficient: false, submissionTargetMet: false } });
   });
   it("aggregates representative report and media volume within the interaction target", () => {
     const fixture = createRepresentativePilotFixture();

@@ -9,7 +9,7 @@ import { PrivacyError } from "./privacy-module";
 import { retentionExpired, type RetentionRecord } from "./retention-module";
 import { operationalMonitor } from "./monitoring";
 
-export const retainedCollections = ["pilotConsents", "privateReports", "moderationReports", "publicReports", "reportEngagements", "residentNotifications", "notificationPreferences", "submissionReceipts", "evidenceUploads", "evidenceDrafts", "evidenceQuotas", "pilotInvitations", "publicAliases", "pilotMeasurements", "lifecycleEmailJobs", "mutationLimits", "auditEvents", "deletionRequests", "cleanupRuns", "erasureLedger", "deletionLocks", "deletionWork"] as const;
+export const retainedCollections = ["pilotConsents", "privateReports", "moderationReports", "publicReports", "reportEngagements", "residentNotifications", "notificationPreferences", "submissionReceipts", "evidenceUploads", "evidenceDrafts", "evidenceQuotas", "pilotInvitations", "publicAliases", "pilotMeasurements", "pilotEvaluation", "lifecycleEmailJobs", "mutationLimits", "auditEvents", "deletionRequests", "cleanupRuns", "erasureLedger", "deletionLocks", "deletionWork"] as const;
 const ownedPath = /^private-evidence\/[a-f0-9-]{36}\/[a-f0-9-]{36}\.jpg$/;
 async function inventory() {
   const db = getFirebaseAdmin().db, docs: DocumentSnapshot[] = [];

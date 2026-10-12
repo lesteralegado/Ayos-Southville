@@ -13,6 +13,7 @@ import { allowedRoles as roles } from "./administration-module";
 import type { AuditEvent } from "@/features/reports/moderation-module";
 import { OperatingControls } from "./operating-controls";
 import { defaultPilotOperations, type PilotOperations } from "./pilot-operations";
+import { measurementCopy } from "@/features/pilot/measurement-copy";
 
 export type AdministrationSnapshot = {
   users: PilotUser[];
@@ -139,6 +140,7 @@ export function AdministrationWorkspace({
           <a href="#configuration">{t("configuration")}</a>
           <a href="#audit">{t("auditHistory")}</a>
           <Link href="/administration/operations">{t("privacyOperations")}</Link>
+          <Link href="/administration/measurement">{measurementCopy[locale].title}</Link>
         </nav>
         <div className="admin-continuity" role="status">
           {administrators >= 2
