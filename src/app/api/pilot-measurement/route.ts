@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     const input = await readBoundedJson(request) as Record<string, unknown>, measurement = getPilotMeasurement();
     if (input?.action === "start-trial") await measurement.startTrial(actor, input);
     else if (input?.action === "review-trial") await measurement.reviewTrial(actor, input);
+    else if (input?.action === "erase-finding") await measurement.eraseFinding(actor, input);
     else await measurement.record(actor, input);
     return response({ ok: true }, 201);
   } catch (error) { return protectionResponse(error) ?? failure(error); }

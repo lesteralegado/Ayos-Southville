@@ -5,7 +5,8 @@ export type MeasurementSource = "real" | "exercise" | "unknown";
 export type MeasurementRecord = { participantCode: string; source: MeasurementSource; consentConfirmed: boolean; revision: number; createdAt: string; updatedAt: string } & Record<typeof outcomeFields[number], boolean | null>;
 export type TrialReview = { week: number; decision: "continue" | "pause" | "expand" | "stop"; capacity: number; coverageReviewed: boolean; safetyReviewed: boolean; evidenceCode: string; recordedAt: string };
 export type PilotTrial = { revision: number; startedAt: string; plannedThrough: string; releaseApprovedAt: string; evidenceCode: string; capacity: number; reviews?: TrialReview[] };
-export type PilotMeasurementStore = { save(record: MeasurementRecord, actor: Operator, expectedRevision: number): Promise<void>; list(): Promise<unknown[]>; trial(): Promise<PilotTrial | null>; saveTrial(trial: PilotTrial, actor: Operator, expectedRevision: number): Promise<void> };
+export type MeasurementErasure = { participantCode: string; source: MeasurementSource; expectedRevision: number; evidenceCode: string; erasedAt: string };
+export type PilotMeasurementStore = { save(record: MeasurementRecord, actor: Operator, expectedRevision: number): Promise<void>; erase(input: MeasurementErasure, actor: Operator): Promise<void>; list(): Promise<unknown[]>; trial(): Promise<PilotTrial | null>; saveTrial(trial: PilotTrial, actor: Operator, expectedRevision: number): Promise<void> };
 export class PilotMeasurementForbiddenError extends Error { readonly code = "FORBIDDEN"; }
 export class PilotMeasurementValidationError extends Error { readonly code = "VALIDATION"; }
 export class PilotMeasurementConflictError extends Error { readonly code = "CONFLICT"; }
@@ -45,6 +46,12 @@ export function createPilotMeasurement(store: PilotMeasurementStore, { now = () 
   }
   return {
     read,
+    async eraseFinding(actor: Operator, input: unknown) {
+      requireAdministrator(actor);
+      const value = object(input);
+      if (value.deletionApproved !== true || !/^P\d{2,4}$/.test(String(value.participantCode)) || !["real", "exercise", "unknown"].includes(String(value.source)) || !Number.isSafeInteger(value.expectedRevision) || Number(value.expectedRevision) < 0 || !/^EVID-[A-Z0-9-]{1,40}$/.test(String(value.evidenceCode))) throw new PilotMeasurementValidationError("An approved privacy request, current revision and pseudonymous evidence reference are required.");
+      await store.erase({ participantCode: String(value.participantCode), source: value.source as MeasurementSource, expectedRevision: Number(value.expectedRevision), evidenceCode: String(value.evidenceCode), erasedAt: now().toISOString() }, actor);
+    },
     async reviewTrial(actor: Operator, input: unknown) {
       requireAdministrator(actor);
       const value = object(input), trial = safeTrial(await store.trial());
@@ -75,11 +82,18 @@ export function createPilotMeasurement(store: PilotMeasurementStore, { now = () 
 }
 export function createMemoryPilotMeasurementStore(initial: unknown[] = []): PilotMeasurementStore {
   let trial: PilotTrial | null = null;
+  const erased = new Set<string>();
   const records = new Map(initial.map((value, index) => { const record = measurementRecord(value); return [record ? `${record.source}-${record.participantCode}` : `legacy-${index}`, structuredClone(value)]; }));
   return { async save(record, _actor, expectedRevision) {
     const key = `${record.source}-${record.participantCode}`, current = measurementRecord(records.get(key));
+    if (erased.has(key)) throw new PilotMeasurementConflictError("An erased participant code cannot be reused.");
     if ((current?.revision ?? 0) !== expectedRevision) throw new PilotMeasurementConflictError("Reload current findings before retrying.");
     records.set(key, structuredClone(record));
+  }, async erase(input) {
+    const key = `${input.source}-${input.participantCode}`, current = measurementRecord(records.get(key));
+    if (erased.has(key)) return;
+    if (!current || current.revision !== input.expectedRevision) throw new PilotMeasurementConflictError("Reload current findings before erasure.");
+    erased.add(key); records.delete(key);
   }, async list() { return [...records.values()].map(value => structuredClone(value)); }, async trial() { return structuredClone(trial); }, async saveTrial(next, _actor, expectedRevision) {
     if ((trial?.revision ?? 0) !== expectedRevision) throw new PilotMeasurementConflictError("Reload current trial before retrying.");
     trial = structuredClone(next);

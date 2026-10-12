@@ -10,6 +10,8 @@ function store(): PilotMeasurementStore {
       await db.runTransaction(async transaction => {
         await assertWritable(transaction, actor.uid, [], ["Administrator"]);
         await assertParticipant(transaction, actor.uid, false);
+        const erased = await transaction.get(db.collection("measurementErasures").doc(`${record.source}-${record.participantCode}`));
+        if (erased.exists) throw new PilotMeasurementConflictError("An erased participant code cannot be reused.");
         const canonicalRef = db.collection("pilotMeasurements").doc(`${record.source}-${record.participantCode}`), legacyRef = db.collection("pilotMeasurements").doc(record.participantCode);
         const [canonical, legacy, trial] = await transaction.getAll(canonicalRef, legacyRef, trialRef);
         const legacyMatches = record.source === "unknown" && measurementRecord(legacy.data())?.source === "unknown";
@@ -23,10 +25,25 @@ function store(): PilotMeasurementStore {
         transaction.set(ref, record);
       });
     },
+    async erase(input, actor) {
+      await protectMutation(actor.uid, "operator");
+      await db.runTransaction(async transaction => {
+        await assertWritable(transaction, actor.uid, [], ["Administrator"]);
+        await assertParticipant(transaction, actor.uid, false);
+        const ledgerRef = db.collection("measurementErasures").doc(`${input.source}-${input.participantCode}`);
+        const canonicalRef = db.collection("pilotMeasurements").doc(`${input.source}-${input.participantCode}`), legacyRef = db.collection("pilotMeasurements").doc(input.participantCode);
+        const [ledger, canonical, legacy] = await transaction.getAll(ledgerRef, canonicalRef, legacyRef);
+        const matching = [canonical, legacy].filter(document => measurementRecord(document.data())?.source === input.source);
+        if (!ledger.exists && (!matching.length || Math.max(...matching.map(document => measurementRecord(document.data())!.revision)) !== input.expectedRevision)) throw new PilotMeasurementConflictError("Reload current findings before erasure.");
+        if (!ledger.exists) transaction.set(ledgerRef, { source: input.source, participantCode: input.participantCode, evidenceCode: input.evidenceCode, erasedAt: input.erasedAt, createdAt: input.erasedAt });
+        for (const document of matching) transaction.delete(document.ref);
+      });
+    },
     async list() {
-      const snapshot = await db.collection("pilotMeasurements").limit(2001).get();
-      if (snapshot.size > 2000) throw new Error("Measurement capacity exceeded.");
-      return snapshot.docs.map(document => document.data());
+      const [snapshot, ledger] = await Promise.all([db.collection("pilotMeasurements").limit(2001).get(), db.collection("measurementErasures").limit(2001).get()]);
+      if (snapshot.size > 2000 || ledger.size > 2000) throw new Error("Measurement capacity exceeded.");
+      const erased = new Set(ledger.docs.map(document => document.id));
+      return snapshot.docs.map(document => document.data()).filter(value => { const record = measurementRecord(value); return !record || !erased.has(`${record.source}-${record.participantCode}`); });
     },
     async trial() { return (await trialRef.get()).data() as PilotTrial ?? null; },
     async saveTrial(trial, actor, expectedRevision) {

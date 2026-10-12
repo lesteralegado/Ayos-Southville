@@ -51,6 +51,9 @@ import { getEngagementModule } from "@/features/reports/firebase-engagement-stor
 import { GET as operatorWorkspace } from "@/app/api/moderation/route";
 import { getModerationModule } from "@/features/reports/firebase-moderation-store";
 import { defaultPilotOperations } from "./pilot-operations";
+import { GET as measurementRead, POST as measurementWrite } from "@/app/api/pilot-measurement/route";
+import { GET as publicDiscovery } from "@/app/api/public-reports/route";
+import { GET as publicInsights } from "@/app/api/insights/route";
 it("refuses backup takeover when coverage changes after the initial API checks", async () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-30T01:00:00Z"));
   try {
@@ -89,6 +92,15 @@ it("persists overdue backup responsibility, one delay notice, actual acknowledge
     fixture.uid = "resident";
     expect((await (await mine()).json()).reports[0].reviewExpectation.acknowledgedAt).toBe("2026-11-04T11:00:01.000Z");
     expect(JSON.stringify(await getModerationModule().listNotifications("resident"))).not.toMatch(/alice|Block 9|Private organization/);
+    // One connected synthetic API journey; provider fixtures, never live outcomes.
+    const discoveryBefore = await (await publicDiscovery(new Request("https://isolated.test/api/public-reports"))).json();
+    const insightsBefore = await (await publicInsights()).json();
+    fixture.uid = "backup";
+    expect((await measurementWrite(request("pilot-measurement", { participantCode: "P01", source: "exercise", expectedRevision: 0, submitted: true, assisted: false, understoodStatus: true, foundDuplicate: null, completedLifecycle: false }))).status).toBe(201);
+    expect(await (await measurementRead()).json()).toMatchObject({ summary: { real: { participants: 0 }, exercise: { participants: 1, lifecycleCompletionRate: 0 } } });
+    expect(await (await publicDiscovery(new Request("https://isolated.test/api/public-reports"))).json()).toEqual(discoveryBefore);
+    expect(await (await publicInsights()).json()).toEqual(insightsBefore);
+    expect(insightsBefore.insights.totals.all).toBe(1);
   } finally { vi.useRealTimers(); }
 });
 const choice = { version: "southville-adult-pilot-2026-10-12", adultAcknowledged: true, consent: true, locale: "en" };

@@ -11,6 +11,30 @@ vi.mock("@/lib/firebase/admin", async () => {
 import { GET, POST } from "@/app/api/pilot-measurement/route";
 beforeEach(() => { fixture.uid = "admin"; fixture.records.clear(); fixture.records.set("residentProfiles/admin", { roles: ["Administrator"] }); });
 const request = (input: unknown) => new Request("https://example.test/api/pilot-measurement", { method: "POST", headers: { origin: "https://example.test", "content-type": "application/json" }, body: JSON.stringify(input) });
+it("erases an authorized pseudonymous finding and prevents restored or retried data from reviving it", async () => {
+  const finding = { participantCode: "P01", source: "exercise", expectedRevision: 0, submitted: true, assisted: false, understoodStatus: null, foundDuplicate: null, completedLifecycle: null };
+  expect((await POST(request(finding))).status).toBe(201);
+  const stored = structuredClone(fixture.records.get("pilotMeasurements/exercise-P01"));
+  const erase = { action: "erase-finding", source: "exercise", participantCode: "P01", expectedRevision: 1, deletionApproved: true, evidenceCode: "EVID-PRIVACY" };
+  expect((await POST(request({ ...erase, deletionApproved: false }))).status).toBe(422);
+  expect((await POST(request(erase))).status).toBe(201);
+  expect((await (await GET()).json()).summary.exercise.participants).toBe(0);
+  fixture.records.set("pilotMeasurements/exercise-P01", stored!);
+  expect((await (await GET()).json()).records).toEqual([]);
+  expect((await POST(request(finding))).status).toBe(409);
+});
+it("persists explicit trial approval, real findings and reviewed expansion without ending the pilot", async () => {
+  const startedAt = new Date(Date.now() - 8 * 86400000).toISOString();
+  expect((await POST(request({ action: "start-trial", expectedRevision: 0, releaseApproved: true, prerequisitesReviewed: true, evidenceCode: "EVID-SYNTHETIC", startedAt }))).status).toBe(201);
+  expect((await POST(request({ participantCode: "P01", source: "real", consentConfirmed: true, expectedRevision: 0, submitted: false, assisted: true, understoodStatus: null, foundDuplicate: false, completedLifecycle: null }))).status).toBe(201);
+  const review = { action: "review-trial", expectedRevision: 1, week: 1, decision: "expand", capacity: 15, coverageReviewed: false, safetyReviewed: false, evidenceCode: "EVID-SYNTHETIC-W1" };
+  expect((await POST(request(review))).status).toBe(422);
+  expect((await POST(request({ ...review, coverageReviewed: true, safetyReviewed: true }))).status).toBe(201);
+  const snapshot = await (await GET()).json();
+  expect(snapshot).toMatchObject({ trial: { revision: 2, capacity: 15, startedAt, reviews: [expect.objectContaining({ decision: "expand" })] }, summary: { real: { participants: 1, unassistedSubmissionRate: 0, sampleSufficient: false } } });
+  expect(snapshot.trial.plannedThrough).toBe(new Date(Date.parse(startedAt) + 28 * 86400000).toISOString());
+  expect(fixture.records.get("pilotEvaluation/current")).not.toHaveProperty("pilotEndedAt");
+});
 it("refuses unauthorized reads and edits and rejects cross-origin writes", async () => {
   fixture.records.set("residentProfiles/admin", { roles: ["Resident"], pilotAccess: "approved" });
   expect((await GET()).status).toBe(403);

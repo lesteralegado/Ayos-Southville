@@ -9,7 +9,7 @@ import { PrivacyError } from "./privacy-module";
 import { retentionExpired, type RetentionRecord } from "./retention-module";
 import { operationalMonitor } from "./monitoring";
 
-export const retainedCollections = ["pilotConsents", "privateReports", "moderationReports", "publicReports", "reportEngagements", "residentNotifications", "notificationPreferences", "submissionReceipts", "evidenceUploads", "evidenceDrafts", "evidenceQuotas", "pilotInvitations", "publicAliases", "pilotMeasurements", "pilotEvaluation", "lifecycleEmailJobs", "mutationLimits", "auditEvents", "deletionRequests", "cleanupRuns", "erasureLedger", "deletionLocks", "deletionWork"] as const;
+export const retainedCollections = ["pilotConsents", "privateReports", "moderationReports", "publicReports", "reportEngagements", "residentNotifications", "notificationPreferences", "submissionReceipts", "evidenceUploads", "evidenceDrafts", "evidenceQuotas", "pilotInvitations", "publicAliases", "pilotMeasurements", "pilotEvaluation", "measurementErasures", "lifecycleEmailJobs", "mutationLimits", "auditEvents", "deletionRequests", "cleanupRuns", "erasureLedger", "deletionLocks", "deletionWork"] as const;
 const ownedPath = /^private-evidence\/[a-f0-9-]{36}\/[a-f0-9-]{36}\.jpg$/;
 async function inventory() {
   const db = getFirebaseAdmin().db, docs: DocumentSnapshot[] = [];
@@ -25,7 +25,7 @@ function descriptor(doc: DocumentSnapshot, reports: Map<string, Record<string, u
   const value = doc.data() ?? {}, collection = doc.ref.parent.id;
   const report = typeof value.attachedTo === "string" ? reports.get(value.attachedTo) : undefined;
   let kind: RetentionRecord["kind"] = "pilot";
-  if (["auditEvents", "cleanupRuns", "erasureLedger"].includes(collection) || (collection === "deletionRequests" && value.status === "complete")) kind = "audit";
+  if (["auditEvents", "cleanupRuns", "erasureLedger", "measurementErasures"].includes(collection) || (collection === "deletionRequests" && value.status === "complete")) kind = "audit";
   if (["mutationLimits", "evidenceQuotas", "publicAliases", "deletionLocks"].includes(collection)) kind = "ephemeral";
   if (collection === "evidenceUploads") kind = "upload";
   return { key: doc.ref.path, kind, createdAt: String(value.createdAt ?? value.occurredAt ?? value.completedAt ?? value.requestedAt ?? value.submittedAt ?? ""),
