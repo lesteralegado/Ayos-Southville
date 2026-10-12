@@ -3,6 +3,7 @@ import { beforeEach, vi } from "vitest";
 const fixtures = vi.hoisted(() => ({
   records: new Map<string, Record<string, unknown>>(),
   storageExists: true,
+  pauseOnReceiptRead: false,
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/features/admin/firebase-administration-store", () => ({
@@ -18,7 +19,13 @@ vi.mock("firebase-admin/storage", () => ({
   }),
 }));
 vi.mock("@/lib/firebase/admin", () => {
-  const doc = (path: string) => ({ path, get: async () => snapshot(path) });
+  const doc = (path: string) => ({ path, get: async () => {
+    if (fixtures.pauseOnReceiptRead && path.startsWith("submissionReceipts/")) {
+      fixtures.records.set("pilotOperations/current", { intakePaused: true });
+      fixtures.pauseOnReceiptRead = false;
+    }
+    return snapshot(path);
+  } });
   const snapshot = (path: string) => ({
     exists: fixtures.records.has(path),
     ref: doc(path),
@@ -89,6 +96,7 @@ beforeEach(() => {
   fixtures.records.clear();
   fixtures.records.set("residentProfiles/r1", { roles: ["Resident"] });
   fixtures.storageExists = true;
+  fixtures.pauseOnReceiptRead = false;
   process.env.FIREBASE_STORAGE_BUCKET = "private-test-bucket";
   fixtures.records.set(`evidenceUploads/${assetId}`, {
     id: assetId,
@@ -142,4 +150,25 @@ it.each([
     status: expect.any(Number),
   });
   expect(await reports.listMine("r1")).toEqual([]);
+});
+
+it('refuses a stale new submission during a pause but preserves an already committed receipt', async () => {
+  const reports = await getReportModule();
+  fixtures.records.set('pilotOperations/current', { intakePaused: true });
+  await expect(reports.submit(submission)).rejects.toMatchObject({ code: 'INTAKE_PAUSED' });
+  expect(await reports.listMine('r1')).toEqual([]);
+  fixtures.records.set('pilotOperations/current', { intakePaused: false });
+  const receipt = await reports.submit(submission);
+  fixtures.records.set('pilotOperations/current', { intakePaused: true });
+  expect(await reports.submit(submission)).toEqual({ ...receipt, created: false });
+});
+it("refuses a submission whose intake closes after its initial receipt check, then safely retries the same key", async () => {
+  const reports = await getReportModule();
+  fixtures.pauseOnReceiptRead = true;
+  await expect(reports.submit(submission)).rejects.toMatchObject({ code: "INTAKE_PAUSED" });
+  expect(await reports.listMine("r1")).toEqual([]);
+  fixtures.records.set("pilotOperations/current", { intakePaused: false });
+  const receipt = await reports.submit(submission);
+  expect(await reports.submit(submission)).toEqual({ ...receipt, created: false });
+  expect(await reports.listMine("r1")).toHaveLength(1);
 });

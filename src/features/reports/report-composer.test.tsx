@@ -21,6 +21,21 @@ const emergencyGuidance = {
 };
 
 describe("report composer", () => {
+  it("keeps the draft and its retry key when the server pauses an in-flight submission", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ code: "INTAKE_PAUSED" }, { status: 409 })));
+    render(<ReportComposer emergencyGuidance={emergencyGuidance} />);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText(/category/i), "streetlights");
+    await user.type(screen.getByLabelText(/describe/i), "The streetlight beside the court is broken.");
+    await user.type(screen.getByLabelText("Nearby landmark", { exact: true }), "Covered court");
+    await user.click(screen.getByLabelText("I confirm this is not an emergency."));
+    await user.click(screen.getByLabelText(/I understand that only/));
+    const before = localStorage.getItem("ayos-report-draft-v1");
+    await user.click(screen.getByRole("button", { name: "Submit report" }));
+    await waitFor(() => expect(screen.getByText(/New reports are paused/)).toBeInTheDocument());
+    expect(localStorage.getItem("ayos-report-draft-v1")).toBe(before);
+    expect(push).not.toHaveBeenCalled();
+  });
   it("recovers a saved receipt before validating a category disabled since submission", async () => {
     localStorage.setItem(
       "ayos-report-draft-v1:r1",

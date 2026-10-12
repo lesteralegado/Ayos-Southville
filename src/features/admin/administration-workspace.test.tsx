@@ -3,7 +3,21 @@ import { vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { AdministrationWorkspace } from "./administration-workspace";
 import { defaultPilotConfiguration } from "./administration-module";
+import { defaultPilotOperations } from "./pilot-operations";
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); });
+
+it("shows confirmed pause state and preserves operating edits on a stale-save conflict", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ code: "CONFLICT", error: "Settings changed. Refresh before retrying." }, { status: 409 })));
+  render(<AdministrationWorkspace initial={{ users: [], configuration: defaultPilotConfiguration, invitations: [], audit: [], operations: defaultPilotOperations }} />);
+  fireEvent.click(screen.getByLabelText("Pause new reports"));
+  fireEvent.change(screen.getByLabelText("Public explanation · English"), { target: { value: "Coverage unavailable." } });
+  fireEvent.change(screen.getByLabelText("Public explanation · Filipino"), { target: { value: "Walang operator." } });
+  fireEvent.click(screen.getByRole("button", { name: "Save operating controls" }));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Settings changed"));
+  expect(screen.getByLabelText("Pause new reports")).toBeChecked();
+  expect(screen.getByText("New reports: open")).toBeInTheDocument();
+  expect(screen.queryByText("Changes saved.")).not.toBeInTheDocument();
+});
 
 it("shows recoverable connection failure without claiming a save", async () => {
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Offline")));

@@ -3,6 +3,7 @@ import type {
   OperatorRole,
   AuditEvent,
 } from "@/features/reports/moderation-module";
+import { defaultPilotOperations, OperatingControlError, type PilotOperations } from "./pilot-operations";
 
 export type PilotUser = {
   uid: string;
@@ -35,6 +36,8 @@ export type PilotConfiguration = {
   emergency: EmergencyGuidance;
 };
 export type AdministrationStore = {
+  getOperations(): Promise<PilotOperations>;
+  saveOperations(value: PilotOperations, expectedRevision: number, audit: AuditEvent): Promise<void>;
   listUsers(): Promise<PilotUser[]>;
   getUser(uid: string): Promise<PilotUser | null>;
   listInvitations(): Promise<PilotInvitation[]>;
@@ -240,6 +243,49 @@ export function createAdministrationModule({
     };
   }
   return {
+    async getOperations(actor: Operator) {
+      requireAdmin(actor);
+      return store.getOperations();
+    },
+    async updateOperations(actor: Operator, input: { operations: PilotOperations; expectedRevision: number; recoveryConfirmed: boolean }) {
+      requireAdmin(actor);
+      const value = input?.operations;
+      if (!value || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0 ||
+        ["intakePaused", "invitationsPaused", "publicRestricted", "backupAffirmed"].some(key => typeof value[key as keyof PilotOperations] !== "boolean") ||
+        typeof value.primaryUid !== "string" || typeof value.backupUid !== "string" ||
+        typeof value.resumesAt !== "string" || typeof value.explanation?.en !== "string" || typeof value.explanation?.fil !== "string")
+        throw new AdministrationValidationError("Complete the operating controls.");
+      if (value.primaryUid && value.primaryUid === value.backupUid)
+        throw new AdministrationValidationError("Choose different primary and backup operators.");
+      const previous = await store.getOperations();
+      if (previous.revision !== input.expectedRevision) throw new OperatingControlError("CONFLICT");
+      const resuming = (previous.intakePaused && !value.intakePaused) || (previous.invitationsPaused && !value.invitationsPaused) || (previous.publicRestricted && !value.publicRestricted);
+      const users = await store.listUsers();
+      for (const uid of [value.primaryUid, value.backupUid].filter(Boolean))
+        if (!(value.intakePaused && !resuming && [previous.primaryUid, previous.backupUid].includes(uid)) &&
+          !users.some(user => user.uid === uid && user.emailVerified && user.access !== "revoked" && user.roles.some(role => ["Administrator", "Moderator", "Coordinator"].includes(role))))
+          throw new AdministrationValidationError("Coverage requires a verified, authorized operator.");
+      if (value.backupAffirmed && !value.backupUid)
+        throw new AdministrationValidationError("Choose a backup before affirming coverage.");
+      if (value.publicRestricted && !value.intakePaused)
+        throw new AdministrationValidationError("Suspend intake while public information is restricted for safety.");
+      {
+        for (const label of [value.explanation.en, value.explanation.fil])
+          if (((value.intakePaused || value.invitationsPaused || value.publicRestricted) && !label.trim()) || label.length > 240 || /https?:|@|\d{5}/i.test(label))
+            throw new AdministrationValidationError("Add safe English and Filipino explanations (up to 240 characters); omit contacts and private schedules.");
+      }
+      if (value.resumesAt && (!Number.isFinite(Date.parse(value.resumesAt)) || !/T.*(Z|[+-]\d{2}:\d{2})$/.test(value.resumesAt)))
+        throw new AdministrationValidationError("Use a resumption time with an explicit timezone, or leave it unknown.");
+      if (resuming && (input.recoveryConfirmed !== true || !value.primaryUid || !value.backupUid || !value.backupAffirmed))
+        throw new AdministrationValidationError("Confirm restored coverage or a fixed and retested fault before resuming. Record primary and affirmed backup coverage.");
+      await store.saveOperations({
+        revision: previous.revision + 1, primaryUid: value.primaryUid, backupUid: value.backupUid,
+        backupAffirmed: value.backupAffirmed, intakePaused: value.intakePaused,
+        invitationsPaused: value.invitationsPaused, publicRestricted: value.publicRestricted,
+        explanation: { en: value.explanation.en.trim(), fil: value.explanation.fil.trim() },
+        resumesAt: value.resumesAt,
+      }, input.expectedRevision, audit(actor, "pilot.operations-updated", "pilot", "Operating controls updated."));
+    },
     async canParticipate(resident: PilotResident) {
       if (!resident.emailVerified) return false;
       const user = await store.getUser(resident.uid);
@@ -266,6 +312,8 @@ export function createAdministrationModule({
     ) {
       requireAdmin(actor);
       const email = text(input?.email, "Email").toLowerCase();
+      if (input.active && (await store.getOperations()).invitationsPaused)
+        throw new OperatingControlError("INVITATIONS_PAUSED");
       if (
         email.length > 254 ||
         !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
@@ -295,6 +343,8 @@ export function createAdministrationModule({
         );
       const user = await store.getUser(text(input.uid, "User"));
       if (!user) throw new AdministrationValidationError("User was not found.");
+      if (input.access === "approved" && user.access !== "approved" && (await store.getOperations()).invitationsPaused)
+        throw new OperatingControlError("INVITATIONS_PAUSED");
       await store.saveUser(
         { ...user, access: input.access },
         audit(
@@ -372,6 +422,7 @@ export function createMemoryAdministrationStore(
     users?: PilotUser[];
     invitations?: PilotInvitation[];
     configuration?: PilotConfiguration;
+    operations?: PilotOperations;
   } = {},
 ): AdministrationStore {
   const users = new Map(
@@ -381,6 +432,7 @@ export function createMemoryAdministrationStore(
     seed.configuration ?? defaultPilotConfiguration,
   );
   const audit: AuditEvent[] = [];
+  let operations = structuredClone(seed.operations ?? defaultPilotOperations);
   const invitations = new Map(
     (seed.invitations ?? []).map((invitation) => [
       invitation.email,
@@ -388,6 +440,14 @@ export function createMemoryAdministrationStore(
     ]),
   );
   return {
+    async getOperations() { return structuredClone(operations); },
+    async saveOperations(value, revision, event) {
+      if (operations.revision !== revision) throw new OperatingControlError("CONFLICT");
+      const actor = users.get(event.actorUid);
+      if (!actor?.roles.includes("Administrator")) throw new AdministrationForbiddenError("Administrator capability is required.");
+      operations = structuredClone(value);
+      audit.push(structuredClone(event));
+    },
     async getUser(uid) {
       return structuredClone(users.get(uid) ?? null);
     },
@@ -398,6 +458,7 @@ export function createMemoryAdministrationStore(
       return structuredClone(invitations.get(email) ?? null);
     },
     async saveInvitation(invitation, event) {
+      if (invitation.active && operations.invitationsPaused) throw new OperatingControlError("INVITATIONS_PAUSED");
       invitations.set(invitation.email, structuredClone(invitation));
       audit.push(structuredClone(event));
     },
@@ -406,6 +467,8 @@ export function createMemoryAdministrationStore(
     },
     async saveUser(user, event, change) {
       const current = users.get(user.uid);
+      if (change === "access" && user.access === "approved" && current?.access !== "approved" && operations.invitationsPaused)
+        throw new OperatingControlError("INVITATIONS_PAUSED");
       if (!current)
         throw new AdministrationValidationError("User was not found.");
       users.set(

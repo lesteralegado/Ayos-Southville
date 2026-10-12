@@ -10,12 +10,15 @@ import type {
 } from "./administration-module";
 import { allowedRoles as roles } from "./administration-module";
 import type { AuditEvent } from "@/features/reports/moderation-module";
+import { OperatingControls } from "./operating-controls";
+import { defaultPilotOperations, type PilotOperations } from "./pilot-operations";
 
 export type AdministrationSnapshot = {
   users: PilotUser[];
   configuration: PilotConfiguration;
   invitations: PilotInvitation[];
   audit: AuditEvent[];
+  operations?: PilotOperations;
 };
 
 export function AdministrationWorkspace({
@@ -50,6 +53,10 @@ export function AdministrationWorkspace({
             ? result.error
             : result.code === "FORBIDDEN"
               ? "Wala kang pahintulot. Mag-sign in muli."
+              : result.code === "CONFLICT"
+                ? "Nagbago ang mga setting. I-refresh bago subukang muli."
+              : result.code === "INVITATIONS_PAUSED"
+                ? "Naka-pause ang imbitasyon. Nananatili ang kasalukuyang access."
               : result.code === "VALIDATION"
                 ? "Suriin ang mga detalye. Kailangan ang dahilan, tamang mga tungkulin, aktibong destinasyon, at HTTPS na emergency source."
                 : "Hindi makumpleto ang pagbabago. Subukang muli.";
@@ -96,6 +103,16 @@ export function AdministrationWorkspace({
       trigger?.focus({ preventScroll: true }),
     );
   }
+  async function refreshControls() {
+    setPending(true); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/administration", { cache: "no-store" });
+      if (!response.ok) throw new Error(t("Access or refresh failed. Sign in and retry.", "Hindi ma-refresh o walang access. Mag-sign in at subukan muli."));
+      setSnapshot(await response.json());
+    } catch {
+      setError(t("Refresh could not be confirmed. Keep your edits, reconnect and retry.", "Hindi makumpirma ang refresh. Panatilihin ang mga pagbabago, kumonekta at subukan muli."));
+    } finally { setPending(false); }
+  }
   return (
     <main className="admin-page">
       <header className="composer-header">
@@ -125,6 +142,7 @@ export function AdministrationWorkspace({
           aria-label={t("Administration sections", "Mga seksyon ng pamamahala")}
         >
           <a href="#people">{t("People", "Mga tao")}</a>
+          <a href="#coverage">{t("Coverage", "Mga operator")}</a>
           <a href="#invitations">{t("Invitations", "Mga imbitasyon")}</a>
           <a href="#configuration">{t("Configuration", "Mga setting")}</a>
           <a href="#audit">{t("Audit history", "Kasaysayan ng audit")}</a>
@@ -133,8 +151,8 @@ export function AdministrationWorkspace({
         <div className="admin-continuity" role="status">
           {administrators >= 2
             ? t(
-                "Administrator continuity is ready.",
-                "Handa ang pagpapatuloy ng pamamahala.",
+                "Two administrator accounts are verified; backup coverage still needs demonstration.",
+                "Verified ang dalawang administrator; kailangan pa ring patunayan ang backup coverage.",
               )
             : t(
                 "Before launch, add a second verified administrator.",
@@ -153,11 +171,13 @@ export function AdministrationWorkspace({
         {error && (
           <div className="admin-error" role="alert">
             {error}{" "}
+            <button type="button" className="button button-quiet" disabled={pending} onClick={() => void refreshControls()}>{t("Refresh operating controls", "I-refresh ang mga kontrol sa operasyon")}</button>{" "}
             <Link href="/account">
               {t("Return to account", "Bumalik sa account")}
             </Link>
           </div>
         )}
+        <OperatingControls key={snapshot.operations?.revision ?? 0} confirmed={snapshot.operations ?? defaultPilotOperations} users={snapshot.users} pending={pending} locale={locale} save={input => mutate("update-operations", input)} />
         <section id="people" className="admin-section">
           <h2>{t("People and access", "Mga tao at access")}</h2>
           <p>
@@ -294,7 +314,7 @@ export function AdministrationWorkspace({
               }))
             }
           >
-            <fieldset className="admin-invite-form" disabled={pending}>
+            <fieldset className="admin-invite-form" disabled={pending || snapshot.operations?.invitationsPaused}>
               <legend className="sr-only">
                 {t("Invitation details", "Mga detalye ng imbitasyon")}
               </legend>

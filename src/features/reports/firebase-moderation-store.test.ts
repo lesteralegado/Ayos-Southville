@@ -42,6 +42,7 @@ beforeEach(() => {
   fixture.records.set("evidenceUploads/" + originalId, { ...upload(originalId), residentUid: "resident", draftKey: "resident-draft", attachedTo: reference });
   fixture.records.set("evidenceUploads/" + resolutionId, upload(resolutionId));
   fixture.records.set("pilotConfiguration/current", defaultPilotConfiguration);
+  fixture.records.set("pilotOperations/current", { intakePaused: true, invitationsPaused: true });
 });
 async function start() {
   const moderation = getModerationModule();

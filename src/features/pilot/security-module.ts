@@ -1,4 +1,5 @@
 import { operationalMonitor } from "./monitoring";
+import { operatingControlResponse } from "@/features/admin/pilot-operations";
 export class ProtectionError extends Error {
   constructor(readonly code: "RATE_LIMIT" | "TOO_LARGE" | "FORBIDDEN" | "UNAVAILABLE", readonly status: number) {
     super(code === "RATE_LIMIT" ? "Too many requests. Wait before retrying." : code === "TOO_LARGE" ? "The request is too large." : "The operation is unavailable. Reload and retry.");
@@ -36,6 +37,8 @@ export async function readBoundedJson(request: Request, limit = 32_768): Promise
   } finally { clearTimeout(timer); reader.releaseLock(); }
 }
 export function protectionResponse(error: unknown) {
+  const operatingFailure = operatingControlResponse(error);
+  if (operatingFailure) return operatingFailure;
   if (!(error instanceof ProtectionError)) return null;
   operationalMonitor.record({ operation: "privacy", status: error.status, code: error.code });
   return Response.json({ code: error.code, error: error.message }, { status: error.status, headers: { "Cache-Control": "private, no-store", ...(error.status === 429 ? { "Retry-After": "3600" } : {}) } });

@@ -8,15 +8,16 @@ export default async function AdministrationPage() {
   if (!actor) redirect("/sign-in?next=/administration");
   if (!actor.roles.includes("Administrator")) redirect("/account");
   const administration = getAdministrationModule();
-  const [users, configuration, invitations, audit] = await Promise.all([
+  const [users, configuration, invitations, audit, operations] = await Promise.all([
     administration.listUsers(actor),
     administration.getConfiguration(actor),
     administration.listInvitations(actor),
     administration.listAudit(actor),
+    administration.getOperations(actor),
   ]);
   return (
     <AdministrationWorkspace
-      initial={{ users, configuration, invitations, audit }}
+      initial={{ users, configuration, invitations, audit, operations }}
     />
   );
 }

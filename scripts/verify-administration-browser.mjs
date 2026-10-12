@@ -128,7 +128,7 @@ try {
   await person.getByLabel("Role change reason").fill("Backup administrator");
   await person.getByRole("button", { name: "Save roles" }).click();
   await page
-    .getByText("Administrator continuity is ready.", { exact: false })
+    .getByText("Two administrator accounts are verified;", { exact: false })
     .waitFor();
   await page
     .getByLabel("English label", { exact: true })

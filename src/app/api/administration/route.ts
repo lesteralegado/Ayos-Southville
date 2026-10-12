@@ -17,14 +17,15 @@ export async function GET() {
     );
   try {
     const administration = getAdministrationModule();
-    const [users, configuration, invitations, audit] = await Promise.all([
+    const [users, configuration, invitations, audit, operations] = await Promise.all([
       administration.listUsers(actor),
       administration.getConfiguration(actor),
       administration.listInvitations(actor),
       administration.listAudit(actor),
+      administration.getOperations(actor),
     ]);
     return NextResponse.json(
-      { users, configuration, invitations, audit },
+      { users, configuration, invitations, audit, operations },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
@@ -56,7 +57,9 @@ export async function PATCH(request: Request) {
         "Choose a supported administration action.",
       );
     const administration = getAdministrationModule();
-    if (body.action === "set-roles")
+    if (body.action === "update-operations")
+      await administration.updateOperations(actor, body.input as Parameters<typeof administration.updateOperations>[1]);
+    else if (body.action === "set-roles")
       await administration.setRoles(actor, body.input as Parameters<typeof administration.setRoles>[1]);
     else if (body.action === "set-access")
       await administration.setAccess(actor, body.input as Parameters<typeof administration.setAccess>[1]);

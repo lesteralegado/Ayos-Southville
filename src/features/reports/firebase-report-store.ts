@@ -1,12 +1,12 @@
 import "server-only";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
-import { assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
+import { assertIntakeOpen, assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
 
 import { createHash } from "node:crypto";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { getPublicPilotConfiguration } from "@/features/admin/firebase-administration-store";
 import { publicProjection } from "./public-projection";
-import { discoveryMode, publicCollection } from "./firebase-discovery";
+import { discoveryMode, publicCollection, publicReportsRestricted } from "./firebase-discovery";
 import {
   EvidenceError,
   evidenceAsset,
@@ -53,6 +53,7 @@ function createFirebaseReportStore(): ReportStore {
           };
         }
         const requestedIds = report.private.evidence.map((asset) => asset.id);
+        await assertIntakeOpen(transaction);
         if (
           new Set(requestedIds).size !== requestedIds.length ||
           requestedIds.some((id) => !/^[a-f0-9]{64}$/.test(id))
@@ -135,6 +136,7 @@ function createFirebaseReportStore(): ReportStore {
         );
     },
     async getPublic(reference: string) {
+      if (await publicReportsRestricted()) return null;
       if (await pilotRecordsExpired()) return null;
       const document = await db
         .collection(publicCollection())

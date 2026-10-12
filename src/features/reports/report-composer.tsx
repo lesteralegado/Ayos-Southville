@@ -16,6 +16,7 @@ import type { DuplicateSuggestion } from "./engagement-module";
 import { EvidencePicker } from "./evidence-picker";
 import { LocationPicker } from "./location-picker";
 import { clearLocalPhotos } from "./evidence-drafts";
+import type { PilotOperations } from "@/features/admin/pilot-operations";
 
 const draftKey = "ayos-report-draft-v1";
 const draftEvent = "ayos-report-draft-change";
@@ -180,10 +181,12 @@ export function ReportComposer({
   emergencyGuidance,
   categories = fallbackCategories,
   residentUid,
+  operatingStatus,
 }: {
   emergencyGuidance: { en: Guidance; fil: Guidance };
   categories?: Category[];
   residentUid?: string;
+  operatingStatus?: Pick<PilotOperations, "intakePaused" | "explanation" | "resumesAt">;
 }) {
   const router = useRouter();
   const { locale, chooseLocale } = useLocale();
@@ -201,6 +204,8 @@ export function ReportComposer({
   const [issues, setIssues] = useState<FieldIssues>({});
   const [submitError, setSubmitError] = useState("");
   const [pending, setPending] = useState(false);
+  const [availability, setAvailability] = useState(operatingStatus);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [ambiguous, setAmbiguous] = useState(false);
   const [resumed, setResumed] = useState(false);
   const [storageError, setStorageError] = useState(false);
@@ -211,6 +216,17 @@ export function ReportComposer({
   const summaryRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const duplicateHeading = useRef<HTMLHeadingElement>(null);
+  async function refreshAvailability() {
+    setCheckingAvailability(true);
+    try {
+      const response = await fetch("/api/pilot-status", { cache: "no-store" });
+      if (!response.ok) throw new Error("Unavailable");
+      setAvailability(await response.json());
+      setSubmitError("");
+    } catch {
+      setSubmitError(fil ? "Hindi makumpirma ang availability. Nananatili ang draft; kumonekta at subukan muli." : "Availability could not be confirmed. Your draft remains; reconnect and retry.");
+    } finally { setCheckingAvailability(false); }
+  }
   useEffect(() => {
     if (!draft.category && !draft.description && !draft.nearbyLandmark) return;
     try {
@@ -376,7 +392,14 @@ export function ReportComposer({
       const result = (await response.json()) as {
         reference?: string;
         issues?: FieldIssues;
+        code?: string;
       };
+      if (result.code === "INTAKE_PAUSED") {
+        setAvailability({ intakePaused: true, explanation: { en: "", fil: "" }, resumesAt: "" });
+        setAmbiguous(false);
+        setSubmitError("");
+        return;
+      }
       if (response.status === 422) {
         const localized: FieldIssues = {};
         for (const field of Object.keys(result.issues ?? {}))
@@ -472,6 +495,13 @@ export function ReportComposer({
           className="composer-card"
           aria-label={fil ? "Form ng ulat" : "Report form"}
         >
+          {availability?.intakePaused && <div className="draft-banner" role="status">
+            <h2>{fil ? "Pansamantalang sarado ang bagong ulat" : "New reports are paused"}</h2>
+            <p>{availability.explanation[locale] || (fil ? "Nananatili ang draft. Subukan muli kapag bukas na ang bagong ulat." : "Your draft remains. Retry after intake resumes.")}</p>
+            <p>{availability.resumesAt ? (fil ? "Inaasahang pagbubukas: " : "Expected resumption: ") + new Date(availability.resumesAt).toLocaleString(locale === "fil" ? "fil-PH" : "en-PH", { timeZone: "Asia/Manila" }) : fil ? "Wala pang tiyak na oras ng pagbubukas." : "Resumption time is not yet known."}</p>
+            <p>{fil ? "Hindi ito deadline ng pagkukumpuni. Available pa rin ang kasalukuyang mga ulat, tugon at pagbura." : "This is not a repair deadline. Existing reports, responses and deletion remain available."}</p>
+            <button type="button" className="button button-quiet" disabled={checkingAvailability || pending} onClick={() => void refreshAvailability()}>{checkingAvailability ? (fil ? "Sinusuri…" : "Checking…") : fil ? "Suriin ang availability" : "Check availability"}</button>
+          </div>}
           {savedDraft &&
             savedDraft.idempotencyKey !== draft.idempotencyKey &&
             !ambiguous && (
@@ -682,7 +712,7 @@ export function ReportComposer({
                   </p>
                 )}
               </fieldset>
-              {residentUid && (
+              {residentUid && !availability?.intakePaused && (
                 <EvidencePicker
                   key={draft.idempotencyKey}
                   owner={residentUid}
@@ -807,6 +837,7 @@ export function ReportComposer({
               className="button button-primary composer-submit"
               type="submit"
               disabled={
+                (availability?.intakePaused && !ambiguous && !resumed) ||
                 pending ||
                 draft.isEmergency ||
                 (uploadBlocked && !ambiguous && !resumed) ||

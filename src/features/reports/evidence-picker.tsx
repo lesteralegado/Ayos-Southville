@@ -46,6 +46,7 @@ function uploadPhoto(
     request.onload = () => {
       try {
         const result = JSON.parse(request.responseText);
+        if (result.code === "INTAKE_PAUSED") throw new Error("INTAKE_PAUSED");
         if (request.status < 200 || request.status >= 300 || !result.asset?.id)
           throw new Error("Upload not confirmed");
         resolve(result.asset);
@@ -226,7 +227,9 @@ export function EvidencePicker({
               : item,
           ),
         );
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message === "INTAKE_PAUSED")
+        setMessage(fil ? "Naka-pause ang bagong ulat. Nananatili ang pribadong litrato sa device; subukan kapag bukas na." : "New reports are paused. Your private photo remains on this device; retry after intake resumes.");
       if (mounted.current)
         setPhotos((items) =>
           items.map((item) =>

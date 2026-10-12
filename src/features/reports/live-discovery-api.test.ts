@@ -73,3 +73,14 @@ it("redirects duplicates only to a currently approved canonical report and termi
   fixture.records.set("privateReports/AS-ABC123", { status: "Duplicate", canonicalReference: "AS-OLD123" });
   expect(await getPublicCanonicalReference("AS-OLD123")).toBeNull();
 });
+
+it("keeps public browsing open for coverage pauses and restricts every public projection for safety", async () => {
+  fixture.records.set("publicReports/AS-ABC123", accepted);
+  fixture.records.set("pilotOperations/current", { intakePaused: true });
+  expect((await (await discovery(new Request("https://example.test/api/public-reports"))).json()).total).toBe(1);
+  fixture.records.set("pilotOperations/current", { intakePaused: true, publicRestricted: true });
+  expect((await discovery(new Request("https://example.test/api/public-reports"))).status).toBe(503);
+  expect((await insights()).status).toBe(503);
+  expect(await (await getReportModule()).getPublic("AS-ABC123")).toBeNull();
+  expect(await getPublicCanonicalReference("AS-ABC123")).toBeNull();
+});

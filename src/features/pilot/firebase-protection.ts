@@ -4,6 +4,7 @@ import type { Transaction } from "firebase-admin/firestore";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import type { AuditEvent } from "@/features/reports/moderation-module";
 import { createMutationProtection, ProtectionError, type SensitiveOperation } from "./security-module";
+import { OperatingControlError } from "@/features/admin/pilot-operations";
 
 export function pseudonym(value: string) {
   const secret = process.env.AUDIT_PSEUDONYM_SECRET;
@@ -32,6 +33,24 @@ export async function assertAdministrator(transaction: Transaction, uid: string)
   const profile = await transaction.get(getFirebaseAdmin().db.collection("residentProfiles").doc(uid));
   const roles: unknown = profile.data()?.roles;
   if (!profile.exists || profile.data()?.deletionPending || !Array.isArray(roles) || !roles.includes("Administrator")) throw new ProtectionError("FORBIDDEN", 403);
+}
+export async function assertIntakeOpen(transaction: Transaction) {
+  if ((await transaction.get(getFirebaseAdmin().db.collection("pilotOperations").doc("current"))).data()?.intakePaused === true)
+    throw new OperatingControlError("INTAKE_PAUSED");
+}
+export async function assertEvidenceIntake(transaction: Transaction, uid: string, draftKey: string) {
+  const db = getFirebaseAdmin().db;
+  const match = /^(support|resolution)_(AS-[A-Z0-9]+)$/.exec(draftKey);
+  if (!match) return assertIntakeOpen(transaction);
+  const ref = db.collection(match[1] === "support" ? "publicReports" : "privateReports").doc(match[2]);
+  const [report, profile] = await transaction.getAll(ref, db.collection("residentProfiles").doc(uid));
+  const roles = profileRolesForEvidence(profile.data()?.roles);
+  if (!report.exists || (match[1] === "support" && report.data()?.approved !== true) ||
+    (match[1] === "resolution" && !roles.some(role => ["Coordinator", "Administrator"].includes(role))))
+    throw new ProtectionError("FORBIDDEN", 403);
+}
+function profileRolesForEvidence(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((role): role is string => typeof role === "string") : [];
 }
 export async function protectMutation(uid: string, operation: SensitiveOperation) {
   const db = getFirebaseAdmin().db;

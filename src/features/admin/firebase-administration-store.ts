@@ -15,6 +15,7 @@ import {
   type PilotInvitation,
 } from "./administration-module";
 import type { AuditEvent } from "@/features/reports/moderation-module";
+import { pilotOperations, OperatingControlError } from "./pilot-operations";
 
 const invitationId = (email: string) =>
   createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
@@ -35,6 +36,32 @@ const profileUser = (doc: DocumentSnapshot): PilotUser => {
 function createFirebaseAdministrationStore(): AdministrationStore {
   const { db, auth } = getFirebaseAdmin();
   return {
+    async getOperations() {
+      return pilotOperations((await db.collection("pilotOperations").doc("current").get()).data());
+    },
+    async saveOperations(value, revision, event) {
+      await protectMutation(event.actorUid, "operator");
+      await db.runTransaction(async transaction => {
+        await assertAdministrator(transaction, event.actorUid);
+        const ref = db.collection("pilotOperations").doc("current");
+        const current = await transaction.get(ref);
+        if (pilotOperations(current.data()).revision !== revision) throw new OperatingControlError("CONFLICT");
+        const previous = pilotOperations(current.data());
+        const resuming = (previous.intakePaused && !value.intakePaused) || (previous.invitationsPaused && !value.invitationsPaused) || (previous.publicRestricted && !value.publicRestricted);
+        const coverage = [value.primaryUid, value.backupUid].filter(Boolean);
+        for (const uid of coverage) {
+          if (value.intakePaused && !resuming && [previous.primaryUid, previous.backupUid].includes(uid)) continue;
+          const profile = await transaction.get(db.collection("residentProfiles").doc(uid));
+          const user = await auth.getUser(uid);
+          if (!profile.exists || profile.data()?.deletionPending || profile.data()?.pilotAccess === "revoked" ||
+            !profileRoles(profile.data()?.roles).some(role => ["Administrator", "Moderator", "Coordinator"].includes(role)) ||
+            !user.emailVerified || user.disabled)
+            throw new AdministrationValidationError("Coverage requires a current verified operator.");
+        }
+        transaction.set(ref, value, { merge: true });
+        transaction.create(db.collection("auditEvents").doc(), minimizedAudit(event));
+      });
+    },
     async getUser(uid) {
       const doc = await db.collection("residentProfiles").doc(uid).get();
       return doc.exists ? profileUser(doc) : null;
@@ -78,6 +105,8 @@ function createFirebaseAdministrationStore(): AdministrationStore {
       await protectMutation(event.actorUid, "operator");
       await db.runTransaction(async transaction => {
         await assertAdministrator(transaction, event.actorUid);
+        if (invitation.active && (await transaction.get(db.collection("pilotOperations").doc("current"))).data()?.invitationsPaused)
+          throw new OperatingControlError("INVITATIONS_PAUSED");
         transaction.set(db.collection("pilotInvitations").doc(invitationId(invitation.email)), invitation);
         transaction.create(db.collection("auditEvents").doc(), minimizedAudit(event));
       });
@@ -90,6 +119,9 @@ function createFirebaseAdministrationStore(): AdministrationStore {
         const target = await transaction.get(targetRef);
         if (!target.exists)
           throw new AdministrationValidationError("User was not found.");
+        if (change === "access" && user.access === "approved" && target.data()?.pilotAccess !== "approved" &&
+          (await transaction.get(db.collection("pilotOperations").doc("current"))).data()?.invitationsPaused === true)
+          throw new OperatingControlError("INVITATIONS_PAUSED");
         if (target.data()?.deletionPending === true)
           throw new AdministrationValidationError("Account deletion is already approved. Complete the deletion workflow before changing access.");
         if (
@@ -162,4 +194,8 @@ export function getAdministrationModule() {
 }
 export async function getPublicPilotConfiguration() {
   return createFirebaseAdministrationStore().getConfiguration();
+}
+export async function getPublicOperatingStatus() {
+  const { intakePaused, invitationsPaused, publicRestricted, explanation, resumesAt } = await createFirebaseAdministrationStore().getOperations();
+  return { intakePaused, invitationsPaused, publicRestricted, explanation, resumesAt };
 }

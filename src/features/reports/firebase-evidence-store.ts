@@ -1,6 +1,6 @@
 import "server-only";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
-import { assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
+import { assertEvidenceIntake, assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
 import { createHash, randomUUID } from "node:crypto";
 import { getStorage } from "firebase-admin/storage";
 import { getFirebaseAdmin } from "@/lib/firebase/admin";
@@ -14,6 +14,7 @@ import {
 } from "./evidence-module";
 import { prepareEvidencePhoto } from "./prepare-evidence-photo";
 import { publicProjection } from "./public-projection";
+import { publicReportsRestricted } from "./firebase-discovery";
 
 const documentId = (...parts: string[]) =>
   createHash("sha256").update(JSON.stringify(parts)).digest("hex");
@@ -77,6 +78,7 @@ export function getEvidenceBucket() {
 }
 
 export async function readApprovedPublicEvidence(id: string) {
+  if (await publicReportsRestricted()) throw new EvidenceError("Photo not found.", 404);
   if (await pilotRecordsExpired()) throw new EvidenceError("Photo not found.", 404);
   if (!/^[a-f0-9]{64}$/.test(id))
     throw new EvidenceError("Photo not found.", 404);
@@ -104,6 +106,10 @@ export function getEvidenceModule() {
   const store: EvidenceStore = {
     async saveOnce(scope, photo) {
       await protectMutation(scope.residentUid, "evidence");
+      await db.runTransaction(async transaction => {
+        await assertWritable(transaction, scope.residentUid);
+        await assertEvidenceIntake(transaction, scope.residentUid, scope.draftKey);
+      });
       const id = documentId(scope.residentUid, scope.draftKey, scope.slotId);
       const ref = db.collection("evidenceUploads").doc(id);
       const prior = await ref.get();
@@ -139,6 +145,7 @@ export function getEvidenceModule() {
       try {
         const saved = await db.runTransaction(async (transaction) => {
           await assertWritable(transaction, scope.residentUid);
+          await assertEvidenceIntake(transaction, scope.residentUid, scope.draftKey);
           const draftRef = db
             .collection("evidenceDrafts")
             .doc(documentId(scope.residentUid, scope.draftKey));

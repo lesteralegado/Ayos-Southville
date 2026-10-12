@@ -12,9 +12,13 @@ export function discoveryMode(): DiscoveryMode {
   return "demo";
 }
 export function publicCollection() { return discoveryMode() === "demo" ? "demoPublicReports" : "publicReports"; }
+export async function publicReportsRestricted() {
+  return (await getFirebaseAdmin().db.collection("pilotOperations").doc("current").get()).data()?.publicRestricted === true;
+}
 export function getDiscoveryModule() {
   const mode = discoveryMode();
   return createDiscoveryModule({ mode, async read() {
+    if (await publicReportsRestricted()) throw new DiscoveryError("UNAVAILABLE", 503);
     if (mode === "live" && await pilotRecordsExpired()) return [];
     const snapshot = await getFirebaseAdmin().db.collection(publicCollection()).where("approved", "==", true).limit(discoveryLimit + 1).get();
     return snapshot.docs.map((doc) => ({ ...doc.data(), reference: doc.id }));
@@ -26,6 +30,7 @@ export async function getDiscoveryCategories() {
 }
 /** No private payload is returned. Redirects terminate only at a currently approved public report. */
 export async function getPublicCanonicalReference(reference: string) {
+  if (await publicReportsRestricted()) return null;
   if (await pilotRecordsExpired()) return null;
   if (!/^AS-[A-Z0-9]+$/.test(reference) || discoveryMode() !== "live") return null;
   const db = getFirebaseAdmin().db, seen = new Set<string>();

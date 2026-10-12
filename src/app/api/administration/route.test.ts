@@ -41,6 +41,15 @@ beforeEach(() => {
   });
   state.actor.mockResolvedValue(admin);
 });
+it("confirms independent operating pauses and rejects stale saves or new recruitment through direct requests", async () => {
+  const initial = (await (await GET()).json()).operations;
+  const input = { expectedRevision: 0, operations: { ...initial, invitationsPaused: true, explanation: { en: "Core workflow is under repair.", fil: "Inaayos ang pangunahing proseso." } }, recoveryConfirmed: false };
+  expect((await PATCH(request("update-operations", input))).status).toBe(200);
+  expect((await PATCH(request("update-operations", input))).status).toBe(409);
+  expect((await PATCH(request("set-invitation", { email: "new@example.test", active: true, reason: "New enrollment" }))).status).toBe(409);
+  expect((await PATCH(request("set-access", { uid: "neighbor", access: "approved", reason: "New enrollment" }))).status).toBe(409);
+  expect((await (await GET()).json()).operations).toMatchObject({ intakePaused: false, invitationsPaused: true });
+});
 it("denies a resident access to users, invitations, and audits", async () => {
   state.actor.mockResolvedValue({ uid: "neighbor", roles: ["Resident"] });
   expect((await GET()).status).toBe(403);
