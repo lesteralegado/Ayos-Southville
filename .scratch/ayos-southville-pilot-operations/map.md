@@ -6,7 +6,7 @@ Six-ticket breakdown approved by the owner on 2026-10-12 (Asia/Manila). Scope is
 
 | Ticket | Blocked by | Status | Execution |
 | --- | --- | --- | --- |
-| [01 Coverage and pause controls](issues/01-coverage-and-pause-controls.md) | None | claimed | Implementation; local verification complete, final code review pending |
+| [01 Coverage and pause controls](issues/01-coverage-and-pause-controls.md) | None | resolved | Local implementation verified; both code-review axes clear; release gates remain open |
 | [02 Consented pilot participation](issues/02-consented-participation.md) | None | ready-for-agent | Implementation |
 | [03 Accountable report handling](issues/03-accountable-report-handling.md) | 01 | ready-for-agent | Implementation |
 | [04 Truthful pilot measurement](issues/04-truthful-pilot-measurement.md) | None | ready-for-agent | Implementation |
