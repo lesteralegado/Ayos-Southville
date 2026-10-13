@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "local:check": "node scripts/local-emulators.mjs check",
+    "local:emulators": "node scripts/local-emulators.mjs emulators",
+    "local:app": "node scripts/local-emulators.mjs app",
+    "local:seed": "node scripts/local-emulators.mjs seed",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -38,6 +42,7 @@
     "axe-core": "^4.14.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.4.0",
+    "firebase-tools": "15.33.0",
     "jsdom": "^30.1.2",
     "typescript": "^6.0.3",
     "vite": "^8.3.4",

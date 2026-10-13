@@ -1,5 +1,8 @@
 node_modules/
 .next/
+.next-local/
+firestore-debug.log
+ui-debug.log
 coverage/
 .env*
 !.env.example

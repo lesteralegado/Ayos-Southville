@@ -1,6 +1,9 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth, inMemoryPersistence, setPersistence } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { connectAuthEmulator, getAuth, inMemoryPersistence, setPersistence } from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { localEmulatorProject } from "./local-emulator";
+
+const connectedApps = new WeakSet<object>();
 
 function getClientConfig() {
   const config = {
@@ -16,8 +19,19 @@ function getClientConfig() {
 }
 
 export function getFirebaseClient() {
-  const app = getApps().length ? getApp() : initializeApp(getClientConfig());
-  return { auth: getAuth(app), db: getFirestore(app) };
+  const config = getClientConfig(), emulator = process.env.NEXT_PUBLIC_FIREBASE_EMULATORS === "true";
+  if (emulator && (process.env.NODE_ENV === "production" || config.projectId !== localEmulatorProject || (typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname))))
+    throw new Error("Local emulator configuration requires the isolated demo project on a loopback development site.");
+  const app = getApps().length ? getApp() : initializeApp(config);
+  if (emulator && app.options.projectId !== config.projectId) throw new Error("Local emulator project differs from the cached Firebase connection.");
+  const auth = getAuth(app), db = getFirestore(app);
+  if (emulator && !connectedApps.has(app)) {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099");
+    connectFirestoreEmulator(db, "127.0.0.1", 8080);
+    connectedApps.add(app);
+  }
+  if (!emulator && auth.emulatorConfig) throw new Error("Restart before leaving local emulator mode.");
+  return { auth, db };
 }
 
 export async function getSessionlessAuth() {

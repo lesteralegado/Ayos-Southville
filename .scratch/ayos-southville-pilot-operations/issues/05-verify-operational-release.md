@@ -6,7 +6,7 @@
 
 **Blocked by:** 01: Coverage and pause controls; 02: Consented pilot participation; 03: Accountable report handling; 04: Truthful pilot measurement.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 **Execution:** Agent-assisted verification with mandatory human and external-service gates. No deployment or destructive operation is implicitly authorized.
 
@@ -28,3 +28,9 @@ Use the owner-approved resident-to-operator-to-resident browser/API journey as t
 For UI changes use Impeccable, established product/design context and task-first operating screens; read craft-floor immediately before UI edits. Deliver English/Filipino first-use, loading, empty, validation, pending, success, permission, offline, retry and unexpected-failure states where applicable. Verify phone/tablet/desktop, keyboard focus, screen-reader semantics/live announcements, zoom, contrast and reduced motion. Perform one batched visual inspection, fix findings together and at most one confirmation round; record evidence. Automated checks do not substitute for human assistive-technology testing.
 
 Append completion evidence and update this effort's map only after this ticket's criteria pass. Never fabricate participant results or treat code completion as release approval. Preserve the historical production-completion tickets. No invitation sending, role changes, production deployment, destructive cleanup or restore is authorized merely by this ticket.
+
+## Comments
+
+2026-10-12: Started read-only deployed verification. [Initial current evidence](../../../docs/release/operational-readiness-verification.md) records NO-GO: production health 503, pilot-status 404, GitHub main 60f9f04 versus local 9a25f19 (12 unpublished commits), and unverified deployed source SHA. Scoped CLI inspection succeeded after the connector's permission failure. All acceptance criteria remain unchecked. Await explicit push/deployment authority, confirmed staging isolation and authorized test accounts/data operations; human and external-service gates remain mandatory. No final release approval, external writes or completion claim.
+
+2026-10-13: Owner subsequently authorized push; GitHub main verified at 9a25f19. Owner declined billing and approved an isolated local-emulator setup while preserving photo evidence. Connection/startup test boundaries approved. [Local instructions](../../../docs/pilot/local-emulators.md) use a synthetic demo project, not staging/production; Java 21 is currently missing, so live local journey verification remains pending. Deployed release, human checks and external-service gates are not satisfied. Ticket stays claimed/unresolved; no release approval or recruitment authorization recorded.
