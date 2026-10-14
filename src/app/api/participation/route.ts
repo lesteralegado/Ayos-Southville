@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import { getVerifiedResident, hasPilotEligibility } from "@/features/auth/session";
 import { getAdministrationModule } from "@/features/admin/firebase-administration-store";
 import { consentVersion } from "@/features/pilot/participation-consent";
@@ -23,7 +24,7 @@ export async function GET() {
   } catch (error) { return failure(error); }
 }
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin || !request.headers.get("content-type")?.startsWith("application/json"))
+  if (!isSameOrigin(request) || !request.headers.get("content-type")?.startsWith("application/json"))
     return Response.json({ code: "FORBIDDEN" }, { status: 403, headers });
   const resident = await getVerifiedResident();
   if (!resident) return Response.json({ code: "AUTH" }, { status: 401, headers });

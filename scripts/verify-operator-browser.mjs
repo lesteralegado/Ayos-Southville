@@ -17,8 +17,8 @@ const role = new URL(location.href).searchParams.get('role') || 'Administrator';
 fetch('/api/moderation').then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(<OperatorWorkspace initialReports={data.reports} actor={{uid:'operator',roles:[role]}} destinations={[{id:'lighting',name:'Streetlight desk'}]} />));
 `;
 let boundaries;
-const server = await createServer({
-  root, configFile: false, server: { host: "127.0.0.1", port: 4180, strictPort: true },
+const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-operator-browser"),
+  root, configFile: false, server: { watch: { ignored: ["**/.next/**", "**/.next-local/**", "**/.scratch/**"] }, host: "127.0.0.1", port: 4180, strictPort: true },
   resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } },
   define: { "process.env": "{}" }, optimizeDeps: { exclude: ["next/link"] },
   plugins: [{
@@ -94,7 +94,7 @@ const server = await createServer({
 let browser;
 try {
   await server.listen();
-  let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? chromium.executablePath();
   if (!executablePath && process.platform === "win32") {
     const cache = path.join(process.env.LOCALAPPDATA, "ms-playwright");
     const installed = (await readdir(cache)).filter(name => /^chromium-/.test(name)).sort().at(-1);
@@ -124,7 +124,13 @@ try {
   await page.getByRole("button", { name: "English", exact: true }).click();
   await page.keyboard.press("Tab"); assert.ok(await page.evaluate(() => document.activeElement !== document.body));
   await page.evaluate(() => document.documentElement.style.fontSize = "200%");
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) {
+    console.log('Operator zoom overflow:', await page.evaluate(() => ({ viewport: innerWidth, document: document.documentElement.scrollWidth, nodes: [...document.querySelectorAll('body *')].map(node => ({ tag: node.tagName, className: node.className, right: node.getBoundingClientRect().right, width: node.getBoundingClientRect().width, scroll: node.scrollWidth, client: node.clientWidth })).filter(node => node.right > innerWidth || node.scroll > node.client + 1) })));
+    await page.screenshot({ path: path.join(artifacts, 'operator-zoom-overflow.png'), fullPage: false });
+  }
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "200% text zoom");
+  if (capture) await page.screenshot({ path: path.join(artifacts, 'operator-zoom200.png'), fullPage: false });
   await page.evaluate(() => document.documentElement.style.fontSize = "");
   await page.getByRole("button", { name: "Accept and publish" }).click();
   await page.getByRole("button", { name: "Assign report" }).waitFor().catch(async error => { console.log("Acceptance diagnostics:", await page.locator("body").innerText(), await page.locator("input:invalid,textarea:invalid").evaluateAll(nodes => nodes.map(node => ({ name: node.name, value: node.value, validation: node.validationMessage })))); throw error; });

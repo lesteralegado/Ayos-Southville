@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
 import { getEngagementModule } from "@/features/reports/firebase-engagement-store";
 import { getPublicPilotConfiguration } from "@/features/admin/firebase-administration-store";
@@ -5,7 +6,7 @@ import { getPublicPilotConfiguration } from "@/features/admin/firebase-administr
 const headers = { "Cache-Control": "private, no-store" };
 export async function POST(request: Request) {
   if (
-    request.headers.get("origin") !== new URL(request.url).origin ||
+    !isSameOrigin(request) ||
     !request.headers.get("content-type")?.startsWith("application/json")
   )
     return Response.json(

@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import { NextResponse } from "next/server";
 import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
 import { getVerifiedOperator } from "@/features/auth/session";
@@ -10,7 +11,7 @@ export async function GET() {
   try { return response(await getPilotMeasurement().read(actor)); } catch (error) { return failure(error); }
 }
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin || !request.headers.get("content-type")?.startsWith("application/json")) return response({ error: "Invalid request.", code: "FORBIDDEN" }, 403);
+  if (!isSameOrigin(request) || !request.headers.get("content-type")?.startsWith("application/json")) return response({ error: "Invalid request.", code: "FORBIDDEN" }, 403);
   const actor = await getVerifiedOperator();
   if (!actor) return response({ error: "Authentication required.", code: "AUTHENTICATION" }, 401);
   try {

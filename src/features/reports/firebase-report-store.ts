@@ -133,11 +133,18 @@ function createFirebaseReportStore(): ReportStore {
         .where("reporterUid", "==", residentUid)
         .get();
       const operating = pilotOperations((await db.collection("pilotOperations").doc("current").get()).data());
-      return snapshot.docs
-        .map((document) => {
+      return (await Promise.all(snapshot.docs
+        .map(async (document) => {
           const data = document.data() as ResidentReport & { reviewAcknowledgedAt?: string };
-          return { ...data, reviewExpectation: { dueAt: reviewDeadline(data.submittedAt, operating.reviewCalendar), acknowledgedAt: data.reviewAcknowledgedAt ?? null } };
-        })
+          const moderation = await db.collection("moderationReports").doc(data.reference).get();
+          const history = (moderation.data()?.history ?? []) as NonNullable<ResidentReport["history"]>;
+          return { ...data, history: history.map(event => ({
+            action: event.action, occurredAt: event.occurredAt,
+            ...(event.status ? { status: event.status } : {}),
+            ...(event.update ? { update: event.update } : {}),
+            ...(event.action.startsWith("rejected:") && event.reason ? { reason: event.reason } : {}),
+          })), reviewExpectation: { dueAt: reviewDeadline(data.submittedAt, operating.reviewCalendar), acknowledgedAt: data.reviewAcknowledgedAt ?? null } };
+        })))
         .toSorted((left, right) =>
           right.submittedAt.localeCompare(left.submittedAt),
         );

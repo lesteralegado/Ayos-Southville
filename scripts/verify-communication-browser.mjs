@@ -12,7 +12,7 @@ import React,{useEffect,useState} from 'react';import {createRoot} from 'react-d
 import {NotificationCenter} from '/src/features/reports/notification-center.tsx';import {ReportDetail} from '/src/features/reports/report-detail.tsx';import '/src/app/globals.css';
 function App(){const [data,setData]=useState(null);const ref=location.pathname.split('/')[2];useEffect(()=>{if(!ref)return;const reload=()=>fetch('/api/fixture-report?reference='+ref).then(r=>r.json()).then(setData);reload();addEventListener('fixture-refresh',reload);return()=>removeEventListener('fixture-refresh',reload)},[ref]);return ref?data?<ReportDetail report={data.report} canRespond={data.canRespond}/>:<p role="status">Loading report…</p>:<NotificationCenter/>}createRoot(document.getElementById('root')).render(<App/>);`;
 let boundaries;
-const server = await createServer({ root, configFile: false, server: { host: "127.0.0.1", port: 4181, strictPort: true }, resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } }, define: { "process.env": "{}" }, optimizeDeps: { exclude: ["next/link", "next/navigation"] }, plugins: [{ name: "communication-verification", enforce: "pre",
+const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-communication-browser"), root, configFile: false, server: { watch: { ignored: ["**/.next/**", "**/.next-local/**", "**/.scratch/**"] }, host: "127.0.0.1", port: 4181, strictPort: true }, resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } }, define: { "process.env": "{}" }, optimizeDeps: { exclude: ["next/link", "next/navigation"] }, plugins: [{ name: "communication-verification", enforce: "pre",
   resolveId(id) { if (["/__communication.jsx", "next/link", "next/navigation"].includes(id)) return "\0" + id; },
   async load(id) {
     if (id === "\0next/link") return "import React from 'react';export default function Link({children,...props}){return React.createElement('a',props,children)}";
@@ -55,7 +55,7 @@ const server = await createServer({ root, configFile: false, server: { host: "12
 }] });
 let browser;
 try {
-  await server.listen(); let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  await server.listen(); let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? chromium.executablePath();
   if (!executablePath && process.platform === "win32") { const cache = path.join(process.env.LOCALAPPDATA, "ms-playwright"), installed = (await readdir(cache)).filter(name => /^chromium-/.test(name)).sort().at(-1); if (installed) executablePath = path.join(cache, installed, "chrome-win", "chrome.exe"); }
   browser = await chromium.launch({ headless: true, executablePath });
   const page = await browser.newPage({ reducedMotion: "reduce" }), errors = []; page.on("pageerror", error => errors.push(error.message));

@@ -18,7 +18,7 @@ try {
     await new Promise(resolve => setTimeout(resolve,250));
   }
   assert.ok(ready, "Built Next.js server did not become ready");
-  let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? chromium.executablePath();
   if (!executablePath && process.platform === "win32") {
     const cache = path.join(process.env.LOCALAPPDATA,"ms-playwright"), installed = (await readdir(cache)).filter(name => /^chromium-/.test(name)).sort().at(-1);
     if (installed) executablePath = path.join(cache,installed,"chrome-win","chrome.exe");

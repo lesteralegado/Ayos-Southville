@@ -13,7 +13,7 @@ const fixture = `import React,{useEffect,useState} from 'react';import {createRo
 import Home from '/src/app/page.tsx';import {PublicInsights} from '/src/features/admin/public-insights.tsx';import {ReportDetail} from '/src/features/reports/report-detail.tsx';import '/src/app/globals.css';
 function App(){const [data,setData]=useState(null);const ref=location.pathname.split('/')[2];useEffect(()=>{if(ref)fetch('/api/fixture-detail?reference='+ref).then(r=>r.json()).then(setData)},[ref]);return ref?data?<ReportDetail report={data} categoryLabel={{en:'Configured lighting',fil:'Nasuring ilaw'}}/>:<p role="status">Loading report</p>:location.pathname==='/insights'?<PublicInsights/>:<Home/>}createRoot(document.getElementById('root')).render(<App/>);`;
 let boundaries;
-const server = await createServer({ root, configFile: false, server: { host: "127.0.0.1", port: 4182, strictPort: true, watch: { ignored: ["**/.next/**", "**/.scratch/**"] } },
+const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-discovery-browser"), root, configFile: false, server: { host: "127.0.0.1", port: 4182, strictPort: true, watch: { ignored: ["**/.next/**", "**/.next-local/**", "**/.scratch/**"] } },
   resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } }, define: { "process.env": "{}" },
   optimizeDeps: { exclude: ["next/link", "next/navigation"] }, plugins: [{ name: "discovery-verification", enforce: "pre",
     resolveId(id) { if (["/__discovery.jsx", "next/link", "next/navigation"].includes(id)) return "\0" + id; },
@@ -63,7 +63,7 @@ const server = await createServer({ root, configFile: false, server: { host: "12
 let browser;
 try {
   await server.listen();
-  let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? chromium.executablePath();
   if (!executablePath && process.platform === "win32") {
     const cache = path.join(process.env.LOCALAPPDATA, "ms-playwright");
     const installed = (await readdir(cache)).filter(name => /^chromium-/.test(name)).sort().at(-1);

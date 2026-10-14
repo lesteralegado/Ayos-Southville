@@ -20,7 +20,9 @@
     "verify:intake": "node scripts/verify-intake-browser.mjs",
     "verify:operator": "node scripts/verify-operator-browser.mjs",
     "verify:communication": "node scripts/verify-communication-browser.mjs",
-    "verify:discovery": "node scripts/verify-discovery-browser.mjs"
+    "verify:discovery": "node scripts/verify-discovery-browser.mjs",
+    "verify:demo": "node scripts/verify-demo.mjs",
+    "verify:local-demo": "node scripts/verify-local-demo.mjs"
   },
   "dependencies": {
     "firebase": "^13.0.0",

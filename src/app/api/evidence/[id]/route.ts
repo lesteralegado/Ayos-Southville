@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import {
   getVerifiedResident,
   getVerifiedOperator,
@@ -58,7 +59,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  if (request.headers.get("origin") !== new URL(request.url).origin)
+  if (!isSameOrigin(request))
     return Response.json(
       { error: "Invalid request." },
       { status: 403, headers },

@@ -8,7 +8,7 @@ await mkdir(artifacts, { recursive: true });
 const capture = !process.argv.includes("--functional-only");
 const fixture = `import React from 'react';import {createRoot} from 'react-dom/client';import {PrivacyWorkspace} from '/src/features/pilot/privacy-workspace.tsx';import '/src/app/globals.css';createRoot(document.getElementById('root')).render(<PrivacyWorkspace mode={location.pathname.slice(1)||'resident'}/>);`;
 let privacy, requests = new Map(), runs = [], ended = null;
-const server = await createServer({ root, configFile: false, server: { host: "127.0.0.1", port: 4186, strictPort: true }, resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } }, define: { "process.env": "{}" }, optimizeDeps: { exclude: ["next/link"] }, plugins: [{ name: "hardening-verification", enforce: "pre",
+const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-hardening-browser"), root, configFile: false, server: { watch: { ignored: ["**/.next/**", "**/.next-local/**", "**/.scratch/**"] }, host: "127.0.0.1", port: 4186, strictPort: true }, resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } }, define: { "process.env": "{}" }, optimizeDeps: { exclude: ["next/link"] }, plugins: [{ name: "hardening-verification", enforce: "pre",
   resolveId(id) { if (["/__hardening.jsx", "next/link"].includes(id)) return "\0" + id; },
   async load(id) {
     if (id === "\0next/link") return "import React from 'react';export default function Link({children,...props}){return React.createElement('a',props,children)}";
@@ -29,7 +29,7 @@ const server = await createServer({ root, configFile: false, server: { host: "12
 }] });
 let browser;
 try {
-  await server.listen(); let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  await server.listen(); let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? chromium.executablePath();
   if (!executablePath && process.platform === "win32") { const cache = path.join(process.env.LOCALAPPDATA, "ms-playwright"), installed = (await readdir(cache)).filter(name => /^chromium-/.test(name)).sort().at(-1); if (installed) executablePath = path.join(cache, installed, "chrome-win", "chrome.exe"); }
   browser = await chromium.launch({ headless: true, executablePath });
   const page = await browser.newPage({ reducedMotion: "reduce" }), errors = []; page.on("pageerror", error => errors.push(error.message));

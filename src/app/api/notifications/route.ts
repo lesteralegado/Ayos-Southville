@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import { NextResponse } from "next/server";
 import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
 import { getVerifiedResident } from "@/features/auth/session";
@@ -16,7 +17,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin || !request.headers.get("content-type")?.startsWith("application/json"))
+  if (!isSameOrigin(request) || !request.headers.get("content-type")?.startsWith("application/json"))
     return NextResponse.json({ code: "FORBIDDEN", error: "Invalid request origin." }, { status: 403, headers });
   try {
     const resident = await getVerifiedResident();

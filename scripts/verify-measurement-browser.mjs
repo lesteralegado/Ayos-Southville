@@ -28,14 +28,14 @@ window.fetch=async(url,options={})=>{
 };
 createRoot(document.getElementById("root")).render(<><div className="global-demo-banner" role="status">Synthetic verification only · No live participant or release evidence</div><MeasurementWorkspace/></>);
 `;
-const server = await createServer({ root, configFile: false, server: { host: "127.0.0.1", port: 4192, strictPort: true }, optimizeDeps: { exclude: ["next/link", "next/navigation"] }, resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } }, define: { "process.env": "{}" }, plugins: [{ name: "measurement-fixture", enforce: "pre",
+const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-measurement-browser"), root, configFile: false, server: { watch: { ignored: ["**/.next/**", "**/.next-local/**", "**/.scratch/**"] }, host: "127.0.0.1", port: 4192, strictPort: true }, optimizeDeps: { exclude: ["next/link", "next/navigation"] }, resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } }, define: { "process.env": "{}" }, plugins: [{ name: "measurement-fixture", enforce: "pre",
   resolveId(id) { if (["/__measurement.jsx", "next/link", "next/navigation"].includes(id)) return "\0" + id; },
   async load(id) { if (id === "\0next/link") return "import React from 'react';export default function Link({children,...p}){return React.createElement('a',p,children)}"; if (id === "\0next/navigation") return "export const useRouter=()=>({push:()=>{},refresh:()=>{}})"; if (id === "\0/__measurement.jsx") return (await transformWithOxc(fixture, "fixture.tsx", { lang: "tsx", jsx: { runtime: "automatic" } })).code; },
   configureServer(vite) { vite.middlewares.use((req, res, next) => { if (!req.url.startsWith("/?") && req.url !== "/") return next(); res.setHeader("Content-Type", "text/html"); res.end('<!doctype html><html lang="en"><head><title>Synthetic measurement verification</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script>window.process={env:{NODE_ENV:"development"}}</script><script type="module" src="/@vite/client"></script><script type="module" src="/__measurement.jsx"></script></body></html>'); }); },
 }] });
 let browser;
 try {
-  await server.listen(); let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  await server.listen(); let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? chromium.executablePath();
   if (!executablePath && process.platform === "win32") { const entries = await readdir(path.join(process.env.LOCALAPPDATA, "ms-playwright")); const installed = entries.filter(name => /^chromium-/.test(name)).sort().at(-1); if (installed) executablePath = path.join(process.env.LOCALAPPDATA, "ms-playwright", installed, "chrome-win", "chrome.exe"); }
   browser = await chromium.launch({ executablePath, headless: true }); const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [];
   page.on("pageerror", error => errors.push(error.message));

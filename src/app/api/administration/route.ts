@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import { NextResponse } from "next/server";
 import { operationalMonitor } from "@/features/pilot/monitoring";
 import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
@@ -34,7 +35,7 @@ export async function GET() {
 }
 export async function PATCH(request: Request) {
   if (
-    request.headers.get("origin") !== new URL(request.url).origin ||
+    !isSameOrigin(request) ||
     !request.headers.get("content-type")?.startsWith("application/json")
   )
     return NextResponse.json({ error: "Invalid request." }, { status: 403 });

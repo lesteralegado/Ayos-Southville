@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import { NextResponse } from "next/server";
 import { operationalMonitor } from "@/features/pilot/monitoring";
 import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
@@ -13,8 +14,7 @@ import {
 const headers = { "Cache-Control": "private, no-store" };
 
 function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  return origin !== null && origin === new URL(request.url).origin;
+  return isSameOrigin(request);
 }
 export async function GET() {
   const actor = await getVerifiedOperator();

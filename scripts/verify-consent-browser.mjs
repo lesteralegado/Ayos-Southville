@@ -25,8 +25,8 @@ window.fetch=async(url,options={})=>{
 };
 createRoot(document.getElementById("root")).render(<ResidentPanel publicAlias="Synthetic neighbor" approved/>);
 `;
-const server = await createServer({
-  root, configFile: false, server: { host: "127.0.0.1", port: 4190, strictPort: true },
+const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-consent-browser"),
+  root, configFile: false, server: { watch: { ignored: ["**/.next/**", "**/.next-local/**", "**/.scratch/**"] }, host: "127.0.0.1", port: 4190, strictPort: true },
   optimizeDeps: { exclude: ["next/link", "next/navigation"] },
   resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } }, define: { "process.env": "{}" },
   plugins: [{
@@ -47,7 +47,7 @@ const server = await createServer({
 let browser;
 try {
   await server.listen();
-  let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? chromium.executablePath();
   if (!executablePath && process.platform === "win32") {
     const entries = await readdir(path.join(process.env.LOCALAPPDATA, "ms-playwright"));
     const installed = entries.filter(name => /^chromium-/.test(name)).sort().at(-1);

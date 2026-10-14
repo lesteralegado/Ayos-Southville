@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
 import { operationalMonitor } from "@/features/pilot/monitoring";
 import { protectionResponse } from "@/features/pilot/security-module";
@@ -12,7 +13,7 @@ import {
 
 const headers = { "Cache-Control": "private, no-store" };
 export async function DELETE(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin)
+  if (!isSameOrigin(request))
     return Response.json(
       { error: "Invalid request." },
       { status: 403, headers },
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
   }
 }
 export async function POST(request: Request) {
-  if (request.headers.get("origin") !== new URL(request.url).origin)
+  if (!isSameOrigin(request))
     return Response.json(
       { error: "Invalid request." },
       { status: 403, headers },

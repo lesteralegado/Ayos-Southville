@@ -16,7 +16,7 @@ for (const pathname of ["/account/privacy","/administration/operations"]) {
   if (response.status === 307) assert.match(response.headers.get("location"),/sign-in/);
   else assert.match(await response.text(),/NEXT_REDIRECT.*sign-in/);
 }
-let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+let executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ?? chromium.executablePath();
 if (!executablePath && process.platform === "win32") { const cache=path.join(process.env.LOCALAPPDATA,"ms-playwright"), installed=(await readdir(cache)).filter(name=>/^chromium-/.test(name)).sort().at(-1); if(installed) executablePath=path.join(cache,installed,"chrome-win","chrome.exe"); }
 const browser=await chromium.launch({headless:true,executablePath});
 try { const page=await browser.newPage(), errors=[]; page.on("pageerror",error=>errors.push(error.message)); await page.goto(base+"/privacy"); await page.getByRole("heading",{name:"Your privacy, your choice"}).waitFor(); await page.getByLabel("Language").selectOption("fil"); await page.getByRole("heading",{name:"Inyong privacy, inyong pasya"}).waitFor(); assert.deepEqual(errors,[]); console.log("Built Next app: bilingual policy hydration, private-route redirects, worker authentication and missing-configuration health refusal passed."); } finally { await browser.close(); }

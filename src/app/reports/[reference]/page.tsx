@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getReportModule } from "@/features/reports/firebase-report-store";
 import { ReportDetail } from "@/features/reports/report-detail";
+import { residentReportDetail } from "@/features/reports/resident-report-detail";
 import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
 import { discoveryMode, getDiscoveryCategories, getPublicCanonicalReference } from "@/features/reports/firebase-discovery";
 
@@ -16,7 +17,7 @@ export default async function ReportPage({ params }: { params: Promise<{ referen
     const owned = resident ? (await (await getReportModule()).listMine(resident.uid)).find((item) => item.reference === reference.toUpperCase()) : undefined;
     if (!owned) notFound();
     if (owned.status === "Duplicate" && owned.canonicalReference) redirect("/reports/" + owned.canonicalReference);
-    return <ReportDetail privateReceipt report={{ reference: owned.reference, category: owned.category, status: owned.status, publicSummary: "Private report / Pribadong ulat", publicArea: "Not publicly visible / Hindi nakikita ng publiko", submittedAt: owned.submittedAt, media: [], timeline: [{ status: "Submitted", occurredAt: owned.submittedAt }] }} />;
+    return <ReportDetail privateReceipt report={residentReportDetail(owned)} />;
   }
   const demonstration = discoveryMode() === "demo";
   const resident = !demonstration && report.status === "Resolved" ? await getVerifiedResident() : null;

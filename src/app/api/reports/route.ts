@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import { NextResponse } from "next/server";
 import { operationalMonitor } from "@/features/pilot/monitoring";
 import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
@@ -10,8 +11,7 @@ import {
 import { EvidenceError } from "@/features/reports/evidence-module";
 
 function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  return origin !== null && origin === new URL(request.url).origin;
+  return isSameOrigin(request);
 }
 
 export async function POST(request: Request) {

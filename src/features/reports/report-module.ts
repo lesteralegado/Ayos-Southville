@@ -42,6 +42,13 @@ export type EvidenceAsset = {
 };
 
 export type ResidentReport = {
+  history?: Array<{
+    action: string;
+    status?: ReportStatus;
+    occurredAt: string;
+    reason?: string;
+    update?: { en: string; fil: string };
+  }>;
   reviewExpectation?: { dueAt: string | null; acknowledgedAt: string | null };
   canonicalReference?: string;
   reference: string;

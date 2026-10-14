@@ -1,3 +1,4 @@
+import { isSameOrigin } from "@/features/pilot/request-origin";
 import { NextResponse } from "next/server";
 import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
 import { protectMutation } from "@/features/pilot/firebase-protection";
@@ -5,8 +6,7 @@ import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { sessionCookieName, sessionDurationMs } from "@/features/auth/session";
 
 function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  return origin !== null && origin === new URL(request.url).origin;
+  return isSameOrigin(request);
 }
 
 export async function POST(request: Request) {

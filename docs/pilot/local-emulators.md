@@ -1,5 +1,7 @@
 # No-billing local verification
 
+Latest evidence (2026-10-15): Java 21 installation, emulator startup, synthetic seeding and the connected local resident-to-operator-to-resident workflow now pass. See [local demonstration verification](../release/demo-verification.md). The older verification record below remains historical. Reopen PowerShell after Java installation so its updated PATH is available.
+
 This setup runs Auth, Firestore and private photo Storage on your computer. It uses the synthetic demo-ayos-southville-local project, not ayos-southville or ayos-southville-staging. No Firebase login, service-account key, credit card, cloud bucket or copied production data is required. It is development verification, not deployed readiness or release approval.
 
 ## Prerequisites

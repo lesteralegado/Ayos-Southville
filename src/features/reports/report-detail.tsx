@@ -106,8 +106,8 @@ export function ReportDetail({
         {privateReceipt ? (
           <p>
             {fil
-              ? "Pribadong resibo. Sa iyo at awtorisadong operator lamang nakikita ang ulat hanggang aprubahan."
-              : "Private receipt. Only you and authorized operators can view this report until it is approved."}
+              ? "Pribadong resibo. Sa iyo at awtorisadong operator lamang nakikita ang ulat. Hindi ito nakikita ng publiko."
+              : "Private receipt. Only you and authorized operators can view this report. It is not publicly visible."}
           </p>
         ) : demonstration ? null : (
           <ReportEngagement reference={report.reference} />

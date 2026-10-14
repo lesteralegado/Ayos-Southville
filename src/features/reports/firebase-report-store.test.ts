@@ -72,6 +72,7 @@ vi.mock("@/lib/firebase/admin", () => {
   return { getFirebaseAdmin: () => ({ db, auth: { getUser: async (uid: string) => ({ uid, emailVerified: true, disabled: false }) } }) };
 });
 import { getReportModule } from "./firebase-report-store";
+import { residentReportDetail } from "./resident-report-detail";
 const assetId = "a".repeat(64);
 const submission = {
   residentUid: "r1",
@@ -112,6 +113,23 @@ beforeEach(() => {
     createdAt: new Date().toISOString(),
   });
 });
+it("loads persisted rejection history only for the owner and omits internal reasons", async () => {
+  const reports = await getReportModule();
+  const receipt = await reports.submit(submission);
+  const stored = fixtures.records.get(`privateReports/${receipt.reference}`)!;
+  stored.status = "Rejected";
+  fixtures.records.set(`moderationReports/${receipt.reference}`, { history: [
+    { action: "external-follow-up", occurredAt: "2026-10-15T02:00:00Z", reason: "Internal correspondence", actorUid: "operator" },
+    { action: "rejected:out-of-scope", occurredAt: "2026-10-15T03:00:00Z", reason: "Outside pilot categories", actorUid: "operator" },
+  ] });
+  const mine = await reports.listMine("r1");
+  expect(residentReportDetail(mine[0]).timeline.at(-1)).toMatchObject({ status: "Rejected", update: { en: "Outside pilot categories" } });
+  expect(JSON.stringify(mine)).not.toContain("Internal correspondence");
+  expect(JSON.stringify(mine)).not.toContain("actorUid");
+  expect(await reports.listMine("r2")).toEqual([]);
+  expect(await reports.getPublic(receipt.reference)).toBeNull();
+});
+
 it("accepts only completed owned files and uses server metadata, then recovers the original receipt", async () => {
   const reports = await getReportModule();
   const receipt = await reports.submit(submission);
