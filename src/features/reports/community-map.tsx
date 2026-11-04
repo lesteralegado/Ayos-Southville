@@ -68,7 +68,7 @@ export default function CommunityMap({ reports, locale, style = communityMapStyl
       map.on("error", () => { if (!disposed) setState("error"); });
     }).catch(() => { if (!disposed) setState("error"); });
     return () => { disposed = true; window.clearTimeout(timeout); map?.remove(); };
-  }, [reports, locale, style, copy.mapLabel]);
+  }, [reports, locale, style, copy.mapLabel, copy.count]);
   return <div className="public-map-section">
     <div ref={container} className="public-community-map" aria-label={copy.mapLabel} />
     {state !== "ready" && <p role="status">{state === "error" ? copy.mapError : copy.mapLoading}</p>}
