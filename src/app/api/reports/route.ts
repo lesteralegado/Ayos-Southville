@@ -1,5 +1,6 @@
 import { isSameOrigin } from "@/features/pilot/request-origin";
 import { NextResponse } from "next/server";
+import { ReportPageError } from "@/features/reports/report-pages";
 import { operationalMonitor } from "@/features/pilot/monitoring";
 import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
 import { getVerifiedResident, hasPilotAccess } from "@/features/auth/session";
@@ -80,16 +81,19 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request?: Request) {
   const resident = await getVerifiedResident();
   if (!resident)
     return NextResponse.json(
       { error: "Authentication required." },
       { status: 401 },
     );
-  const reports = await (await getReportModule()).listMine(resident.uid);
-  return NextResponse.json(
-    { reports },
-    { headers: { "Cache-Control": "private, no-store" } },
-  );
+  const headers = { "Cache-Control": "private, no-store" };
+  try {
+    const cursor = request ? new URL(request.url).searchParams.get("cursor") : null;
+    return NextResponse.json(await (await getReportModule()).listMinePage(resident.uid, cursor), { headers });
+  } catch (error) {
+    if (error instanceof ReportPageError) return NextResponse.json({ error: error.message, code: error.code }, { status: 422, headers });
+    return NextResponse.json({ error: "Report history is unavailable. Retry loading your reports." }, { status: 503, headers });
+  }
 }

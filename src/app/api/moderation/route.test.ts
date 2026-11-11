@@ -68,7 +68,9 @@ it("publishes explicit redaction and returns a conflict on a repeated stale requ
   expect((await PATCH(request("accept", acceptance))).status).toBe(200);
   const response = await GET();
   expect(response.headers.get("cache-control")).toBe("private, no-store");
-  expect((await response.json()).reports[0]).toMatchObject({
+  expect((await response.json()).reports[0]).toMatchObject({ status: "Under review", revision: 1 });
+  const detail = await GET(new Request(`https://ayos.test/api/moderation?reference=${seed.reference}`));
+  expect((await detail.json()).report).toMatchObject({
     status: "Under review",
     revision: 1,
     public: { location: { latitude: 14.28, longitude: 121.13 } },
@@ -78,6 +80,11 @@ it("publishes explicit redaction and returns a conflict on a repeated stale requ
   expect(
     JSON.stringify(await state.moderation!.getPublicReport(seed.reference)),
   ).not.toMatch(/09171234567|Block 9/);
+});
+it("rejects malformed page continuations and denies resident detail reads", async () => {
+  expect((await GET(new Request("https://ayos.test/api/moderation?cursor=broken"))).status).toBe(422);
+  state.actor = { uid: "r1", roles: ["Resident"] };
+  expect((await GET(new Request(`https://ayos.test/api/moderation?reference=${seed.reference}`))).status).toBe(403);
 });
 it.each(["Resident", "Coordinator"] as const)(
   "denies %s attempts to accept reports",

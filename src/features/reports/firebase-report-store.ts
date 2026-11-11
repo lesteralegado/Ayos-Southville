@@ -1,4 +1,6 @@
 import "server-only";
+import { boundedReportQuery } from "./firebase-report-pages";
+import { reportPageSize } from "./report-pages";
 import { pilotOperations } from "@/features/admin/pilot-operations";
 import { reviewDeadline } from "./review-calendar";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
@@ -29,6 +31,15 @@ function receiptId(key: string) {
 
 function createFirebaseReportStore(): ReportStore {
   const db = getFirebaseAdmin().db;
+  async function details(values: ResidentReport[]) {
+    if (!values.length) return [];
+    const [operatingDoc, ...moderation] = await db.getAll(db.collection("pilotOperations").doc("current"), ...values.map(report => db.collection("moderationReports").doc(report.reference)));
+    const operating = pilotOperations(operatingDoc.data());
+    return values.map((data, index) => {
+      const history = (moderation[index].data()?.history ?? []) as NonNullable<ResidentReport["history"]>;
+      return { ...data, history: history.map(event => ({ action: event.action, occurredAt: event.occurredAt, ...(event.status ? { status: event.status } : {}), ...(event.update ? { update: event.update } : {}), ...(event.action.startsWith("rejected:") && event.reason ? { reason: event.reason } : {}) })), reviewExpectation: { dueAt: reviewDeadline(data.submittedAt, operating.reviewCalendar), acknowledgedAt: (data as ResidentReport & { reviewAcknowledgedAt?: string }).reviewAcknowledgedAt ?? null } };
+    });
+  }
   return {
     async getReceipt(key) {
       if (await pilotRecordsExpired()) return null;
@@ -127,27 +138,18 @@ function createFirebaseReportStore(): ReportStore {
       });
     },
     async listByResident(residentUid: string) {
+      return this.listResidentWindow(residentUid, null, reportPageSize);
+    },
+    async listResidentWindow(residentUid, after, limit) {
       if (await pilotRecordsExpired()) return [];
-      const snapshot = await db
-        .collection("privateReports")
-        .where("reporterUid", "==", residentUid)
-        .get();
-      const operating = pilotOperations((await db.collection("pilotOperations").doc("current").get()).data());
-      return (await Promise.all(snapshot.docs
-        .map(async (document) => {
-          const data = document.data() as ResidentReport & { reviewAcknowledgedAt?: string };
-          const moderation = await db.collection("moderationReports").doc(data.reference).get();
-          const history = (moderation.data()?.history ?? []) as NonNullable<ResidentReport["history"]>;
-          return { ...data, history: history.map(event => ({
-            action: event.action, occurredAt: event.occurredAt,
-            ...(event.status ? { status: event.status } : {}),
-            ...(event.update ? { update: event.update } : {}),
-            ...(event.action.startsWith("rejected:") && event.reason ? { reason: event.reason } : {}),
-          })), reviewExpectation: { dueAt: reviewDeadline(data.submittedAt, operating.reviewCalendar), acknowledgedAt: data.reviewAcknowledgedAt ?? null } };
-        })))
-        .toSorted((left, right) =>
-          right.submittedAt.localeCompare(left.submittedAt),
-        );
+      const snapshot = await boundedReportQuery(db.collection("privateReports").where("reporterUid", "==", residentUid), after, limit).get();
+      return details(snapshot.docs.map(doc => ({ ...doc.data(), reference: doc.id }) as ResidentReport));
+    },
+    async getOwned(residentUid, reference) {
+      if (!/^AS-[A-Z0-9]{1,76}$/.test(reference) || await pilotRecordsExpired()) return null;
+      const doc = await db.collection("privateReports").doc(reference).get();
+      if (!doc.exists || doc.data()?.reporterUid !== residentUid) return null;
+      return (await details([{ ...doc.data(), reference: doc.id } as ResidentReport]))[0];
     },
     async getPublic(reference: string) {
       if (await publicReportsRestricted()) return null;

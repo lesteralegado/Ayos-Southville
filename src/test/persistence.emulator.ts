@@ -130,3 +130,50 @@ it("concurrent actions at one revision commit exactly one lifecycle change and o
   expect(await reports.getPublic(reference)).toMatchObject({ status: "Assigned" });
   expect(JSON.stringify(await reports.getPublic(reference))).not.toContain("private reporting details");
 });
+
+it("traverses tied-date history and sparse overdue windows against real bounded Firestore queries", async () => {
+  const reports = await getReportModule(), moderation = getModerationModule();
+  const submittedAt = new Date(Date.now() - 10 * 86_400_000).toISOString();
+  const from = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+  const through = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  const batch = db.batch();
+  // Existing contracts in this owned database are acknowledged so they cannot
+  // accidentally make the first sparse overdue scan window non-empty.
+  for (const doc of (await db.collection("privateReports").get()).docs) {
+    batch.set(db.collection("moderationReports").doc(doc.id), { review: { acknowledgedAt: new Date().toISOString() } }, { merge: true });
+  }
+  for (let index = 0; index < 121; index++) {
+    const reference = `AS-ZPAGE${String(index).padStart(6, "0")}`;
+    batch.create(db.collection("privateReports").doc(reference), {
+      reference, reporterUid: uid, category: "streetlights", description: "SYNTHETIC private page concern", nearbyLandmark: "Synthetic court", status: "Submitted", submittedAt,
+      evidence: index < 25 ? [{ id: "a".repeat(64), name: "synthetic.jpg", type: "image/jpeg", size: 50, visibility: "restricted" }] : [],
+    });
+    if (index >= 21) batch.create(db.collection("moderationReports").doc(reference), { revision: 0, review: { acknowledgedAt: submittedAt, nextStep: "Synthetic private review", actorUid: uid } });
+  }
+  batch.set(db.collection("pilotOperations").doc("current"), { reviewCalendar: { from, through, holidays: [], source: "Synthetic contract calendar", ownerConfirmed: true } });
+  await batch.commit();
+  let cursor: string | null = null;
+  const seen: string[] = [];
+  do {
+    const page = await reports.listMinePage(uid, cursor);
+    expect(page.reports.length).toBeLessThanOrEqual(20);
+    seen.push(...page.reports.map(report => report.reference)); cursor = page.nextCursor;
+  } while (cursor);
+  const paged = seen.filter(reference => reference.startsWith("AS-ZPAGE"));
+  expect(paged).toHaveLength(121); expect(new Set(seen).size).toBe(seen.length);
+  expect(paged[0]).toBe("AS-ZPAGE000120"); expect(paged.at(-1)).toBe("AS-ZPAGE000000");
+  expect(await reports.getMine(uid, "AS-ZPAGE000000")).toMatchObject({ description: "SYNTHETIC private page concern", evidence: [{ name: "synthetic.jpg" }] });
+  expect(await reports.getMine("not-the-owner", "AS-ZPAGE000000")).toBeNull();
+  const overdue: string[] = [];
+  const first = await moderation.listWorkspacePage(actor, { filter: "overdue" });
+  expect(first.reports).toEqual([]); expect(first.nextCursor).not.toBeNull();
+  cursor = first.nextCursor;
+  do {
+    const page = await moderation.listWorkspacePage(actor, { filter: "overdue", cursor });
+    expect(JSON.stringify(page.reports)).not.toMatch(/private page concern|evidence|reporterUid|nextStep/);
+    overdue.push(...page.reports.map(report => report.reference)); cursor = page.nextCursor;
+  } while (cursor);
+  expect(overdue).toHaveLength(21); expect(new Set(overdue).size).toBe(21);
+  await expect(moderation.listWorkspacePage(actor, { filter: "all", cursor: first.nextCursor })).rejects.toMatchObject({ code: "VALIDATION" });
+  await expect(reports.listMinePage("other-owner", (await reports.listMinePage(uid)).nextCursor)).rejects.toMatchObject({ code: "VALIDATION" });
+});

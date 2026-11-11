@@ -60,12 +60,12 @@ try {
   assert.equal(unreadPhoto.status(), 404, 'Unapproved evidence must remain private');
   const denied = await publicContext.request.get(base + '/api/evidence/' + asset.id);
   assert.equal(denied.status(), 401);
-  async function current() { return (await json(operator, '/api/moderation')).reports.find(report => report.reference === receipt.reference); }
+  async function current() { return (await json(operator, '/api/moderation?reference=' + receipt.reference)).report; }
   async function act(action, input) {
     const report = await current(); assert.ok(report);
     await json(operator, '/api/moderation', 'PATCH', { action, input: { reference: receipt.reference, expectedRevision: report.revision ?? 0, ...input } });
   }
-  assert.ok((await json(backup, '/api/moderation')).reports.some(report => report.reference === receipt.reference));
+  assert.equal((await json(backup, '/api/moderation?reference=' + receipt.reference)).report.reference, receipt.reference);
   await act('accept', { publicSummary: 'SYNTHETIC TEST: streetlight near a covered court.', publicArea: 'Synthetic court', approvedMedia: [], reason: 'Synthetic local workflow exercise.', update: { en: 'Test report accepted for review.', fil: 'Tinanggap ang pansubok na ulat para sa pagsusuri.' } });
   await act('assign', { priority: 'normal', destination: 'lighting', reason: 'Internal test desk.', update: { en: 'Assigned to the internal test desk.', fil: 'Itinalaga sa panloob na pansubok na desk.' } });
   await act('transition', { to: 'In progress', update: { en: 'Synthetic test work started.', fil: 'Nagsimula ang pansubok na gawain.' } });
@@ -100,7 +100,7 @@ try {
   assert.equal(await publicPage.getByRole('button', { name: 'Confirm resolution' }).count(), 0);
   assert.ok((await json(resident, '/api/notifications')).notifications.some(notice => notice.reference === receipt.reference));
   const rejected = await json(resident, '/api/reports', 'POST', { ...submission, idempotencyKey: crypto.randomUUID(), evidence: [] }, 201);
-  const queued = (await json(operator, '/api/moderation')).reports.find(report => report.reference === rejected.reference);
+  const queued = (await json(operator, '/api/moderation?reference=' + rejected.reference)).report;
   await json(operator, '/api/moderation', 'PATCH', { action: 'reject', input: { reference: rejected.reference, expectedRevision: queued.revision ?? 0, category: 'out-of-scope', reason: 'Synthetic test concern is outside the pilot categories.' } });
   await page.goto(base + '/reports/' + rejected.reference);
   await page.getByText('Synthetic test concern is outside the pilot categories.', { exact: true }).waitFor();

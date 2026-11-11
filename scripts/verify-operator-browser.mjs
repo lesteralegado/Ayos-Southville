@@ -14,7 +14,7 @@ import { createRoot } from 'react-dom/client';
 import { OperatorWorkspace } from '/src/features/reports/operator-workspace.tsx';
 import '/src/app/globals.css';
 const role = new URL(location.href).searchParams.get('role') || 'Administrator';
-fetch('/api/moderation').then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(<OperatorWorkspace initialReports={data.reports} actor={{uid:'operator',roles:[role]}} destinations={[{id:'lighting',name:'Streetlight desk'}]} />));
+fetch('/api/moderation?filter=active').then(r=>r.json()).then(async data=>{const detail=data.reports[0]?await fetch('/api/moderation?reference='+data.reports[0].reference).then(r=>r.json()):{report:null};createRoot(document.getElementById('root')).render(<OperatorWorkspace initialReports={data.reports} initialNextCursor={data.nextCursor} initialSelectedReport={detail.report} actor={{uid:'operator',roles:[role]}} destinations={[{id:'lighting',name:'Streetlight desk'}]} />)});
 `;
 let boundaries;
 const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-operator-browser"),
@@ -36,7 +36,7 @@ const server = await createServer({ cacheDir: path.join(root, "node_modules/.vit
         const upload = await vite.ssrLoadModule("/src/features/reports/evidence-module.ts");
         const prepare = await vite.ssrLoadModule("/src/features/reports/prepare-evidence-photo.ts");
         const seed = reference => ({ reference, reporterUid: "resident", category: "streetlights", description: "Private report: Block 9 Lot 12, 09171234567.", nearbyLandmark: "Covered court", exactLocation: { latitude: 14.281234, longitude: 121.126789, privateDetails: "Synthetic block and lot" }, evidence: [], status: "Submitted", submittedAt: "2026-10-10T02:00:00Z", public: { summary: "", area: "", media: [] }, followers: [], affectedResidents: [], supportingEvidence: [], history: [] });
-        const store = domain.createMemoryModerationStore({ reports: ["AS-300001", "AS-300002", "AS-300003", "AS-300004"].map(seed) });
+        const store = domain.createMemoryModerationStore({ reports: ["AS-300001", "AS-300002", "AS-300003", "AS-300004"].map((reference, index) => ({ ...seed(reference), submittedAt: new Date(Date.parse("2026-10-10T02:00:00Z") - index * 1000).toISOString() })) });
         const evidenceStore = upload.createMemoryEvidenceStore();
         const evidence = upload.createEvidenceModule({ store: evidenceStore, prepare: prepare.prepareEvidencePhoto });
         const originalCommit = store.commit;
@@ -66,7 +66,7 @@ const server = await createServer({ cacheDir: path.join(root, "node_modules/.vit
           const body = Buffer.concat(chunks), url = new URL(req.url, "http://127.0.0.1:4180");
           let result;
           if (url.pathname === "/api/moderation") {
-            if (req.method === "GET") result = { reports: await moderation.listWorkspace(actor) };
+            if (req.method === "GET") result = url.searchParams.has("reference") ? { report: await moderation.getPrivateReport(actor, url.searchParams.get("reference")) } : await moderation.listWorkspacePage(actor, { filter: url.searchParams.get("filter") ?? "all", cursor: url.searchParams.get("cursor") });
             else {
               const { action, input } = JSON.parse(body);
               if (action === "assign" && input.destination !== "lighting") throw new Error("Invalid desk");
@@ -176,7 +176,9 @@ try {
   await page.getByRole("button", { name: "Assign report" }).waitFor();
   await page.getByRole("button", { name: /AS-300004/ }).click();
   await page.getByLabel("Review decision").selectOption("merge");
-  await page.getByLabel("Canonical report", { exact: true }).selectOption("AS-300003");
+  await page.getByLabel("Canonical report", { exact: true }).fill("AS-300003");
+  await page.getByRole("button", { name: "Find canonical report" }).click();
+  await page.getByText("AS-300003: Another approved light concern.", { exact: true }).waitFor();
   await page.getByLabel("Decision reason").fill("Same light concern.");
   await page.getByRole("button", { name: "Merge duplicate", exact: true }).click();
   await page.getByRole("heading", { name: "AS-300004 · Duplicate" }).waitFor();
