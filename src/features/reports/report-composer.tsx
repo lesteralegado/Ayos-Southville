@@ -3,51 +3,13 @@ import { operatingCopy } from "@/features/i18n/operating-copy";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  type FormEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { type FormEvent, useEffect, useRef } from "react";
+import { useReportSubmission } from "./use-report-submission";
 import { useLocale } from "@/features/i18n/use-locale";
-import type { EvidenceAsset } from "./report-module";
-import type { DuplicateSuggestion } from "./engagement-module";
 import { EvidencePicker } from "./evidence-picker";
 import { LocationPicker } from "./location-picker";
-import { clearLocalPhotos } from "./evidence-drafts";
 import type { PilotOperations } from "@/features/admin/pilot-operations";
 
-const draftKey = "ayos-report-draft-v1";
-const draftEvent = "ayos-report-draft-change";
-type Draft = {
-  version: 1;
-  idempotencyKey: string;
-  category: string;
-  description: string;
-  nearbyLandmark: string;
-  latitude: string;
-  longitude: string;
-  privateLocationDetails: string;
-  isEmergency: boolean;
-  confirmNonEmergency: boolean;
-  confirmPublicSummary: boolean;
-};
-const blankDraft = (): Draft => ({
-  version: 1,
-  idempotencyKey: crypto.randomUUID(),
-  category: "",
-  description: "",
-  nearbyLandmark: "",
-  latitude: "",
-  longitude: "",
-  privateLocationDetails: "",
-  isEmergency: false,
-  confirmNonEmergency: false,
-  confirmPublicSummary: false,
-});
-type FieldIssues = Record<string, string>;
 const copy = {
   en: {
     title: "Tell us what needs attention.",
@@ -75,8 +37,6 @@ const copy = {
     submit: "Submit report",
     submitting: "Submitting…",
     errorTitle: "Please review the highlighted fields.",
-    networkError:
-      "We could not confirm the submission. Keep this draft unchanged and retry to recover the same receipt without creating a duplicate.",
     back: "Back to account",
     retry: "Check submission again",
   },
@@ -106,52 +66,10 @@ const copy = {
     submit: "Isumite ang ulat",
     submitting: "Isinusumite…",
     errorTitle: "Suriin ang mga field na may marka.",
-    networkError:
-      "Hindi makumpirma ang submission. Huwag baguhin ang draft; subukan muli upang mabawi ang parehong receipt nang walang duplicate.",
     back: "Bumalik sa account",
     retry: "Suriin muli ang submission",
   },
 };
-function subscribe(onChange: () => void) {
-  window.addEventListener(draftEvent, onChange);
-  return () => window.removeEventListener(draftEvent, onChange);
-}
-function readDraft(key: string) {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-function parseDraft(value: string | null): Draft | null {
-  if (!value) return null;
-  try {
-    const draft = JSON.parse(value);
-    if (
-      draft.version !== 1 ||
-      typeof draft.idempotencyKey !== "string" ||
-      !/^[a-zA-Z0-9_-]{12,128}$/.test(draft.idempotencyKey) ||
-      ["category", "description", "nearbyLandmark"].some(
-        (field) => typeof draft[field] !== "string",
-      ) ||
-      ["isEmergency", "confirmNonEmergency", "confirmPublicSummary"].some(
-        (field) => typeof draft[field] !== "boolean",
-      )
-    )
-      return null;
-    return {
-      ...draft,
-      latitude: typeof draft.latitude === "string" ? draft.latitude : "",
-      longitude: typeof draft.longitude === "string" ? draft.longitude : "",
-      privateLocationDetails:
-        typeof draft.privateLocationDetails === "string"
-          ? draft.privateLocationDetails
-          : "",
-    };
-  } catch {
-    return null;
-  }
-}
 type Category = { id: string; label: { en: string; fil: string } };
 type Guidance = { message: string; phone: string; sourceUrl: string };
 const fallbackCategories: Category[] = [
@@ -194,277 +112,33 @@ export function ReportComposer({
   const fil = locale === "fil";
   const message = copy[locale];
   const guidance = emergencyGuidance[locale];
-  const storageKey = residentUid ? `${draftKey}:${residentUid}` : draftKey;
-  const [draft, setDraft] = useState<Draft>(blankDraft);
-  const savedText = useSyncExternalStore(
-    subscribe,
-    () => readDraft(storageKey),
-    () => null,
-  );
-  const savedDraft = useMemo(() => parseDraft(savedText), [savedText]);
-  const [issues, setIssues] = useState<FieldIssues>({});
-  const [submitError, setSubmitError] = useState("");
-  const [pending, setPending] = useState(false);
-  const [availability, setAvailability] = useState(operatingStatus);
-  const [availabilityConfirmed, setAvailabilityConfirmed] = useState(!!operatingStatus);
-  const [checkingAvailability, setCheckingAvailability] = useState(false);
-  const [ambiguous, setAmbiguous] = useState(false);
-  const [resumed, setResumed] = useState(false);
-  const [storageError, setStorageError] = useState(false);
-  const [evidence, setEvidence] = useState<EvidenceAsset[]>([]);
-  const [uploadBlocked, setUploadBlocked] = useState(false);
-  const [suggestions, setSuggestions] = useState<DuplicateSuggestion[]>([]);
-  const [duplicatesReviewed, setDuplicatesReviewed] = useState(false);
+  const workflow = useReportSubmission({ residentUid, categories, operatingStatus, locale });
+  const {
+    draft, savedDraft, issues, submitError, pending, ambiguous, resumed, availability,
+    availabilityConfirmed, checkingAvailability, storageError, suggestions, duplicatesReviewed,
+    uploadBlocked, update, resumeDraft, discardDraft, supportSuggestion, refreshAvailability,
+    reviewDuplicates, setEvidence, setUploadBlocked,
+  } = workflow;
   const summaryRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const duplicateHeading = useRef<HTMLHeadingElement>(null);
-  async function refreshAvailability() {
-    setCheckingAvailability(true);
-    try {
-      const response = await fetch("/api/pilot-status", { cache: "no-store" });
-      if (!response.ok) throw new Error("Unavailable");
-      setAvailability(await response.json());
-      setAvailabilityConfirmed(true);
-      setSubmitError("");
-    } catch {
-      setSubmitError(operatingCopy(locale, "availabilityCouldNotBeConfirmedYourDraftRemains"));
-    } finally { setCheckingAvailability(false); }
-  }
   useEffect(() => {
-    if (!draft.category && !draft.description && !draft.nearbyLandmark) return;
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(draft));
-    } catch {
-      queueMicrotask(() => setStorageError(true));
-    }
-  }, [draft, storageKey]);
-
-  function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
-    setDraft((current) => ({ ...current, [key]: value }));
-    if (["category", "latitude", "longitude"].includes(key)) {
-      setDuplicatesReviewed(false);
-      setSuggestions([]);
-    }
-  }
-  function clearDraft() {
-    try {
-      localStorage.removeItem(storageKey);
-    } catch {
-      /* Receipt is authoritative even without device storage. */
-    }
-    window.dispatchEvent(new Event(draftEvent));
-    if (residentUid)
-      void clearLocalPhotos(residentUid, draft.idempotencyKey).catch(
-        () => undefined,
-      );
-  }
-  function discardDraft() {
-    clearDraft();
-    setDraft(blankDraft());
-    setIssues({});
-    setSubmitError("");
-    setAmbiguous(false);
-    setResumed(false);
-    setDuplicatesReviewed(false);
-    setSuggestions([]);
-  }
-  function validate() {
-    const next: FieldIssues = {};
-    if (!categories.some((item) => item.id === draft.category))
-      next.category = fil ? "Pumili ng kategorya." : "Choose a category.";
-    if (
-      draft.description.trim().length < 20 ||
-      draft.description.trim().length > 1000
-    )
-      next.description = fil
-        ? "Gumamit ng 20–1,000 character."
-        : "Use 20–1,000 characters.";
-    if (
-      draft.nearbyLandmark.trim().length < 3 ||
-      draft.nearbyLandmark.trim().length > 160
-    )
-      next.nearbyLandmark = fil
-        ? "Maglagay ng landmark na may 3–160 character."
-        : "Add a landmark with 3–160 characters.";
-    if (
-      (draft.latitude || draft.longitude) &&
-      (!draft.latitude ||
-        !draft.longitude ||
-        !Number.isFinite(Number(draft.latitude)) ||
-        !Number.isFinite(Number(draft.longitude)) ||
-        Math.abs(Number(draft.latitude)) > 90 ||
-        Math.abs(Number(draft.longitude)) > 180)
-    )
-      next.exactLocation = fil
-        ? "Maglagay ng wastong latitude at longitude, o alisin ang pareho."
-        : "Enter valid latitude and longitude, or clear both.";
-    if (draft.privateLocationDetails && !draft.latitude)
-      next.exactLocation = fil
-        ? "Maglagay ng coordinates para sa pribadong detalye, o alisin ang detalye."
-        : "Add coordinates for the private details, or clear the details.";
-    if (!draft.confirmNonEmergency)
-      next.confirmNonEmergency = fil
-        ? "Kumpirmahing hindi ito emergency."
-        : "Confirm this is not an emergency.";
-    if (!draft.confirmPublicSummary)
-      next.confirmPublicSummary = fil
-        ? "Kumpirmahin ang pampublikong summary."
-        : "Confirm the public summary.";
-    return next;
-  }
-  async function submit(event: FormEvent<HTMLFormElement>) {
+    if (workflow.phase === "confirmed" && workflow.reference)
+      router.push(`/reports/${workflow.reference}`);
+  }, [workflow.phase, workflow.reference, router]);
+  useEffect(() => {
+    if (!Object.keys(issues).length) return;
+    const timer = setTimeout(() => summaryRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [issues]);
+  useEffect(() => {
+    if (!suggestions.length) return;
+    const timer = setTimeout(() => duplicateHeading.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [suggestions]);
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
-    if (residentUid && (ambiguous || resumed)) {
-      setPending(true);
-      try {
-        const response = await fetch(
-          `/api/reports/receipt?draftKey=${encodeURIComponent(draft.idempotencyKey)}`,
-          { cache: "no-store" },
-        );
-        if (response.ok) {
-          const receipt = (await response.json()) as { reference: string };
-          clearDraft();
-          router.push(`/reports/${receipt.reference}`);
-          return;
-        }
-        if (response.status !== 404) throw new Error("Receipt unconfirmed");
-      } catch {
-        setSubmitError(message.networkError);
-        return;
-      } finally {
-        setPending(false);
-      }
-    }
-    if (uploadBlocked && !ambiguous) return;
-    const next = validate();
-    if (ambiguous) delete next.category;
-    setIssues(next);
-    setSubmitError("");
-    if (draft.isEmergency || Object.keys(next).length) {
-      setTimeout(() => summaryRef.current?.focus(), 0);
-      return;
-    }
-    setPending(true);
-    let submissionStarted = false;
-    try {
-      if (
-        !duplicatesReviewed &&
-        !ambiguous &&
-        draft.latitude &&
-        draft.longitude
-      ) {
-        const response = await fetch("/api/reports/suggestions", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            category: draft.category,
-            latitude: Number(draft.latitude),
-            longitude: Number(draft.longitude),
-          }),
-        });
-        if (!response.ok) throw new Error("Duplicate check unavailable");
-        const result = (await response.json()) as {
-          suggestions: DuplicateSuggestion[];
-        };
-        if (result.suggestions.length) {
-          setSuggestions(result.suggestions);
-          setTimeout(() => duplicateHeading.current?.focus(), 0);
-          return;
-        }
-        setDuplicatesReviewed(true);
-      }
-      submissionStarted = true;
-      const response = await fetch("/api/reports", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...draft,
-          exactLocation:
-            draft.latitude && draft.longitude
-              ? {
-                  latitude: Number(draft.latitude),
-                  longitude: Number(draft.longitude),
-                  privateDetails: draft.privateLocationDetails,
-                }
-              : undefined,
-          evidence,
-        }),
-      });
-      const result = (await response.json()) as {
-        reference?: string;
-        issues?: FieldIssues;
-        code?: string;
-      };
-      if (result.code === "INTAKE_PAUSED") {
-        setAvailability({ intakePaused: true, explanation: { en: "", fil: "" }, resumesAt: "" });
-        setAvailabilityConfirmed(false);
-        setAmbiguous(false);
-        setSubmitError("");
-        await refreshAvailability();
-        return;
-      }
-      if (response.status === 422) {
-        const localized: FieldIssues = {};
-        for (const field of Object.keys(result.issues ?? {}))
-          localized[field] = fil
-            ? field === "evidence"
-              ? "Gumamit ng nakumpirmang pribadong upload. Subukan muli ang litrato."
-              : "Suriin at iwasto ang field na ito."
-            : field === "evidence"
-              ? "Use confirmed private uploads. Retry the photo."
-              : "Review and correct this field.";
-        setIssues(localized);
-        setAmbiguous(false);
-        setTimeout(() => summaryRef.current?.focus(), 0);
-        return;
-      }
-      if (response.status === 401 || response.status === 403) {
-        setSubmitError(
-          fil
-            ? "Mag-sign in muli at tiyaking aprubado ang pilot access. Nananatili ang draft."
-            : "Sign in again and confirm pilot approval. Your draft remains.",
-        );
-        return;
-      }
-      if (!response.ok || !result.reference)
-        throw new Error("Submission unconfirmed");
-      clearDraft();
-      router.push(`/reports/${result.reference}`);
-    } catch {
-      setAmbiguous(submissionStarted);
-      setSubmitError(
-        submissionStarted
-          ? message.networkError
-          : fil
-            ? "Hindi available ang duplicate check. Nananatili ang draft; kumonekta at subukan muli."
-            : "Duplicate checking is unavailable. Your draft remains; reconnect and retry.",
-      );
-    } finally {
-      setPending(false);
-    }
-  }
-  async function supportSuggestion(reference: string) {
-    setPending(true);
-    try {
-      const response = await fetch(`/api/reports/${reference}/engagement`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "affected", active: true }),
-      });
-      if (!response.ok) throw new Error("Support unconfirmed");
-      clearDraft();
-      router.push(`/reports/${reference}`);
-    } catch {
-      setSubmitError(
-        fil
-          ? "Hindi makumpirma ang update. Ligtas ang draft; subukan muli."
-          : "The update could not be confirmed. Your draft remains; retry.",
-      );
-    } finally {
-      setPending(false);
-    }
+    void workflow.submit();
   }
   return (
     <main className="composer-page">
@@ -517,12 +191,7 @@ export function ReportComposer({
                     type="button"
                     className="button button-dark"
                     disabled={pending}
-                    onClick={() => {
-                      setDraft(savedDraft);
-                      setResumed(true);
-                      setDuplicatesReviewed(false);
-                      setSuggestions([]);
-                    }}
+                    onClick={resumeDraft}
                   >
                     {message.resume}
                   </button>
@@ -663,13 +332,8 @@ export function ReportComposer({
                   longitude={draft.longitude}
                   locale={locale}
                   onSelect={(latitude, longitude) => {
-                    setDraft((current) => ({
-                      ...current,
-                      latitude,
-                      longitude,
-                    }));
-                    setDuplicatesReviewed(false);
-                    setSuggestions([]);
+                    update("latitude", latitude);
+                    update("longitude", longitude);
                   }}
                 />
                 <div className="coordinate-grid">
@@ -824,10 +488,7 @@ export function ReportComposer({
                   type="button"
                   className="button button-quiet"
                   disabled={pending}
-                  onClick={() => {
-                    setDuplicatesReviewed(true);
-                    setSuggestions([]);
-                  }}
+                  onClick={reviewDuplicates}
                 >
                   {fil
                     ? "Hindi kaugnay — magpatuloy sa bagong ulat"
