@@ -6,7 +6,7 @@
 
 **Blocked by:** 01: Automate clean repository verification.
 
-**Status:** claimed
+**Status:** resolved
 
 - [x] Use approved submission module and browser/HTTP seams, driving behavior changes test-first.
 - [x] Preserve existing drafts, resident scoping, photos, validation, emergency diversion, duplicate suggestions and availability handling.
@@ -27,3 +27,5 @@ Red-to-green evidence: the first workflow test failed before the module existed;
 The intake synthetic browser journey passed photo preparation/storage, lost-response upload recovery, preview/removal, English/Filipino, MapLibre with controlled tiles, duplicate choice and landmark-only receipt. Desktop/tablet/mobile axe, overflow, keyboard, reduced motion and 200% text zoom checks passed. Desktop and Filipino mobile captures were inspected together; incumbent layout preserved. The mechanical design detector reported no findings. No new human device, screen-reader or deployed evidence is claimed. Standard production build must pass in the integration root because isolated worktrees share dependencies through a junction rejected by Turbopack's hermetic root.
 
 After merging the persistence ticket, an unconstrained full run passed 264 tests but hit two five-second interaction timeouts in consent refresh and in-flight pause. Both files passed all 11 tests when run in isolation; the consent test was left unchanged. The pause test now pastes its setup prose instead of synthesizing irrelevant individual keystrokes. The full suite passed 65 files / 266 tests with two workers. The subsequently added pause-transition test and final workflow/composer cases passed separately (14 tests); no global timeout or worker configuration was changed. Final TypeScript and zero-warning lint checks passed. Ticket remains claimed solely pending the integration-root standard production build.
+
+2026-11-11: After integration at ce4a11b, the standard `npm run build` passed in the integration workspace, including Turbopack compilation, TypeScript and all 28 generated pages. Ticket resolved; no deployed or human verification is inferred.
