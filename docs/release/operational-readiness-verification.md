@@ -1,5 +1,7 @@
 # Ticket 05: Operational release readiness
 
+Current evidence index: [recorded readiness](readiness-status.md), reconciled 2026-11-11. The observations below are dated historical records, not current deployment probes. October 15 local demonstration evidence supersedes the October 13 Java/emulator blockers, while deployed, human and operational release gates remain unresolved.
+
 Status: NO-GO / incomplete. Checked 2026-10-12, approximately 21:14 Asia/Manila. This records read-only observations, not release approval or a completed deployment review.
 
 ## Target and provenance
@@ -39,3 +41,7 @@ Ticket 05 remains unresolved. Historical [release evidence](pilot-release-eviden
 The preceding observations are historical, not a claim about the current deployment. After explicit owner authorization, main was pushed successfully to GitHub at 9a25f19 and the remote SHA was verified. A resulting Vercel deployment or current health was not established by that push. The owner supplied staging project ID ayos-southville-staging and reported configuring its web app, Email/Password Auth and Firestore; cloud isolation/settings are not independently verified.
 
 The owner declined paid Storage/billing and explicitly chose local emulator verification without removing photo-evidence features or replacing providers. A synthetic demo-project Auth/Firestore/Storage setup is provided in [local emulator instructions](../pilot/local-emulators.md). It does not use either real Firebase project and it is not a substitute for Ticket 05's deployed, human, monitoring or recovery evidence. Java 21 is absent on the checked workstation, so live emulator startup and the connected local workflow remain pending. Local configuration is not readiness approval. Review baseline 9a25f19 and connection/startup test boundaries were explicitly approved.
+
+## Subsequent evidence reconciliation — 2026-11-11
+
+The 2026-10-15 [local demonstration verification](demo-verification.md) records Java 21 installed, emulator startup and synthetic seeding passing, and the connected local workflow passing. That dated evidence supersedes the preceding local Java/startup blockers; those paragraphs remain unchanged as history. It does not establish current deployed health or satisfy human, administrator, monitoring, recovery or release-approval gates. See [recorded readiness](readiness-status.md) for the remaining evidence categories. No new external probe or local browser/emulator run was performed for this reconciliation.

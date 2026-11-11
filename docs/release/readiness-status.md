@@ -1,0 +1,23 @@
+# Current recorded readiness
+
+Reviewed 2026-11-11 (Asia/Manila). This summary reconciles repository evidence; it does not report a new deployment, emulator/browser run, human session or release decision.
+
+The controlled pilot remains **not approved for recruitment**. Local implementation and automated verification are recorded, while deployed, human and operational release gates remain unresolved.
+
+| Evidence category | Latest recorded result | Limits and next work |
+| --- | --- | --- |
+| Local automated checks | The 2026-11-11 [architecture survey baseline](../../.scratch/architecture-health/spec.md) records 63 files / 258 tests passing, TypeScript passing and lint with zero errors and 94 bundled-tooling warnings. | This is a survey baseline, not evidence that later implementation passes. React act and jsdom canvas warnings were observed. |
+| Connected local demonstration | The 2026-10-15 [local demonstration verification](demo-verification.md) records Java 21, Auth/Firestore/Storage startup, synthetic seeding, ten synthetic browser suites and the persisted resident-to-operator-to-resident journey passing. | These are synthetic test scenarios on local emulators. They do not demonstrate real consent, real repairs, administrator acceptance, cloud configuration or production email delivery. No new run is claimed here. |
+| Local startup prerequisites | The integration agent reran `npm run local:check` on 2026-11-11: Java 21 and Firebase CLI availability passed; the reported project was synthetic `demo-ayos-southville-local`, with loopback targets, email delivery disabled and destructive cleanup disabled. | The prerequisite check does not verify running emulators, browser behavior or a connected journey. It does not replace the dated October 15 evidence or prove cloud readiness. |
+| Human usability and accessibility | [Own-phone usability work](../pilot/demo-usability.md) remains pending in the latest recorded local demonstration evidence. | The reviewed Android/iPhone access method and actual sessions remain outstanding. Browser emulation and automated accessibility checks do not replace human device, screen-reader, zoom, contrast or slow-network evidence. |
+| Deployed integrations and source provenance | [Operational readiness evidence](operational-readiness-verification.md) contains dated October observations and a subsequent authorized push. | Those observations are historical. Current deployed health, exact source SHA, staging isolation, private Storage/provider configuration and the deployed journey have not been established by this reconciliation. Recheck the intended environment rather than treating old HTTP results as current. |
+| Operational recovery and accountable approval | [Release evidence](pilot-release-evidence.md) and [operational release Ticket 05](../../.scratch/ayos-southville-pilot-operations/issues/05-verify-operational-release.md) retain outstanding gates. | Both intended administrators must demonstrate access/responsibility. Required alert delivery, safely authorized cleanup, isolated managed restore with erasure replay, rollback, representative deployed performance and explicit human go/no-go evidence remain necessary. |
+| Actual controlled-pilot outcomes | [Trial Ticket 06](../../.scratch/ayos-southville-pilot-operations/issues/06-run-and-evaluate-pilot.md) remains dependent on release approval. | No actual participant findings, four-week observations, adoption or repair outcomes are established by local test scenarios. |
+
+## How to read older records
+
+The October 13 Java-missing and emulator-not-yet-verified statements were accurate observations at that time. The October 15 local demonstration record supersedes them for local verification. Keep the older text as provenance; do not reopen those historical setup blockers merely because they appear in an older ticket comment.
+
+The [production-completion release/evaluation ticket](../../.scratch/ayos-southville-production-completion/issues/07-verify-and-release.md) and operational release Ticket 05 remain unresolved. This summary changes no historical acceptance checkbox or parent status. It does not authorize deployment, provider changes, invitations, real participant enrollment, cleanup or restore.
+
+When adding evidence, record its date, environment, source commit when known, command or human method, result, limitations and linked artifact. Update this summary with the new evidence and append corrections to historical ticket comments rather than deleting history. A successful local check does not advance a deployed or human gate automatically.

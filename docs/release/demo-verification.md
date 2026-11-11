@@ -1,4 +1,6 @@
-is# Local demonstration verification
+# Local demonstration verification
+
+See [current recorded readiness](readiness-status.md) for the distinction between this dated local evidence and the unresolved release gates. The results below remain the 2026-10-15 record; this reconciliation does not claim a new browser/emulator run.
 
 Date: 2026-10-15 (Asia/Manila). Automated local checks passed. Human own-phone usability remains pending. This is not deployed release approval.
 

@@ -30,3 +30,7 @@
 
 Use behavior tests at existing application boundaries and browser tests for the delivered journey. Record relevant production checks without exposing credentials or private records. On completion, append an Answer with evidence and update the map. Human or external prerequisites remain explicit gates.
 
+## Comments
+
+2026-11-11: [Current recorded readiness](../../../docs/release/readiness-status.md) reconciles the October 15 local demonstration and November 11 survey baseline with historical release observations. Local emulator evidence supersedes the October 13 Java/startup blockers, but does not satisfy this ticket's deployed, human, operational or actual participant findings. No acceptance checkbox or status is changed and no recruitment approval is recorded.
+
