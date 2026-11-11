@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:persistence": "vitest run --config vitest.persistence.config.ts",
+    "verify:server-runtime": "node scripts/verify-server-runtime.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "verify:administration": "node scripts/verify-administration-browser.mjs",
     "verify:intake": "node scripts/verify-intake-browser.mjs",
@@ -53,6 +54,11 @@
     "vitest": "^5.0.3"
   },
   "overrides": {
-    "@grpc/grpc-js": "1.14.6"
+    "@grpc/grpc-js": "1.14.6",
+    "firebase-admin": {
+      "jwks-rsa": {
+        "jose": "5.10.0"
+      }
+    }
   }
 }
