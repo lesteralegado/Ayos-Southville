@@ -302,9 +302,9 @@ export function useReportSubmission({ residentUid, categories, operatingStatus, 
         if (result.code === "INTAKE_PAUSED") {
           setAvailability({ intakePaused: true, explanation: { en: "", fil: "" }, resumesAt: "" });
           setAvailabilityConfirmed(false);
-          setPhase("refused");
           setSubmitError("");
           await refreshAvailability();
+          setPhase("refused");
           return;
         }
         if (response.status === 422) {

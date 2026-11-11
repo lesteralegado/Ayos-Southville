@@ -94,4 +94,28 @@ describe("resident submission workflow", () => {
     await act(async () => result.current.submit());
     expect(result.current.reference).toBe("AS-NOSTORAGE");
   });
+
+  it("keeps an in-flight pause pending until availability is confirmed without clearing the draft", async () => {
+    localStorage.setItem("ayos-report-draft-v1:r1", JSON.stringify(validDraft));
+    let confirmAvailability!: (response: Response) => void;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.startsWith("/api/reports/receipt")) return Response.json({}, { status: 404 });
+      if (url === "/api/pilot-status") return new Promise<Response>(resolve => { confirmAvailability = resolve; });
+      return Response.json({ code: "INTAKE_PAUSED" }, { status: 409 });
+    }));
+    const { result } = renderHook(() => useReportSubmission({ residentUid: "r1", categories: [{ id: "streetlights" }], locale: "en" }));
+    act(() => result.current.resumeDraft());
+    let submission!: Promise<void>;
+    act(() => { submission = result.current.submit(); });
+    await waitFor(() => expect(result.current.checkingAvailability).toBe(true));
+    expect(result.current.phase).toBe("pending");
+    await act(async () => {
+      confirmAvailability(Response.json({ intakePaused: true, explanation: { en: "Review coverage is unavailable.", fil: "Walang coverage sa pagsusuri." }, resumesAt: "" }));
+      await submission;
+    });
+    expect(result.current.phase).toBe("refused");
+    expect(result.current.availability?.explanation.en).toBe("Review coverage is unavailable.");
+    expect(JSON.parse(localStorage.getItem("ayos-report-draft-v1:r1")!).idempotencyKey).toBe(validDraft.idempotencyKey);
+    expect(result.current.reference).toBeUndefined();
+  });
 });
