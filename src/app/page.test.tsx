@@ -45,12 +45,14 @@ describe("public pilot directory", () => {
   it("switches to Filipino and restores the preference on a return visit", async () => {
     const user = userEvent.setup();
     const firstVisit = render(<HomePage />);
+    await screen.findByRole("heading", { name: "Approved streetlight concern" });
 
     await user.click(screen.getByRole("button", { name: /filipino/i }));
     expect(screen.getByRole("link", { name: /mga ulat sa komunidad/i })).toBeInTheDocument();
 
     firstVisit.unmount();
     render(<HomePage />);
+    await screen.findByRole("heading", { name: "Approved streetlight concern" });
 
     expect(screen.getByRole("link", { name: /mga ulat sa komunidad/i })).toBeInTheDocument();
     expect(document.documentElement).toHaveAttribute("lang", "fil");
