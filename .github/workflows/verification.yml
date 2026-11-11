@@ -28,6 +28,8 @@ jobs:
           cache: npm
       - name: Install locked dependencies
         run: npm ci
+      - name: Hosted server runtime compatibility
+        run: npm run verify:server-runtime
       - name: Tests
         run: npm test
       - name: Type checking
