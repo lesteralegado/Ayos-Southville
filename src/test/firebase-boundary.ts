@@ -1,7 +1,10 @@
 import type { Firestore } from "firebase-admin/firestore";
 // External Firebase test double: transaction writes are atomic and serialized,
 // and the SDK's read-before-write contract is enforced.
-export function firebaseBoundary(records: Map<string, Record<string, unknown>>) {
+export function firebaseBoundary(records: Map<string, Record<string, unknown>>, hooks: {
+  beforeRead?: (path: string) => void;
+  beforeCommit?: () => void;
+} = {}) {
   let sequence = 0, tail: Promise<unknown> = Promise.resolve();
   const versions = new Map<string, number>();
   const snapshot = (path: string) => ({ id: path.split("/").at(-1)!, exists: records.has(path), ref: document(path), data: () => structuredClone(records.get(path)),
@@ -10,7 +13,7 @@ export function firebaseBoundary(records: Map<string, Record<string, unknown>>) 
     records.set(path, structuredClone({ ...(merge ? records.get(path) : {}), ...data })); versions.set(path, ++sequence);
   };
   const document = (path: string) => ({ path, id: path.split("/").at(-1)!, parent: { id: path.split("/")[0] },
-    get: async () => snapshot(path), set: async (data: Record<string, unknown>, options?: { merge?: boolean }) => write(path, data, options?.merge),
+    get: async () => { hooks.beforeRead?.(path); return snapshot(path); }, set: async (data: Record<string, unknown>, options?: { merge?: boolean }) => write(path, data, options?.merge),
     create: async (data: Record<string, unknown>) => { if (records.has(path)) throw new Error("Already exists"); write(path, data); },
     update: async (data: Record<string, unknown>) => { const next = { ...records.get(path), ...data }; for (const [key, value] of Object.entries(data)) if (value && typeof value === "object" && value.constructor.name === "DeleteTransform") delete next[key]; write(path, next); },
     delete: async () => { records.delete(path); versions.set(path, ++sequence); },
@@ -40,7 +43,17 @@ export function firebaseBoundary(records: Map<string, Record<string, unknown>>) 
           create: (ref: ReturnType<typeof document>, data: Record<string, unknown>) => { writing = true; writes.push(() => ref.create(data)); },
           delete: (ref: ReturnType<typeof document>) => { writing = true; writes.push(() => ref.delete()); },
         });
-        for (const write of writes) await write(); return result;
+        hooks.beforeCommit?.();
+        const originalRecords = structuredClone(records), originalVersions = new Map(versions), originalSequence = sequence;
+        try {
+          for (const write of writes) await write();
+        } catch (error) {
+          records.clear(); for (const [path, data] of originalRecords) records.set(path, data);
+          versions.clear(); for (const [path, version] of originalVersions) versions.set(path, version);
+          sequence = originalSequence;
+          throw error;
+        }
+        return result;
       }); tail = run; return run;
     },
   };

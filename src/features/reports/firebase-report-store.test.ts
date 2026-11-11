@@ -18,57 +18,14 @@ vi.mock("firebase-admin/storage", () => ({
     }),
   }),
 }));
-vi.mock("@/lib/firebase/admin", () => {
-  const doc = (path: string) => ({ path, get: async () => {
+vi.mock("@/lib/firebase/admin", async () => {
+  const { firebaseBoundary } = await import("@/test/firebase-boundary");
+  const db = firebaseBoundary(fixtures.records, { beforeRead(path) {
     if (fixtures.pauseOnReceiptRead && path.startsWith("submissionReceipts/")) {
       fixtures.records.set("pilotOperations/current", { intakePaused: true });
       fixtures.pauseOnReceiptRead = false;
     }
-    return snapshot(path);
   } });
-  const snapshot = (path: string) => ({
-    exists: fixtures.records.has(path),
-    ref: doc(path),
-    data: () => fixtures.records.get(path),
-  });
-  const db = {
-    collection: (collection: string) => ({
-      doc: (id: string) => doc(`${collection}/${id}`),
-      where: (field: string, _: string, value: string) => ({
-        get: async () => ({
-          docs: [...fixtures.records]
-            .filter(
-              ([key, data]) =>
-                key.startsWith(`${collection}/`) && data[field] === value,
-            )
-            .map(([key]) => snapshot(key)),
-        }),
-      }),
-    }),
-    runTransaction: async (
-      operation: (transaction: unknown) => Promise<unknown>,
-    ) => {
-      const writes: (() => void)[] = [];
-      const result = await operation({
-        get: async (ref: { path: string }) => snapshot(ref.path),
-        getAll: async (...refs: { path: string }[]) =>
-          refs.map((ref) => snapshot(ref.path)),
-        create: (ref: { path: string }, data: Record<string, unknown>) =>
-          writes.push(() => fixtures.records.set(ref.path, data)),
-        set: (ref: { path: string }, data: Record<string, unknown>) =>
-          writes.push(() => fixtures.records.set(ref.path, data)),
-        update: (ref: { path: string }, data: Record<string, unknown>) =>
-          writes.push(() =>
-            fixtures.records.set(ref.path, {
-              ...fixtures.records.get(ref.path),
-              ...data,
-            }),
-          ),
-      });
-      writes.forEach((write) => write());
-      return result;
-    },
-  };
   return { getFirebaseAdmin: () => ({ db, auth: { getUser: async (uid: string) => ({ uid, emailVerified: true, disabled: false }) } }) };
 });
 import { getReportModule } from "./firebase-report-store";

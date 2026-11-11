@@ -5,26 +5,11 @@ const fixture = vi.hoisted(() => ({ records: new Map<string, Record<string, unkn
 vi.mock("server-only", () => ({}));
 vi.mock("@/features/admin/firebase-administration-store", async () => ({ getPublicPilotConfiguration: async () => (await import("@/features/admin/administration-module")).defaultPilotConfiguration }));
 vi.mock("firebase-admin/storage", () => ({ getStorage: () => ({ bucket: () => ({ file: () => ({ exists: async () => [fixture.fileExists], download: async () => [Buffer.from([1, 2, 3])] }) }) }) }));
-vi.mock("@/lib/firebase/admin", () => {
-  const snapshot = (key: string) => ({ exists: fixture.records.has(key), ref: doc(key), data: () => structuredClone(fixture.records.get(key)) });
-  const doc = (key: string) => ({ key, get: async () => snapshot(key) });
-  const query = (collection: string, field?: string, value?: unknown) => ({ get: async () => ({ docs: [...fixture.records].filter(([key, data]) => key.startsWith(collection + "/") && (!field || data[field] === value)).map(([key]) => snapshot(key)) }) });
-  const db = {
-    collection: (name: string) => ({ ...query(name), doc: (id = crypto.randomUUID()) => doc(name + "/" + id), where: (field: string, _op: string, value: unknown) => query(name, field, value) }),
-    runTransaction: async (operation: (transaction: unknown) => Promise<unknown>) => {
-      const pending: (() => void)[] = [];
-      const value = await operation({
-        get: async (ref: { key?: string; get: () => Promise<unknown> }) => ref.key ? snapshot(ref.key) : ref.get(),
-        getAll: async (...refs: { key: string }[]) => refs.map(ref => snapshot(ref.key)),
-        set: (ref: { key: string }, data: Record<string, unknown>, options?: { merge: boolean }) => pending.push(() => fixture.records.set(ref.key, structuredClone({ ...(options?.merge ? fixture.records.get(ref.key) : {}), ...data }))),
-        update: (ref: { key: string }, data: Record<string, unknown>) => pending.push(() => fixture.records.set(ref.key, structuredClone({ ...fixture.records.get(ref.key), ...data }))),
-        create: (ref: { key: string }, data: Record<string, unknown>) => pending.push(() => { if (fixture.records.has(ref.key)) throw new Error("Immutable record exists"); fixture.records.set(ref.key, structuredClone(data)); }),
-        delete: (ref: { key: string }) => pending.push(() => fixture.records.delete(ref.key)),
-      });
-      if (fixture.failCommit) throw new Error("Database unavailable");
-      pending.forEach(write => write()); return value;
-    },
-  };
+vi.mock("@/lib/firebase/admin", async () => {
+  const { firebaseBoundary } = await import("@/test/firebase-boundary");
+  const db = firebaseBoundary(fixture.records, { beforeCommit() {
+    if (fixture.failCommit) throw new Error("Database unavailable");
+  } });
   return { getFirebaseAdmin: () => ({ db }) };
 });
 import { getModerationModule } from "./firebase-moderation-store";
