@@ -1,3 +1,5 @@
+import { memoryWindow, pageCursor, pagePosition, reportPageSize, type PagePosition, type ReportPage } from "./report-pages";
+
 export const reportCategories = [
   "roads-drainage",
   "streetlights",
@@ -93,6 +95,8 @@ export type ReportStore = {
     report: StoredReport,
   ): Promise<{ reference: string; created: boolean }>;
   listByResident(residentUid: string): Promise<ResidentReport[]>;
+  listResidentWindow(residentUid: string, after: PagePosition | null, limit: number): Promise<ResidentReport[]>;
+  getOwned(residentUid: string, reference: string): Promise<ResidentReport | null>;
   getPublic(reference: string): Promise<PublicReportDetail | null>;
 };
 
@@ -296,6 +300,13 @@ export function createReportModule({
       });
     },
     listMine: (residentUid: string) => store.listByResident(residentUid),
+    async listMinePage(residentUid: string, cursor?: string | null): Promise<ReportPage<ResidentReport>> {
+      const scope = `resident:${residentUid}`;
+      const rows = await store.listResidentWindow(residentUid, pagePosition(scope, cursor), reportPageSize + 1);
+      const reports = rows.slice(0, reportPageSize);
+      return { reports, nextCursor: rows.length > reportPageSize ? pageCursor(scope, reports.at(-1)!) : null };
+    },
+    getMine: (residentUid: string, reference: string) => store.getOwned(residentUid, reference),
     recover: (residentUid: string, key: string) =>
       store.getReceipt(`${residentUid}:${key}`),
     async getPublic(reference: string) {
@@ -322,9 +333,16 @@ export function createMemoryReportStore(): ReportStore {
       return { reference: report.private.reference, created: true };
     },
     async listByResident(residentUid) {
-      return [...reports.values()]
+      return memoryWindow([...reports.values()]
         .map((report) => report.private)
-        .filter((report) => report.reporterUid === residentUid);
+        .filter((report) => report.reporterUid === residentUid), null, reportPageSize);
+    },
+    async listResidentWindow(residentUid, after, limit) {
+      return memoryWindow([...reports.values()].map(report => report.private).filter(report => report.reporterUid === residentUid), after, limit);
+    },
+    async getOwned(residentUid, reference) {
+      const report = reports.get(reference)?.private;
+      return report?.reporterUid === residentUid ? report : null;
     },
     async getPublic(reference) {
       return reports.get(reference)?.public ?? null;

@@ -1,4 +1,6 @@
 import "server-only";
+import { boundedReportQuery } from "./firebase-report-pages";
+import { filterStatuses, reportPageSize } from "./report-pages";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
 import { pilotOperations } from "@/features/admin/pilot-operations";
 import { reviewDeadline } from "./review-calendar";
@@ -329,10 +331,23 @@ function createFirebaseModerationStore(): ModerationStore {
     },
     async listReports() {
       if (await pilotRecordsExpired()) return [];
-      const snapshot = await db.collection("privateReports").get();
+      const snapshot = await boundedReportQuery(db.collection("privateReports"), null, reportPageSize).get();
       return Promise.all(
         snapshot.docs.map((item) => hydrate(item.data() as ResidentReport)),
       );
+    },
+    async listWindow(filter, after, limit) {
+      if (await pilotRecordsExpired()) return [];
+      const statuses = filterStatuses(filter);
+      const query = statuses ? db.collection("privateReports").where("status", "in", statuses) : db.collection("privateReports");
+      const snapshot = await boundedReportQuery(query, after, limit).select("category", "status", "submittedAt", "reviewAcknowledgedAt").get();
+      if (!snapshot.docs.length) return [];
+      const moderation = await db.getAll(...snapshot.docs.map(doc => db.collection("moderationReports").doc(doc.id)), { fieldMask: ["revision", "reviewOwnerUid", "review.acknowledgedAt"] });
+      return snapshot.docs.map((doc, index) => {
+        const data = doc.data() as ResidentReport & { reviewAcknowledgedAt?: string };
+        const state = moderation[index].data();
+        return { reference: doc.id, category: data.category, status: data.status, submittedAt: data.submittedAt, revision: state?.revision ?? 0, ...(state?.reviewOwnerUid ? { reviewOwnerUid: state.reviewOwnerUid } : {}), ...((state?.review?.acknowledgedAt ?? data.reviewAcknowledgedAt) ? { reviewAcknowledgedAt: state?.review?.acknowledgedAt ?? data.reviewAcknowledgedAt } : {}) };
+      });
     },
     async getReport(reference) {
       if (await pilotRecordsExpired()) return null;

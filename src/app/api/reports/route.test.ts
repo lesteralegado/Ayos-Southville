@@ -4,12 +4,12 @@ const mocks = vi.hoisted(() => ({
   getVerifiedResident: vi.fn(),
   hasPilotAccess: vi.fn(),
   submit: vi.fn(),
-  listMine: vi.fn(),
+  listMinePage: vi.fn(),
 }));
 
 vi.mock("@/features/auth/session", () => ({ getVerifiedResident: mocks.getVerifiedResident, hasPilotAccess: mocks.hasPilotAccess }));
 vi.mock("@/features/reports/firebase-report-store", () => ({
-  getReportModule: () => ({ submit: mocks.submit, listMine: mocks.listMine }),
+  getReportModule: () => ({ submit: mocks.submit, listMinePage: mocks.listMinePage }),
 }));
 
 import { GET, POST } from "./route";
@@ -64,12 +64,13 @@ describe("resident report application boundary", () => {
 
   it("lists only reports belonging to the authenticated resident", async () => {
     mocks.getVerifiedResident.mockResolvedValue({ uid: "resident-1" });
-    mocks.listMine.mockResolvedValue([{ reference: "AS-7K3M2Q", status: "Submitted" }]);
+    mocks.listMinePage.mockResolvedValue({ reports: [{ reference: "AS-7K3M2Q", status: "Submitted" }], nextCursor: "continuation" });
 
     const response = await GET();
 
     expect(response.status).toBe(200);
-    expect(mocks.listMine).toHaveBeenCalledWith("resident-1");
+    expect(await response.json()).toEqual({ reports: [{ reference: "AS-7K3M2Q", status: "Submitted" }], nextCursor: "continuation" });
+    expect(mocks.listMinePage).toHaveBeenCalledWith("resident-1", null);
   });
 
   it("returns field issues from the report module without creating a receipt", async () => {

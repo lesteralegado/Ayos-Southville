@@ -19,7 +19,8 @@ const operations={...defaultPilotOperations,primaryUid:"synthetic-primary",backu
 const module=createModerationModule({store:createMemoryModerationStore({reports:[seed]}),now:()=>new Date("2026-11-04T11:00:01Z"),operations:async()=>operations});
 window.__module=module;
 window.fetch=async(url,options={})=>{
- if(String(url)!=="/api/moderation")throw Error("Unexpected synthetic request");
+ const params=new URL(String(url),location.origin).searchParams;
+ if(new URL(String(url),location.origin).pathname!=="/api/moderation")throw Error("Unexpected synthetic request");
  if(options.method==="PATCH"){
    const {action,input}=JSON.parse(options.body);
    const method={"take-over-review":"takeOverReview","acknowledge-review":"acknowledgeReview","external-follow-up":"recordExternalFollowUp"}[action];
@@ -27,7 +28,7 @@ window.fetch=async(url,options={})=>{
    if(window.__loseAck)throw TypeError("Synthetic acknowledgement lost after commit");
    return Response.json({ok:true});
  }
- return Response.json({reports:await module.listWorkspace(actor)});
+ return Response.json(params.has("reference")?{report:await module.getPrivateReport(actor,params.get("reference"))}:await module.listWorkspacePage(actor,{filter:params.get("filter")??"all",cursor:params.get("cursor")}));
 };
 const query=new URLSearchParams(location.search),view=query.get("view");
 const reports=await module.listWorkspace(actor);

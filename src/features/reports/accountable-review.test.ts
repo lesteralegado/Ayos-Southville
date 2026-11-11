@@ -3,6 +3,31 @@ import { defaultPilotOperations } from "@/features/admin/pilot-operations";
 const actor = { uid: "primary", roles: ["Administrator"] as const };
 const report: ModerationReport = { reference: "AS-REVIEW", reporterUid: "resident", category: "streetlights", description: "Private concern", nearbyLandmark: "Private landmark", evidence: [], status: "Submitted", submittedAt: "2026-10-30T15:59:00Z", public: { summary: "Safe summary", area: "Court", media: [] }, followers: [], affectedResidents: [], supportingEvidence: [], history: [] };
 const operations = { ...defaultPilotOperations, primaryUid: "primary", backupUid: "backup", backupAffirmed: true, reviewCalendar: { from: "2026-10-01", through: "2026-12-31", holidays: ["2026-11-02"], source: "Synthetic owner-confirmed fixture", ownerConfirmed: true } };
+it.each([
+  ["eligible-backup", true],
+  ["wrong-backup", false],
+  ["unaffirmed", false],
+  ["already-owner", false],
+  ["acknowledged", false],
+  ["not-overdue", false],
+  ["unconfirmed-calendar", false],
+  ["closed-report", false],
+] as const)("shows consistent takeover eligibility for %s in the workspace and private detail", async (scenario, available) => {
+  const seed: ModerationReport = {
+    ...report,
+    ...(scenario === "already-owner" ? { reviewOwnerUid: "backup" } : {}),
+    ...(scenario === "acknowledged" ? { review: { acknowledgedAt: "2026-11-03T11:00:00Z", nextStep: "Review evidence", actorUid: "primary" } } : {}),
+    ...(scenario === "closed-report" ? { status: "Resolved" } : {}),
+  };
+  const moderation = createModerationModule({
+    store: createMemoryModerationStore({ reports: [seed] }),
+    now: () => new Date(scenario === "not-overdue" ? "2026-11-04T11:00:00Z" : "2026-11-04T11:00:01Z"),
+    operations: async () => ({ ...operations, backupAffirmed: scenario !== "unaffirmed", reviewCalendar: { ...operations.reviewCalendar, ownerConfirmed: scenario !== "unconfirmed-calendar" } }),
+  });
+  const operator = { uid: scenario === "wrong-backup" ? "someone-else" : "backup", roles: ["Coordinator"] as const };
+  expect((await moderation.listWorkspace(operator))[0]).toMatchObject({ reviewTakeoverAvailable: available });
+  expect(await moderation.getPrivateReport(operator, report.reference)).toMatchObject({ reviewTakeoverAvailable: available });
+});
 it.each(["wrong-backup", "unaffirmed", "early", "stale", "unsafe-update"])("refuses %s takeover without a delay notification or history mutation", async scenario => {
   const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [report] }), now: () => new Date(scenario === "early" ? "2026-11-04T11:00:00Z" : "2026-11-04T11:00:01Z"), operations: async () => ({ ...operations, backupAffirmed: scenario !== "unaffirmed" }) });
   await expect(moderation.takeOverReview({ uid: scenario === "wrong-backup" ? "someone-else" : "backup", roles: ["Coordinator"] }, { reference: report.reference, expectedRevision: 0, expectedOperatingRevision: scenario === "stale" ? 99 : 0, operationId: "refused", privacyReviewed: true, update: { en: scenario === "unsafe-update" ? "Contact alice@example.test" : "Review delayed; no repair date promised.", fil: "Naantala ang review; wala pang petsa ng pagkukumpuni." } })).rejects.toBeInstanceOf(Error);

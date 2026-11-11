@@ -7,7 +7,7 @@ import { EvidencePicker } from "./evidence-picker";
 import { OperatorReviewPanel } from "./operator-review-panel";
 import { reviewCopy } from "./review-copy";
 import type { EvidenceAsset } from "./report-module";
-import type { ModerationReport, Operator } from "./moderation-module";
+import type { ModerationReport, Operator, QueueReport } from "./moderation-module";
 import {
   formatManilaDate,
   reportStatusLabels,
@@ -16,45 +16,56 @@ import {
 
 type Destination = { id: string; name: string };
 type Props = {
-  initialReports: ModerationReport[];
+  initialReports: (QueueReport | ModerationReport)[];
+  initialNextCursor?: string | null;
+  initialSelectedReport?: ModerationReport | null;
   actor: Operator;
   destinations: Destination[];
 };
 export function OperatorWorkspace({
   initialReports,
+  initialNextCursor = null,
+  initialSelectedReport,
   actor,
   destinations,
 }: Props) {
   const { locale, chooseLocale } = useLocale();
   const t = (en: string, fil: string) => (locale === "fil" ? fil : en);
-  const [reports, setReports] = useState(initialReports);
+  const [reports, setReports] = useState<QueueReport[]>(initialReports);
   const [selected, setSelected] = useState(initialReports.find((report) => ["Submitted", "Under review", "Assigned", "In progress"].includes(report.status))?.reference ?? initialReports[0]?.reference ?? "");
   const [filter, setFilter] = useState("active");
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState(initialNextCursor);
+  const [chosen, setChosen] = useState<ModerationReport | null>(initialSelectedReport ?? (initialReports[0] && "history" in initialReports[0] ? initialReports[0] : null));
   const [pending, setPending] = useState(false);
   const [unconfirmed, setUnconfirmed] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const busy = useRef(false);
   const detailHeading = useRef<HTMLHeadingElement>(null);
-  const chosen = reports.find((report) => report.reference === selected);
-  const shown = reports.filter(
-    (report) =>
-      filter === "all" ||
-      (filter === "overdue" && report.reviewExpectation?.overdue) ||
-      (filter === "active"
-        ? ["Submitted", "Under review", "Assigned", "In progress"].includes(
-            report.status,
-          )
-        : report.status === filter),
-  );
-  async function reload() {
+  const shown = reports;
+  async function readDetail(reference: string) {
+    const response = await fetch(`/api/moderation?reference=${encodeURIComponent(reference)}`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
+    if (!response.ok) throw new Error(t("Could not load this report. Reload and retry.", "Hindi ma-load ang ulat. I-reload at subukang muli."));
+    return (await response.json()).report as ModerationReport;
+  }
+  async function selectReport(reference: string) {
+    if (busy.current) return;
+    busy.current = true; setPending(true); setError("");
+    try { setChosen(await readDetail(reference)); setSelected(reference); setNotice(""); }
+    catch { setError(t("Could not load this report. Reload and retry.", "Hindi ma-load ang ulat. I-reload at subukang muli.")); }
+    finally { busy.current = false; setPending(false); }
+  }
+  async function reload(pageCursor = cursor, requestedFilter = filter) {
     if (busy.current) return;
     busy.current = true;
     setPending(true);
     setError("");
     setNotice("");
     try {
-      const response = await fetch("/api/moderation", {
+      const params = new URLSearchParams({ filter: requestedFilter });
+      if (pageCursor) params.set("cursor", pageCursor);
+      const response = await fetch(`/api/moderation?${params}`, {
         cache: "no-store",
         signal: AbortSignal.timeout(30000),
       });
@@ -66,7 +77,11 @@ export function OperatorWorkspace({
           ),
         );
       const next = await response.json();
+      const reference = requestedFilter === filter && pageCursor === cursor ? selected : next.reports[0]?.reference;
+      const detail = reference ? await readDetail(reference) : null;
       setReports(next.reports);
+      setNextCursor(next.nextCursor); setCursor(pageCursor); setFilter(requestedFilter);
+      setChosen(detail); setSelected(reference ?? "");
       setUnconfirmed(false);
       setNotice(
         t(
@@ -114,7 +129,9 @@ export function OperatorWorkspace({
         );
       }
       // A separate refresh can fail after a successful mutation. Never invite blind retry.
-      const current = await fetch("/api/moderation", {
+      const params = new URLSearchParams({ filter });
+      if (cursor) params.set("cursor", cursor);
+      const current = await fetch(`/api/moderation?${params}`, {
         cache: "no-store",
         signal: AbortSignal.timeout(30000),
       });
@@ -125,7 +142,9 @@ export function OperatorWorkspace({
             "Nai-save ang pagbabago, ngunit hindi ma-refresh. I-reload bago gumawa ng ibang aksyon.",
           ),
         );
-      setReports((await current.json()).reports);
+      const page = await current.json();
+      const detail = await readDetail(selected);
+      setReports(page.reports); setNextCursor(page.nextCursor); setChosen(detail);
       setUnconfirmed(false);
       setNotice(
         t(
@@ -185,7 +204,8 @@ export function OperatorWorkspace({
             <select
               aria-label={t("Report status", "Estado ng ulat")}
               value={filter}
-              onChange={(event) => setFilter(event.target.value)}
+              disabled={pending || unconfirmed}
+              onChange={(event) => void reload(null, event.target.value)}
             >
               <option value="active">
                 {t("Actionable reports", "Mga ulat na kailangan ng aksyon")}
@@ -228,8 +248,8 @@ export function OperatorWorkspace({
             {shown.length === 0 ? (
               <p>
                 {t(
-                  "No matching reports. Choose another status or reload to check for new submissions.",
-                  "Walang tugmang ulat. Pumili ng ibang estado o i-reload para sa bagong ulat.",
+                  nextCursor ? "No matches in this group. Continue checking older reports." : "No matching reports. Choose another status or reload to check for new submissions.",
+                  nextCursor ? "Walang tugma sa pangkat na ito. Ipagpatuloy ang pagsusuri ng mas lumang ulat." : "Walang tugmang ulat. Pumili ng ibang estado o i-reload para sa bagong ulat.",
                 )}
               </p>
             ) : (
@@ -237,15 +257,11 @@ export function OperatorWorkspace({
                 <button
                   type="button"
                   key={report.reference}
-                  disabled={pending}
+                  disabled={pending || unconfirmed}
                   aria-current={
                     selected === report.reference ? "true" : undefined
                   }
-                  onClick={() => {
-                    setSelected(report.reference);
-                    setError("");
-                    setNotice("");
-                  }}
+                  onClick={() => void selectReport(report.reference)}
                 >
                   <strong>{report.reference}</strong>
                   <span>{reportStatusLabels[locale][report.status]}</span>
@@ -260,6 +276,8 @@ export function OperatorWorkspace({
                 </button>
               ))
             )}
+            {nextCursor && <button className="button button-quiet" type="button" disabled={pending || unconfirmed} onClick={() => void reload(nextCursor)}>{filter === "overdue" ? t("Continue checking older reports", "Ipagpatuloy ang mas lumang ulat") : t("Next reports", "Susunod na mga ulat")}</button>}
+            {cursor && <button className="button button-quiet" type="button" disabled={pending || unconfirmed} onClick={() => void reload(null)}>{t("Start of list", "Simula ng listahan")}</button>}
           </nav>
           {chosen ? (
             <section
@@ -273,7 +291,6 @@ export function OperatorWorkspace({
               <OperatorReport
                 key={chosen.reference + ":" + (chosen.revision ?? 0)}
                 report={chosen}
-                reports={reports}
                 actor={actor}
                 destinations={destinations}
                 locale={locale}
@@ -295,9 +312,33 @@ export function OperatorWorkspace({
   );
 }
 
+function CanonicalReportLookup({ currentReference, locale, onChoose }: { currentReference: string; locale: "en" | "fil"; onChoose: (report: ModerationReport | null) => void }) {
+  const [reference, setReference] = useState("");
+  const [pending, setPending] = useState(false);
+  const [result, setResult] = useState("");
+  const t = (en: string, fil: string) => locale === "fil" ? fil : en;
+  async function lookup() {
+    if (pending) return;
+    setPending(true); setResult(""); onChoose(null);
+    try {
+      const response = await fetch(`/api/moderation?reference=${encodeURIComponent(reference.trim().toUpperCase())}`, { cache: "no-store", signal: AbortSignal.timeout(30000) });
+      if (!response.ok) throw new Error();
+      const report = (await response.json()).report as ModerationReport;
+      if (report.reference === currentReference || !report.approved || !["Under review", "Assigned", "In progress"].includes(report.status)) throw new Error();
+      onChoose(report); setResult(`${report.reference}: ${report.public.summary}`);
+    } catch { setResult(t("No approved active report found. Check the reference and retry.", "Walang aprubadong aktibong ulat. Suriin ang sanggunian at subukang muli.")); }
+    finally { setPending(false); }
+  }
+  return <div>
+    <label>{t("Canonical report", "Pangunahing ulat")}<input name="canonical" required disabled={pending} value={reference} maxLength={80} onChange={event => { setReference(event.target.value); onChoose(null); setResult(""); }} aria-describedby="canonical-help" /></label>
+    <p id="canonical-help">{t("Enter an approved active report reference, including one from another page.", "Ilagay ang sanggunian ng aprubadong aktibong ulat, kahit mula sa ibang pahina.")}</p>
+    <button className="button button-quiet" type="button" disabled={pending || !reference.trim()} onClick={() => void lookup()}>{t("Find canonical report", "Hanapin ang pangunahing ulat")}</button>
+    <p role="status" aria-live="polite">{pending ? t("Checking report…", "Sinusuri ang ulat…") : result}</p>
+  </div>;
+}
+
 function OperatorReport({
   report,
-  reports,
   actor,
   destinations,
   locale,
@@ -305,7 +346,6 @@ function OperatorReport({
   mutate,
 }: {
   report: ModerationReport;
-  reports: ModerationReport[];
   actor: Operator;
   destinations: Destination[];
   locale: "en" | "fil";
@@ -322,11 +362,7 @@ function OperatorReport({
   const [decision, setDecision] = useState("accept");
   const [assets, setAssets] = useState<EvidenceAsset[]>([]);
   const [uploadBlocked, setUploadBlocked] = useState(true);
-  const candidates = reports.filter(
-    (item) =>
-      item.reference !== report.reference &&
-      ["Under review", "Assigned", "In progress"].includes(item.status),
-  );
+  const [canonical, setCanonical] = useState<ModerationReport | null>(null);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -361,9 +397,7 @@ function OperatorReport({
       } else if (decision === "reject")
         void mutate("reject", { ...base, category: text("category") });
       else {
-        const canonical = candidates.find(
-          (item) => item.reference === text("canonical"),
-        );
+        if (!canonical) return;
         void mutate("merge", {
           ...base,
           duplicateReference: report.reference,
@@ -596,22 +630,7 @@ function OperatorReport({
                   </label>
                 )}
                 {decision === "merge" && (
-                  <label>
-                    {t("Canonical report", "Pangunahing ulat")}
-                    <select name="canonical" aria-label={t("Canonical report", "Pangunahing ulat")} required defaultValue="">
-                      <option value="">
-                        {t(
-                          "Choose an approved active report",
-                          "Pumili ng aprubadong aktibong ulat",
-                        )}
-                      </option>
-                      {candidates.map((item) => (
-                        <option key={item.reference} value={item.reference}>
-                          {item.reference} · {item.public.summary}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <CanonicalReportLookup currentReference={report.reference} locale={locale} onChoose={setCanonical} />
                 )}
               </>
             )}
@@ -701,6 +720,7 @@ function OperatorReport({
               type="submit"
               disabled={
                 pending ||
+                (report.status === "Submitted" && decision === "merge" && !canonical) ||
                 (report.status === "In progress" &&
                   (uploadBlocked || !assets.length))
               }

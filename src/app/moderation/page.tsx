@@ -12,7 +12,7 @@ export default async function ModerationPage() {
   let reports;
   let configuration;
   try {
-    reports = await getModerationModule().listWorkspace(actor);
+    reports = await getModerationModule().listWorkspacePage(actor, { filter: "active" });
     configuration = await getPublicPilotConfiguration();
   } catch (error) {
     if (error instanceof ModerationForbiddenError) redirect("/account");
@@ -20,7 +20,9 @@ export default async function ModerationPage() {
   }
   return (
     <OperatorWorkspace
-      initialReports={reports}
+      initialReports={reports.reports}
+      initialNextCursor={reports.nextCursor}
+      initialSelectedReport={reports.reports[0] ? await getModerationModule().getPrivateReport(actor, reports.reports[0].reference) : null}
       actor={actor}
       destinations={configuration.destinations.filter((item) => item.active)}
     />

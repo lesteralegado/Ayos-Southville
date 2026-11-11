@@ -66,7 +66,7 @@ try {
       await page.setViewportSize({ width,height }); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), surface + device + " overflow");
       await page.screenshot({ path: path.join(artifacts, `communication-${surface}-${device}.png`), fullPage: true });
       await page.addScriptTag({ path: path.join(root,"node_modules/axe-core/axe.min.js") });
-      const violations = await page.evaluate(async () => (await window.axe.run(document,{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa","wcag22aa"]}})).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.failureSummary)})));
+      const violations = await page.evaluate(async () => (await window.axe.run(document,{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21a","wcag21aa","wcag22aa"]}})).violations.map(v=>({id:v.id,nodes:v.nodes.map(n=>n.failureSummary)})));
       assert.deepEqual(violations,[],surface + device + " accessibility");
     }
   }

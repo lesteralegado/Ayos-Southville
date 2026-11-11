@@ -14,14 +14,14 @@ export default async function ReportPage({ params }: { params: Promise<{ referen
     const canonical = await getPublicCanonicalReference(reference.toUpperCase());
     if (canonical) redirect("/reports/" + canonical);
     const resident = await getVerifiedResident();
-    const owned = resident ? (await (await getReportModule()).listMine(resident.uid)).find((item) => item.reference === reference.toUpperCase()) : undefined;
+    const owned = resident ? await (await getReportModule()).getMine(resident.uid, reference.toUpperCase()) : null;
     if (!owned) notFound();
     if (owned.status === "Duplicate" && owned.canonicalReference) redirect("/reports/" + owned.canonicalReference);
     return <ReportDetail privateReceipt report={residentReportDetail(owned)} />;
   }
   const demonstration = discoveryMode() === "demo";
   const resident = !demonstration && report.status === "Resolved" ? await getVerifiedResident() : null;
-  const canRespond = !!resident && await hasPilotAccess(resident) && (await (await getReportModule()).listMine(resident.uid)).some(owned => owned.reference === report.reference);
+  const canRespond = !!resident && await hasPilotAccess(resident) && !!(await (await getReportModule()).getMine(resident.uid, report.reference));
   const categoryLabel = (await getDiscoveryCategories()).find(category => category.id === report.category)?.label;
   return <ReportDetail report={report} canRespond={canRespond} categoryLabel={categoryLabel} demonstration={demonstration} />;
 }

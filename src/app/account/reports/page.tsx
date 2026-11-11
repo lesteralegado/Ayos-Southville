@@ -8,6 +8,6 @@ export const dynamic = "force-dynamic";
 export default async function MyReportsPage() {
   const resident = await getVerifiedResident();
   if (!resident) redirect("/sign-in?next=/account/reports");
-  const reports = await (await getReportModule()).listMine(resident.uid);
-  return <ResidentReportList reports={reports} />;
+  const page = await (await getReportModule()).listMinePage(resident.uid);
+  return <ResidentReportList reports={page.reports} nextCursor={page.nextCursor} />;
 }

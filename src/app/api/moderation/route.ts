@@ -1,5 +1,6 @@
 import { isSameOrigin } from "@/features/pilot/request-origin";
 import { NextResponse } from "next/server";
+import { ReportPageError } from "@/features/reports/report-pages";
 import { operationalMonitor } from "@/features/pilot/monitoring";
 import { readBoundedJson, protectionResponse } from "@/features/pilot/security-module";
 import { getVerifiedOperator, hasPilotEligibility, hasPilotAccess } from "@/features/auth/session";
@@ -16,7 +17,7 @@ const headers = { "Cache-Control": "private, no-store" };
 function sameOrigin(request: Request) {
   return isSameOrigin(request);
 }
-export async function GET() {
+export async function GET(request?: Request) {
   const actor = await getVerifiedOperator();
   if (!actor)
     return NextResponse.json(
@@ -26,10 +27,12 @@ export async function GET() {
   try {
     if (!(await hasPilotEligibility({ uid: actor.uid, email: actor.email, email_verified: true })))
       throw new ModerationForbiddenError();
-    return NextResponse.json(
-      { reports: await getModerationModule().listWorkspace(actor) },
-      { headers },
-    );
+    const params = new URL(request?.url ?? "https://local.invalid/api/moderation").searchParams;
+    const moderation = getModerationModule();
+    const reference = params.get("reference");
+    return NextResponse.json(reference
+      ? { report: await moderation.getPrivateReport(actor, reference) }
+      : await moderation.listWorkspacePage(actor, { filter: params.get("filter") ?? "all", cursor: params.get("cursor") }), { headers });
   } catch (error) {
     return failure(error);
   }
@@ -132,6 +135,7 @@ export async function PATCH(request: Request) {
   }
 }
 function failure(error: unknown) {
+  if (error instanceof ReportPageError) return NextResponse.json({ error: error.message, code: error.code }, { status: 422, headers });
   const protectedFailure = protectionResponse(error); if (protectedFailure) return protectedFailure;
   if (error instanceof ModerationConflictError)
     return NextResponse.json(

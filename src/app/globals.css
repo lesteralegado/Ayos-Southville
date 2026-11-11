@@ -261,6 +261,7 @@ h1 em { display: block; color: var(--green); font-weight: 450; }
 .timeline time { color: var(--muted); font-size: .75rem; }
 
 .reports-shell { padding: 64px max(20px, calc((100% - 1180px) / 2)) 100px; }
+.reports-page .button-quiet { display: inline-flex; color: var(--ink); }
 .reports-shell .section-heading h1 { margin: 6px 0 0; font-size: clamp(3rem, 7vw, 5.5rem); }
 .report-card-link { color: inherit; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
 .report-card-link:hover { transform: translateY(-3px); box-shadow: var(--shadow); }

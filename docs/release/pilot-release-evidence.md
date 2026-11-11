@@ -2,6 +2,8 @@
 
 This document is the release gate for Ayos Southville. Demo records are synthetic and must never be reported as participant findings.
 
+Start with [current recorded readiness](readiness-status.md) for dated local results and the remaining human, deployed and operational evidence. This release record remains incomplete; local verification is not accountable release approval.
+
 ## Deployment and complete journey
 
 1. Configure Firebase Auth, Firestore, authorized domains, and server credentials from `.env.example`.

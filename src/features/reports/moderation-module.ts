@@ -1,4 +1,5 @@
 import { defaultPilotOperations, type PilotOperations } from "@/features/admin/pilot-operations";
+import { filterStatuses, memoryWindow, pageCursor, pagePosition, queueFilter, reportPageSize, reportScanSize, type PagePosition, type QueueFilter, type ReportPage } from "./report-pages";
 import { reviewDeadline } from "./review-calendar";
 import type {
   EvidenceAsset,
@@ -92,11 +93,16 @@ export type ModerationCommit = {
 export type ModerationStore = {
   commit(change: ModerationCommit): Promise<void>;
   listReports(): Promise<ModerationReport[]>;
+  listWindow(filter: QueueFilter, after: PagePosition | null, limit: number): Promise<QueueReport[]>;
   getReport(reference: string): Promise<ModerationReport | null>;
   listNotifications(residentUid: string): Promise<ModerationNotification[]>;
   appendAudit(event: AuditEvent, id?: string): Promise<void>;
   listAudit(): Promise<AuditEvent[]>;
 };
+export type QueueReport = Pick<ModerationReport, "reference" | "category" | "status" | "submittedAt" | "revision" | "reviewOwnerUid" | "reviewExpectation"> & { reviewAcknowledgedAt?: string };
+export function queueReport(report: ModerationReport): QueueReport {
+  return { reference: report.reference, category: report.category, status: report.status, submittedAt: report.submittedAt, revision: report.revision ?? 0, ...(report.reviewOwnerUid ? { reviewOwnerUid: report.reviewOwnerUid } : {}), ...(report.review?.acknowledgedAt ? { reviewAcknowledgedAt: report.review.acknowledgedAt } : {}) };
+}
 export type EmailDelivery = {
   residentUid: string;
   reference: string;
@@ -204,6 +210,19 @@ export function createModerationModule({
     if (!found) throw new ModerationNotFoundError(reference);
     return found;
   }
+  function reviewState(report: QueueReport, operating: PilotOperations) {
+    const dueAt = reviewDeadline(report.submittedAt, operating.reviewCalendar);
+    const acknowledged = !!report.reviewAcknowledgedAt || ["Rejected", "Duplicate", "Resolved", "Resident confirmed"].includes(report.status);
+    return { dueAt, acknowledged, overdue: !acknowledged && !!dueAt && now().getTime() > Date.parse(dueAt), operatingRevision: operating.revision };
+  }
+  function withReviewExpectation(report: ModerationReport, actor: Operator, operating: PilotOperations) {
+    const reviewExpectation = reviewState(queueReport(report), operating);
+    return {
+      ...report,
+      reviewExpectation,
+      reviewTakeoverAvailable: reviewExpectation.overdue && operating.backupAffirmed && operating.backupUid === actor.uid && report.reviewOwnerUid !== actor.uid,
+    };
+  }
   async function finish(
     actor: Operator,
     reports: ModerationReport[],
@@ -300,12 +319,23 @@ export function createModerationModule({
     async listWorkspace(actor: Operator) {
       requireRole(actor, operatorRoles);
       const [reports, operating] = await Promise.all([store.listReports(), operations()]);
-      return reports.map(report => {
-        const dueAt = reviewDeadline(report.submittedAt, operating.reviewCalendar);
-        const acknowledged = !!report.review?.acknowledgedAt || ["Rejected", "Duplicate", "Resolved", "Resident confirmed"].includes(report.status);
-        const overdue = !acknowledged && !!dueAt && now().getTime() > Date.parse(dueAt);
-        return { ...report, reviewTakeoverAvailable: overdue && operating.backupAffirmed && operating.backupUid === actor.uid && report.reviewOwnerUid !== actor.uid, reviewExpectation: { dueAt, acknowledged, overdue, operatingRevision: operating.revision } };
-      });
+      return reports.map(report => withReviewExpectation(report, actor, operating));
+    },
+    async listWorkspacePage(actor: Operator, input: { filter?: string; cursor?: string | null } = {}): Promise<ReportPage<QueueReport>> {
+      requireRole(actor, operatorRoles);
+      const filter = queueFilter(input.filter), scope = `operator:${actor.uid}:${filter}`;
+      const after = pagePosition(scope, input.cursor);
+      const scanLimit = filter === "overdue" ? reportScanSize : reportPageSize;
+      const [rows, operating] = await Promise.all([store.listWindow(filter, after, scanLimit + 1), operations()]);
+      const reports: QueueReport[] = [];
+      let scanned = 0;
+      for (const row of rows.slice(0, scanLimit)) {
+        scanned++;
+        const report = { ...row, reviewExpectation: reviewState(row, operating) };
+        if (filter !== "overdue" || report.reviewExpectation.overdue) reports.push(report);
+        if (reports.length === reportPageSize) break;
+      }
+      return { reports, nextCursor: scanned && rows.length > scanned ? pageCursor(scope, rows[scanned - 1]) : null };
     },
     async listQueue(actor: Operator) {
       requireRole(actor, operatorRoles);
@@ -315,7 +345,8 @@ export function createModerationModule({
     },
     async getPrivateReport(actor: Operator, reference: string) {
       requireRole(actor, operatorRoles);
-      return findReport(reference);
+      const [report, operating] = await Promise.all([findReport(reference), operations()]);
+      return withReviewExpectation(report, actor, operating);
     },
     async getPublicReport(reference: string) {
       const report = await findReport(reference);
@@ -694,7 +725,11 @@ export function createMemoryModerationStore(
       audit.set(crypto.randomUUID(), structuredClone(change.audit));
     },
     async listReports() {
-      return [...reports.values()].map((report) => structuredClone(report));
+      return memoryWindow([...reports.values()].map(report => structuredClone(report)), null, reportPageSize);
+    },
+    async listWindow(filter, after, limit) {
+      const statuses = filterStatuses(filter);
+      return memoryWindow([...reports.values()].filter(report => !statuses || statuses.includes(report.status)).map(queueReport), after, limit);
     },
     async getReport(reference) {
       const report = reports.get(reference);
