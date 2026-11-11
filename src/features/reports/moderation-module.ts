@@ -215,6 +215,14 @@ export function createModerationModule({
     const acknowledged = !!report.reviewAcknowledgedAt || ["Rejected", "Duplicate", "Resolved", "Resident confirmed"].includes(report.status);
     return { dueAt, acknowledged, overdue: !acknowledged && !!dueAt && now().getTime() > Date.parse(dueAt), operatingRevision: operating.revision };
   }
+  function withReviewExpectation(report: ModerationReport, actor: Operator, operating: PilotOperations) {
+    const reviewExpectation = reviewState(queueReport(report), operating);
+    return {
+      ...report,
+      reviewExpectation,
+      reviewTakeoverAvailable: reviewExpectation.overdue && operating.backupAffirmed && operating.backupUid === actor.uid && report.reviewOwnerUid !== actor.uid,
+    };
+  }
   async function finish(
     actor: Operator,
     reports: ModerationReport[],
@@ -311,10 +319,7 @@ export function createModerationModule({
     async listWorkspace(actor: Operator) {
       requireRole(actor, operatorRoles);
       const [reports, operating] = await Promise.all([store.listReports(), operations()]);
-      return reports.map(report => {
-        const reviewExpectation = reviewState(queueReport(report), operating);
-        return { ...report, reviewTakeoverAvailable: reviewExpectation.overdue && operating.backupAffirmed && operating.backupUid === actor.uid && report.reviewOwnerUid !== actor.uid, reviewExpectation };
-      });
+      return reports.map(report => withReviewExpectation(report, actor, operating));
     },
     async listWorkspacePage(actor: Operator, input: { filter?: string; cursor?: string | null } = {}): Promise<ReportPage<QueueReport>> {
       requireRole(actor, operatorRoles);
@@ -341,8 +346,7 @@ export function createModerationModule({
     async getPrivateReport(actor: Operator, reference: string) {
       requireRole(actor, operatorRoles);
       const [report, operating] = await Promise.all([findReport(reference), operations()]);
-      const reviewExpectation = reviewState(queueReport(report), operating);
-      return { ...report, reviewExpectation, reviewTakeoverAvailable: reviewExpectation.overdue && operating.backupAffirmed && operating.backupUid === actor.uid && report.reviewOwnerUid !== actor.uid };
+      return withReviewExpectation(report, actor, operating);
     },
     async getPublicReport(reference: string) {
       const report = await findReport(reference);
