@@ -28,8 +28,10 @@ describe("report composer", () => {
     render(<ReportComposer emergencyGuidance={emergencyGuidance} />);
     const user = userEvent.setup();
     await user.selectOptions(screen.getByLabelText(/category/i), "streetlights");
-    await user.type(screen.getByLabelText(/describe/i), "The streetlight beside the court is broken.");
-    await user.type(screen.getByLabelText("Nearby landmark", { exact: true }), "Covered court");
+    await user.click(screen.getByLabelText(/describe/i));
+    await user.paste("The streetlight beside the court is broken.");
+    await user.click(screen.getByLabelText("Nearby landmark", { exact: true }));
+    await user.paste("Covered court");
     await user.click(screen.getByLabelText("I confirm this is not an emergency."));
     await user.click(screen.getByLabelText(/I understand that only/));
     const before = localStorage.getItem("ayos-report-draft-v1");
