@@ -4,12 +4,14 @@ import path from "node:path";
 import { chromium } from "@playwright/test";
 import { createServer, transformWithOxc } from "vite";
 
-const root = process.cwd(), artifacts = path.join(root, ".scratch/architecture-health/artifacts");
+const root = process.cwd(), artifacts = path.join(root, ".scratch/simplified-product-flow/artifacts");
 await mkdir(artifacts, { recursive: true });
 const fixture = `
 import React from 'react';import {createRoot} from 'react-dom/client';
 import {OperatorWorkspace} from '/src/features/reports/operator-workspace.tsx';
 import {ResidentReportList} from '/src/features/reports/resident-report-list.tsx';
+import {ProductNavigation} from '/src/features/navigation/product-navigation.tsx';
+import {createEngagementModule,createMemoryEngagementStore} from '/src/features/reports/engagement-module.ts';
 import {createModerationModule,createMemoryModerationStore} from '/src/features/reports/moderation-module.ts';
 import {createReportModule,createMemoryReportStore} from '/src/features/reports/report-module.ts';
 import {defaultPilotOperations} from '/src/features/admin/pilot-operations.ts';
@@ -19,7 +21,15 @@ const items=Array.from({length:121},(_,index)=>({reference:'AS-PAGE'+String(inde
 const moderation=createModerationModule({store:createMemoryModerationStore({reports:items}),now:()=>new Date('2026-11-06T00:00:00Z'),operations:async()=>({...defaultPilotOperations,reviewCalendar:{from:'2026-11-01',through:'2026-11-30',holidays:[],source:'Synthetic',ownerConfirmed:true}})});
 let index=0;const reports=createReportModule({store:createMemoryReportStore(),now:()=>new Date(date),nextReference:()=>items[index++].reference});
 for(const item of items)await reports.submit({residentUid:'resident',idempotencyKey:'synthetic-draft-'+item.reference,category:item.category,description:item.description+' streetlight reporting exercise',nearbyLandmark:item.nearbyLandmark,evidence:[],isEmergency:false,confirmNonEmergency:true,confirmPublicSummary:true});
+const engagement=createEngagementModule({store:createMemoryEngagementStore()});
+for(let index=0;index<25;index++)await engagement.recordReportEvent('resident',index===24?'AS-PAGE000120':'AS-UPDATE'+index,'Synthetic update '+index);
 window.fetch=async(input,options={})=>{if(window.__offline)throw TypeError('Synthetic offline');const url=new URL(String(input),location.origin),params=url.searchParams;
+ if(url.pathname==='/api/report-requests')return Response.json({requests:[],nextCursor:null});
+ if(url.pathname.endsWith('/request'))return Response.json({status:'complete'});
+ if(url.pathname==='/api/notifications'){
+  if(options.method==='PATCH'){const body=JSON.parse(options.body);if(body.notificationId)await engagement.markNotificationRead('resident',body.notificationId);else await engagement.setPreferences('resident',body.preferences);return Response.json({ok:true});}
+  if(params.has('summary'))return Response.json({unreadCount:await engagement.unreadCount('resident')});
+  return Response.json({...await engagement.listNotificationsPage('resident',params.get('cursor')),preferences:await engagement.getPreferences('resident'),unreadCount:await engagement.unreadCount('resident')});}
  if(url.pathname==='/api/reports')return Response.json(await reports.listMinePage('resident',params.get('cursor')));
  if(url.pathname!=='/api/moderation')throw Error('Unexpected fixture request');
  if(options.method==='PATCH'){const body=JSON.parse(options.body);if(body.action!=='merge')throw Error('Unexpected action');await moderation.merge(actor,body.input);return Response.json({ok:true});}
@@ -27,11 +37,11 @@ window.fetch=async(input,options={})=>{if(window.__offline)throw TypeError('Synt
 const resident=new URL(location.href).searchParams.has('resident');
 const page=resident?await reports.listMinePage('resident'):await moderation.listWorkspacePage(actor,{filter:'active'});
 const detail=!resident&&page.reports[0]?await moderation.getPrivateReport(actor,page.reports[0].reference):null;
-createRoot(document.getElementById('root')).render(resident?<ResidentReportList reports={page.reports} nextCursor={page.nextCursor}/>:<OperatorWorkspace initialReports={page.reports} initialNextCursor={page.nextCursor} initialSelectedReport={detail} actor={actor} destinations={[]}/>);
+createRoot(document.getElementById('root')).render(<><ProductNavigation roles={resident?['Resident']:actor.roles} signedIn/>{resident?<ResidentReportList reports={page.reports} nextCursor={page.nextCursor}/>:<OperatorWorkspace initialReports={page.reports} initialNextCursor={page.nextCursor} initialSelectedReport={detail} actor={actor} destinations={[]}/>}</>);
 `;
 const server = await createServer({ root, configFile: false, cacheDir: path.join(root, "node_modules/.vite/verify-report-pages"), server: { host: "127.0.0.1", port: 4194, strictPort: true, watch: { ignored: ["**/.scratch/**", "**/.next/**", "**/.next-local/**"] } }, resolve: { alias: { "@": path.join(root, "src") } }, define: { "process.env": "{}" }, oxc: { jsx: { runtime: "automatic" } }, optimizeDeps: { exclude: ["next/link"] }, plugins: [{ name: "report-pages-fixture", enforce: "pre",
-  resolveId(id) { if (["/__pages.jsx", "next/link"].includes(id)) return "\0" + id; },
-  async load(id) { if (id === "\0next/link") return "import React from 'react';export default function Link({children,...props}){return React.createElement('a',props,children)}"; if (id === "\0/__pages.jsx") return (await transformWithOxc(fixture, "fixture.tsx", { lang: "tsx", jsx: { runtime: "automatic" } })).code; },
+  resolveId(id) { if (["/__pages.jsx", "next/link", "next/navigation"].includes(id)) return "\0" + id; },
+  async load(id) { if (id === "\0next/navigation") return "export const usePathname = () => new URL(location.href).searchParams.has(\'resident\') ? \'/account/reports\' : \'/moderation\';"; if (id === "\0next/link") return "import React from 'react';export default function Link({children,...props}){return React.createElement('a',props,children)}"; if (id === "\0/__pages.jsx") return (await transformWithOxc(fixture, "fixture.tsx", { lang: "tsx", jsx: { runtime: "automatic" } })).code; },
   configureServer(vite) { vite.middlewares.use((req, res, next) => { if (req.url !== "/" && !req.url.startsWith("/?")) return next(); res.setHeader("Content-Type", "text/html"); res.end('<!doctype html><html lang="en"><head><title>Synthetic report page verification</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module" src="/@vite/client"></script><script type="module" src="/__pages.jsx"></script></body></html>'); }); },
 }] });
 let browser;
@@ -41,8 +51,10 @@ try {
   const errors = []; page.on("pageerror", error => errors.push(error.message));
   async function capture(name, width) {
     await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => window.scrollTo(0, 0));
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), name + " overflow");
     await page.screenshot({ path: path.join(artifacts, name + ".png"), fullPage: true });
+    await page.screenshot({ path: path.join(artifacts, name + "-viewport.png"), fullPage: false });
     await page.addScriptTag({ path: path.join(root, "node_modules/axe-core/axe.min.js") });
     assert.deepEqual(await page.evaluate(async () => (await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations.map(item => item.id)), [], name + " axe");
   }
@@ -80,6 +92,19 @@ try {
   await page.getByRole("button", { name: "Older reports", exact: true }).click();
   await page.getByRole("status").filter({ hasText: "40 reports loaded." }).waitFor();
   await capture("report-pages-resident-desktop", 1440);
+  await page.getByRole("button", { name: "Older updates", exact: true }).click();
+  await page.getByRole("button", { name: "Mark read", exact: true }).last().click();
+  await page.getByText("Notification marked read.", { exact: true }).waitFor();
+  const withdrawnCard = page.locator("article.report-card").first();
+  await withdrawnCard.locator("summary").click();
+  await withdrawnCard.getByLabel("I understand and want to continue").check();
+  await page.evaluate(() => { window.__offline = true; });
+  await withdrawnCard.getByRole("button", { name: "Withdraw report", exact: true }).click();
+  await withdrawnCard.getByRole("alert").waitFor();
+  await page.evaluate(() => { window.__offline = false; });
+  await withdrawnCard.getByRole("button", { name: "Retry", exact: true }).click();
+  await page.getByText("Report withdrawn.", { exact: true }).waitFor();
+  assert.equal(await page.getByText("Synthetic update 24", { exact: true }).count(), 0, "Withdrawn notification disappears");
   assert.deepEqual(errors, []);
   console.log("PASS: bounded pages, empty overdue continuation, older selected details, canonical merge beyond current page, resident retry without lost rows, EN/FIL, desktop/mobile, keyboard, reduced motion and axe. Synthetic browser fixtures; real emulator contracts run separately.");
 } finally { await browser?.close(); await server.close(); }

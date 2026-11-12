@@ -3,6 +3,7 @@ import type {
   ReportCategory,
   ReportStatus,
 } from "./report-module";
+import { notificationPage, notificationPosition, type NotificationPosition } from "./notification-pages";
 
 export type SuggestionReport = {
   reference: string;
@@ -53,6 +54,8 @@ export type EngagementStore = {
     notification: ResidentNotification,
   ): Promise<void>;
   listNotifications(residentUid: string): Promise<ResidentNotification[]>;
+  countUnreadNotifications?(residentUid: string): Promise<number>;
+  listNotificationWindow?(residentUid: string, after: NotificationPosition | null, limit: number): Promise<ResidentNotification[]>;
   markNotificationRead(residentUid: string, id: string): Promise<void>;
   getPreferences(residentUid: string): Promise<NotificationPreferences | null>;
   setPreferences(
@@ -222,6 +225,14 @@ export function createEngagementModule({
     ) => notify(residentUid, reference, "report-update", message),
     listNotifications: (residentUid: string) =>
       store.listNotifications(residentUid),
+    async listNotificationsPage(residentUid: string, cursor?: string | null) {
+      const after = notificationPosition(residentUid, cursor);
+      const rows = store.listNotificationWindow
+        ? await store.listNotificationWindow(residentUid, after, 21)
+        : (await store.listNotifications(residentUid)).toSorted((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).filter(notice => !after || notice.createdAt < after.createdAt || (notice.createdAt === after.createdAt && notice.id < after.id)).slice(0, 21);
+      return notificationPage(residentUid, rows);
+    },
+    unreadCount: async (residentUid: string) => store.countUnreadNotifications ? store.countUnreadNotifications(residentUid) : (await store.listNotifications(residentUid)).filter(notice => !notice.read).length,
     markNotificationRead: (residentUid: string, id: string) =>
       store.markNotificationRead(residentUid, id),
     getPreferences: async (residentUid: string) =>

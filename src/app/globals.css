@@ -66,6 +66,27 @@
 .product-header ~ main .composer-header { display: none; }
 .product-header a:hover { text-decoration: underline; text-underline-offset: 7px; }
 .product-utilities { display: flex; gap: 14px; align-items: center; }
+.unread-indicator { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; margin-inline-start: 6px; padding: 2px 6px; border-radius: 999px; background: var(--green-dark); color: white; font-size: .8rem; }
+.resident-report-action { margin-block-start: 20px; padding-block-start: 14px; border-block-start: 1px solid var(--line); }
+.resident-dashboard-nav { display: flex; flex-wrap: wrap; gap: 14px; margin-block: 20px; }
+.resident-dashboard-nav > a:not(.button) { display: inline-flex; align-items: center; min-height: 44px; text-underline-offset: 4px; color: var(--green-dark); }
+.resident-report-action summary, .optional-report-field summary, .removal-request-queue summary, .preferences-panel summary { cursor: pointer; min-height: 44px; padding-block: 10px; color: var(--green-dark); font-weight: 700; }
+.resident-report-action label { display: flex; align-items: start; gap: 10px; line-height: 1.5; margin-block: 14px; }
+.resident-report-action input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--green); }
+.resident-report-action button { white-space: normal; }
+.resident-report-action p { max-width: 70ch; line-height: 1.6; }
+.reports-page .resident-report-action .button-quiet, .embedded-updates .button-quiet, .removal-request-queue .button-quiet { display: inline-flex; }
+.optional-report-field { min-width: 0; padding-block: 6px; border-block-start: 1px solid var(--line); }
+.submission-confirmations h2 { font-size: 1.2rem; margin-block: 14px; }
+.submission-confirmations .check-row { margin-block: 14px; }
+.embedded-updates { width: min(1180px, calc(100% - 40px)); margin: 40px auto 80px; border-block-start: 1px solid var(--line); padding-block-start: 28px; }
+.embedded-updates .notifications-layout { width: 100%; margin: 0; grid-template-columns: minmax(0, 1fr); }
+.embedded-updates .notification-list { max-width: 75ch; }
+.embedded-updates h2 { font-size: 1.75rem; }
+.removal-request-queue { margin-block: 20px; }
+.removal-request-queue li { display: flex; flex-wrap: wrap; gap: 14px; margin-block: 14px; }
+.optional-report-field summary:focus-visible, .resident-report-action summary:focus-visible, .removal-request-queue summary:focus-visible { outline: 3px solid var(--green); outline-offset: 4px; }
+@media (max-width: 560px) { .embedded-updates { width: calc(100% - 28px); } }
 .product-header :focus-visible, .advanced-toggle:focus-visible, .advanced-disclosure summary:focus-visible { outline: 3px solid var(--green); outline-offset: 4px; }
 .advanced-toggle, .advanced-disclosure summary { min-height: 44px; padding-block: 10px; cursor: pointer; color: var(--green-dark); font: inherit; font-weight: 700; }
 .advanced-toggle { background: transparent; border: 1px solid var(--line); border-radius: 10px; padding-inline: 16px; }

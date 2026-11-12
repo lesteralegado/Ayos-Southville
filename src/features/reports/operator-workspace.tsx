@@ -1,4 +1,5 @@
 "use client";
+import { RemovalRequestQueue } from "./removal-request-queue";
 
 import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
@@ -198,6 +199,7 @@ export function OperatorWorkspace({
             "Suriin nang pribado, maingat na ilathala, at subaybayan hanggang malutas. Independent na pilot ng mga residente; internal na pilot desk ang mga destinasyon.",
           )}
         </p>
+        <RemovalRequestQueue />
         <div className="operator-toolbar">
           <label>
             {t("Report status", "Estado ng ulat")}

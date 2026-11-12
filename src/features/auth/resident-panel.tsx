@@ -63,9 +63,6 @@ export function ResidentPanel({
           <Link className="button button-quiet" href="/account/reports">
             {message.myReports}
           </Link>
-          <Link className="button button-quiet" href="/account/notifications">
-            {message.notifications}
-          </Link>
           <Link className="button button-quiet" href="/account/privacy">{locale === "fil" ? "Privacy at aking datos" : "Privacy and my data"}</Link>
           {canOperateReports(roles) && (
             <Link className="button button-quiet" href="/moderation">

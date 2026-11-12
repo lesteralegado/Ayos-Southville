@@ -17,6 +17,8 @@ vi.mock("@/lib/firebase/admin", () => ({ getFirebaseAdmin() {
 } }));
 import { getReportModule } from "@/features/reports/firebase-report-store";
 import { getModerationModule } from "@/features/reports/firebase-moderation-store";
+import { changeResidentReport } from "@/features/reports/resident-report-actions";
+import { getEngagementModule } from "@/features/reports/firebase-engagement-store";
 
 const run = randomUUID().replaceAll("-", "");
 const uid = `contracts-${run}`;
@@ -80,6 +82,22 @@ function submission() {
 function acceptance(reference: string) {
   return { reference, expectedRevision: 0, publicSummary: "SYNTHETIC CONTRACT TEST: light concern.", publicArea: "Synthetic court", approvedMedia: [], reason: "Synthetic privacy review." };
 }
+
+it("withdraws atomically on the real SDK, preserves receipt deduplication, and pages private updates", async () => {
+  const reports = await getReportModule(), input = submission();
+  const receipt = await reports.submit(input);
+  await Promise.all([changeResidentReport(uid, receipt.reference, "withdraw"), changeResidentReport(uid, receipt.reference, "withdraw")]);
+  expect(await reports.getMine(uid, receipt.reference)).toBeNull();
+  expect(await reports.submit(input)).toEqual({ ...receipt, created: false, withdrawn: true });
+  expect(await reports.getMine(uid, receipt.reference)).toBeNull();
+  const engagement = getEngagementModule();
+  for (let index = 0; index < 25; index++) await engagement.recordReportEvent(uid, `AS-UPDATE${index}`, "Synthetic private update");
+  const first = await engagement.listNotificationsPage(uid);
+  expect(first.notifications.length).toBe(20);
+  const second = await engagement.listNotificationsPage(uid, first.nextCursor);
+  expect(second.notifications.length).toBeGreaterThan(0);
+  expect(new Set([...first.notifications, ...second.notifications].map(notice => notice.id)).size).toBe(first.notifications.length + second.notifications.length);
+});
 
 it("concurrent retries return one durable report and submission notification", async () => {
   const reports = await getReportModule(), input = submission();

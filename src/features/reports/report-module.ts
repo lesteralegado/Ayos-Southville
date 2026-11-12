@@ -44,6 +44,7 @@ export type EvidenceAsset = {
 };
 
 export type ResidentReport = {
+  removalRequestedAt?: string;
   history?: Array<{
     action: string;
     status?: ReportStatus;
@@ -89,11 +90,11 @@ export type StoredReport = {
 export type ReportStore = {
   getReceipt(
     key: string,
-  ): Promise<{ reference: string; created: false } | null>;
+  ): Promise<{ reference: string; created: false; withdrawn?: true } | null>;
   submitOnce(
     key: string,
     report: StoredReport,
-  ): Promise<{ reference: string; created: boolean }>;
+  ): Promise<{ reference: string; created: boolean; withdrawn?: true }>;
   listByResident(residentUid: string): Promise<ResidentReport[]>;
   listResidentWindow(residentUid: string, after: PagePosition | null, limit: number): Promise<ResidentReport[]>;
   getOwned(residentUid: string, reference: string): Promise<ResidentReport | null>;

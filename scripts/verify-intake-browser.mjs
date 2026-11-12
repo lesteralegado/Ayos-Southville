@@ -11,7 +11,7 @@ const root = process.cwd();
 const visualRound = !process.argv.includes("--functional-only");
 const artifacts = path.join(
   root,
-  ".scratch/ayos-southville-production-completion/artifacts",
+  ".scratch/simplified-product-flow/artifacts",
 );
 await mkdir(artifacts, { recursive: true });
 const fixture = `
@@ -221,6 +221,7 @@ try {
       errors.push(message.text());
   });
   await page.goto("http://127.0.0.1:4179/");
+  await page.getByText("Add photos (optional)", { exact: true }).click();
   await page.getByText("No photos yet.", { exact: false }).waitFor();
   await page
     .getByLabel("Category", { exact: true })
@@ -262,6 +263,7 @@ try {
   );
   await page.reload();
   await page.getByRole("button", { name: "Resume draft" }).click();
+  await page.getByText("Add photos (optional)", { exact: true }).click();
   await page.getByText("Private · confirmed", { exact: false }).waitFor();
   assert.equal(
     await page
@@ -343,6 +345,7 @@ try {
   await page.route("https://tile.openstreetmap.org/**", (route) =>
     route.fulfill({ contentType: "image/png", body: tile }),
   );
+  await page.getByText("Add map location (optional)", { exact: true }).click();
   await page.getByRole("button", { name: "Open map", exact: true }).click();
   await page
     .getByText("Tap the location, or enter coordinates below.", { exact: true })
