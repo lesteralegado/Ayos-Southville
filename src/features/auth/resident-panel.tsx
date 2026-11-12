@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SignOutButton } from "@/features/auth/sign-out-button";
 import { useLocale } from "@/features/i18n/use-locale";
 import { ConsentPanel } from "@/features/pilot/consent-panel";
+import { navigationCopy, canOperateReports } from "@/features/navigation/navigation-copy";
 
 const copy = {
   en: {
@@ -66,9 +67,7 @@ export function ResidentPanel({
             {message.notifications}
           </Link>
           <Link className="button button-quiet" href="/account/privacy">{locale === "fil" ? "Privacy at aking datos" : "Privacy and my data"}</Link>
-          {roles.some((role) =>
-            ["Moderator", "Coordinator", "Administrator"].includes(role),
-          ) && (
+          {canOperateReports(roles) && (
             <Link className="button button-quiet" href="/moderation">
               {locale === "fil"
                 ? "Mga ulat para sa pagsusuri"
@@ -76,14 +75,19 @@ export function ResidentPanel({
             </Link>
           )}
           {roles.includes("Administrator") && (
-            <Link className="button button-quiet" href="/administration/operations">{locale === "fil" ? "Mga operasyon ng privacy" : "Privacy operations"}</Link>
-          )}
-          {roles.includes("Administrator") && (
             <Link className="button button-quiet" href="/administration">
               {locale === "fil" ? "Pamamahala" : "Administration"}
             </Link>
           )}
         </div>
+        <details className="advanced-disclosure">
+          <summary>{navigationCopy[locale].tools}</summary>
+          <div className="account-actions">
+            <Link href="/pilot">{navigationCopy[locale].pilot}</Link>
+            <Link href="/insights">{navigationCopy[locale].insights}</Link>
+            <Link href="/privacy">{navigationCopy[locale].privacy}</Link>
+          </div>
+        </details>
         <ConsentPanel />
         <SignOutButton />
       </div>

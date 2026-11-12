@@ -6,9 +6,20 @@ import { defaultPilotConfiguration } from "./administration-module";
 import { defaultPilotOperations } from "./pilot-operations";
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); });
 
+it("keeps routine tasks visible and reveals advanced controls on request", () => {
+  render(<AdministrationWorkspace initial={{ users: [], configuration: defaultPilotConfiguration, invitations: [], audit: [] }} />);
+  expect(screen.getByRole("heading", { name: "People and access" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Report categories" })).toBeVisible();
+  expect(screen.queryByRole("heading", { name: "Audit history" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Advanced settings" }));
+  expect(screen.getByRole("heading", { name: "Audit history" })).toBeVisible();
+  expect(screen.getByRole("link", { name: "Privacy operations" })).toHaveAttribute("href", "/administration/operations");
+});
+
 it("shows confirmed pause state and preserves operating edits on a stale-save conflict", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ code: "CONFLICT", error: "Settings changed. Refresh before retrying." }, { status: 409 })));
   render(<AdministrationWorkspace initial={{ users: [], configuration: defaultPilotConfiguration, invitations: [], audit: [], operations: defaultPilotOperations }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Advanced settings" }));
   fireEvent.click(screen.getByLabelText("Pause new reports"));
   fireEvent.change(screen.getByLabelText("Public explanation · English"), { target: { value: "Coverage unavailable." } });
   fireEvent.change(screen.getByLabelText("Public explanation · Filipino"), { target: { value: "Walang operator." } });

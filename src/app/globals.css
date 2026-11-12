@@ -56,6 +56,24 @@
   --font-display: Georgia, "Times New Roman", serif;
 }
 
+.product-header { max-width: 1220px; margin-inline: auto; padding: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; border-block-end: 1px solid var(--line); }
+.product-header nav { display: flex; flex-wrap: wrap; gap: 6px 14px; flex: 1; }
+.product-header nav > a:not(.button), .product-utilities a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); text-decoration: none; font-size: .9rem; }
+.product-header nav a[aria-current=page] { color: var(--green); font-weight: 700; text-decoration: underline; text-underline-offset: 7px; }
+.product-header nav > a.navigation-primary:not(.button) { background: var(--green); color: white; padding-inline: 16px; border-radius: 999px; }
+.product-header nav > a.navigation-primary[aria-current=page] { color: white; }
+/* The shared shell supplies the same home, account, and language controls. */
+.product-header ~ main .composer-header { display: none; }
+.product-header a:hover { text-decoration: underline; text-underline-offset: 7px; }
+.product-utilities { display: flex; gap: 14px; align-items: center; }
+.product-header :focus-visible, .advanced-toggle:focus-visible, .advanced-disclosure summary:focus-visible { outline: 3px solid var(--green); outline-offset: 4px; }
+.advanced-toggle, .advanced-disclosure summary { min-height: 44px; padding-block: 10px; cursor: pointer; color: var(--green-dark); font: inherit; font-weight: 700; }
+.advanced-toggle { background: transparent; border: 1px solid var(--line); border-radius: 10px; padding-inline: 16px; }
+.advanced-disclosure { margin-block: 20px; }
+.advanced-disclosure[open] > summary { margin-block-end: 14px; }
+#advanced-content[hidden] { display: none; }
+@media (max-width: 850px) { .product-header nav { order: 3; flex-basis: 100%; } .product-utilities { margin-inline-start: auto; } }
+@media (max-width: 560px) { .product-header { padding: 14px; gap: 10px; } .product-header nav { gap: 0 14px; } }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {

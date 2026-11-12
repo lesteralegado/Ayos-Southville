@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import HomePage from "./page";
 import { vi } from "vitest";
+import { ProductNavigation } from "@/features/navigation/product-navigation";
+vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 
 const payload = { mode: "live", total: 1, page: 1, pages: 1,
   categories: [{ id: "streetlights", active: true, label: { en: "Configured lighting", fil: "Nasuring ilaw" } }],
@@ -44,14 +46,14 @@ describe("public pilot directory", () => {
 
   it("switches to Filipino and restores the preference on a return visit", async () => {
     const user = userEvent.setup();
-    const firstVisit = render(<HomePage />);
+    const firstVisit = render(<><ProductNavigation /><HomePage /></>);
     await screen.findByRole("heading", { name: "Approved streetlight concern" });
 
     await user.click(screen.getByRole("button", { name: /filipino/i }));
     expect(screen.getByRole("link", { name: /mga ulat sa komunidad/i })).toBeInTheDocument();
 
     firstVisit.unmount();
-    render(<HomePage />);
+    render(<><ProductNavigation /><HomePage /></>);
     await screen.findByRole("heading", { name: "Approved streetlight concern" });
 
     expect(screen.getByRole("link", { name: /mga ulat sa komunidad/i })).toBeInTheDocument();
