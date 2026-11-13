@@ -83,7 +83,7 @@ describe("resident report application boundary", () => {
     mocks.getVerifiedResident.mockResolvedValue({ uid: "resident-1" });
     mocks.listMinePage.mockResolvedValue({ reports: [{ reference: "AS-7K3M2Q", status: "Submitted" }], nextCursor: "continuation" });
 
-    const response = await GET();
+    const response = await GET(new Request("https://ayos.test/api/reports"));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ reports: [{ reference: "AS-7K3M2Q", status: "Submitted" }], nextCursor: "continuation" });

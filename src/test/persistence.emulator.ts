@@ -90,6 +90,20 @@ function acceptance(reference: string) {
   return { reference, expectedRevision: 0, publicSummary: "SYNTHETIC CONTRACT TEST: light concern.", publicArea: "Synthetic court", approvedMedia: [], reason: "Synthetic privacy review." };
 }
 
+it("counts all owned reports beyond the first page with the real SDK", async () => {
+  const reports = await getReportModule();
+  const countUid = `${uid}-count`;
+  const batch = db.batch();
+  for (let index = 0; index < 27; index++) {
+    batch.set(db.collection("privateReports").doc(`AS-COUNT${run}${index}`), { reporterUid: countUid, submittedAt: new Date().toISOString(), ...(index === 0 ? { archivedAt: new Date().toISOString() } : {}) });
+  }
+  await batch.commit();
+  expect(await reports.countMine(countUid)).toBe(27);
+  expect(await reports.countMine(`${countUid}-other`)).toBe(0);
+  await db.collection("privateReports").doc(`AS-COUNT${run}1`).delete();
+  expect(await reports.countMine(countUid)).toBe(26);
+});
+
 it("archives a report atomically with real SDK retries and retains the owner's private record", async () => {
   const reports = await getReportModule(), moderation = getModerationModule();
   const archiveUid = `${uid}-archive`;

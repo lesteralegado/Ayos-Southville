@@ -78,6 +78,7 @@ try {
   page.on("pageerror", error => { errors.push(error.message); console.error(error.message); });
   page.on("console", message => { if (message.type() === "error") console.error(message.text()); });
   await page.goto("http://127.0.0.1:4189/");
+  await page.getByRole("button", { name: "Advanced settings", exact: true }).click();
   await page.getByRole("heading", { name: "Coverage and availability" }).waitFor();
   await page.getByLabel("Primary operator").selectOption("primary");
   await page.getByLabel("Backup operator").selectOption("backup");
@@ -127,6 +128,7 @@ try {
   await page.screenshot({path:path.join(output,"resident-filipino.png"),fullPage:true});
   await page.getByRole("button",{name:"Switch to English",exact:true}).click();
   await page.getByRole("button",{name:"Fixture administration"}).click();
+  await page.getByRole("button", { name: "Advanced settings", exact: true }).click();
   await page.getByLabel("Pause new reports",{exact:true}).uncheck();
   await page.getByLabel("Before resuming", {exact:false}).check();
   await page.getByRole("button",{name:"Save operating controls"}).click();
@@ -135,7 +137,7 @@ try {
   await page.getByRole("button",{name:"Fixture resident"}).click();
   await page.getByRole("button",{name:"Resume draft",exact:true}).click();
   await page.getByLabel("I confirm this is not an emergency.").check();
-  await page.getByLabel(/I understand that only/).check();
+  await page.locator("#confirm-public-summary").check();
   await page.getByRole("button",{name:"Submit report",exact:true}).click();
   await page.waitForFunction(()=>window.__receipt==="/reports/AS-SYNTHETIC");
   assert.equal(await page.evaluate(()=>localStorage.getItem("ayos-report-draft-v1")),null);

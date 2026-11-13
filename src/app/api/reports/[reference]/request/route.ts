@@ -17,12 +17,12 @@ export async function POST(request: Request, context: { params: Promise<{ refere
     return NextResponse.json({ code: error instanceof ResidentReportActionError ? error.code : "UNAVAILABLE" }, { status: error instanceof ResidentReportActionError ? error.status : error instanceof SyntaxError ? 422 : 503, headers });
   }
 }
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   try {
     const actor = await getVerifiedOperator();
     if (!actor) return NextResponse.json({ code: "AUTH" }, { status: 401, headers });
     if (!(await hasPilotEligibility({ uid: actor.uid, email_verified: true }))) return NextResponse.json({ code: "FORBIDDEN" }, { status: 403, headers });
-    return NextResponse.json(await listRemovalRequests(actor, request ? new URL(request.url).searchParams.get("cursor") : null), { headers });
+    return NextResponse.json(await listRemovalRequests(actor, new URL(request.url).searchParams.get("cursor")), { headers });
   } catch (error) {
     return NextResponse.json({ code: error instanceof ResidentReportActionError ? error.code : "UNAVAILABLE" }, { status: error instanceof ResidentReportActionError ? error.status : 503, headers });
   }

@@ -17,7 +17,7 @@ const headers = { "Cache-Control": "private, no-store" };
 function sameOrigin(request: Request) {
   return isSameOrigin(request);
 }
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   const actor = await getVerifiedOperator();
   if (!actor)
     return NextResponse.json(
@@ -27,7 +27,7 @@ export async function GET(request?: Request) {
   try {
     if (!(await hasPilotEligibility({ uid: actor.uid, email: actor.email, email_verified: true })))
       throw new ModerationForbiddenError();
-    const params = new URL(request?.url ?? "https://local.invalid/api/moderation").searchParams;
+    const params = new URL(request.url).searchParams;
     const moderation = getModerationModule();
     const reference = params.get("reference");
     return NextResponse.json(reference

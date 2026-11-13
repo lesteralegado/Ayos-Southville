@@ -66,7 +66,7 @@ const acceptance = {
 };
 it("publishes explicit redaction and returns a conflict on a repeated stale request", async () => {
   expect((await PATCH(request("accept", acceptance))).status).toBe(200);
-  const response = await GET();
+  const response = await GET(new Request("https://ayos.test/api/moderation"));
   expect(response.headers.get("cache-control")).toBe("private, no-store");
   expect((await response.json()).reports[0]).toMatchObject({ status: "Under review", revision: 1 });
   const detail = await GET(new Request(`https://ayos.test/api/moderation?reference=${seed.reference}`));
@@ -95,7 +95,7 @@ it.each(["Resident", "Coordinator"] as const)(
 );
 it("denies revoked operator access and malformed direct requests", async () => {
   state.access = false;
-  expect((await GET()).status).toBe(403);
+  expect((await GET(new Request("https://ayos.test/api/moderation"))).status).toBe(403);
   state.access = true;
   expect((await PATCH(request("accept", null))).status).toBe(422);
 });

@@ -108,8 +108,8 @@ try {
   await page.getByText("Edit public details", { exact: true }).click();
   await page.getByLabel("Public summary", { exact: true }).fill("Broken streetlight beside the covered court.");
   await page.getByLabel("Public area", { exact: true }).fill("Phase 2 · Covered court");
-  await page.getByLabel("Approximate latitude").fill("14.28");
-  await page.getByLabel("Approximate longitude").fill("121.13");
+  await page.getByLabel("Pin latitude").fill("14.28");
+  await page.getByLabel("Pin longitude").fill("121.13");
   for (const [name, width, height] of capture ? [["desktop", 1440, 1000], ["tablet", 768, 1024], ["mobile", 390, 844]] : []) {
     await page.setViewportSize({ width, height }); await page.evaluate(() => scrollTo(0, 0));
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), name + " overflow");
