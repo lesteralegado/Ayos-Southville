@@ -15,6 +15,7 @@ vi.mock("@/lib/firebase/admin", async () => {
 import { getModerationModule } from "./firebase-moderation-store";
 import { getReportModule } from "./firebase-report-store";
 import { readApprovedPublicEvidence } from "./firebase-evidence-store";
+import { archiveRequestedReport, changeResidentReport } from "./resident-report-actions";
 const actor = { uid: "operator", roles: ["Administrator"] as const };
 const reference = "AS-300001", originalId = "b".repeat(64), resolutionId = "a".repeat(64);
 const upload = (id: string) => ({ id, name: "evidence.jpg", type: "image/jpeg", size: 500, visibility: "restricted", path: "private-evidence/file.jpg", residentUid: "operator", draftKey: "resolution_" + reference, createdAt: new Date().toISOString() });
@@ -36,6 +37,18 @@ async function start() {
   await moderation.transition(actor, { reference, expectedRevision: 2, to: "In progress", update: { en: "Started.", fil: "Nagsimula." } });
   return moderation;
 }
+it("withholds archived reports and public photos permanently, including stale and fresh operator updates", async () => {
+  const moderation = await start();
+  await changeResidentReport("resident", reference, "request-archive");
+  await archiveRequestedReport(actor, reference, "Resident requested archiving.");
+  const reports = await getReportModule();
+  expect(await reports.getPublic(reference)).toBeNull();
+  expect(await reports.getMine("resident", reference)).toMatchObject({ archivedAt: expect.any(String), description: "Private 09171234567" });
+  await expect(readApprovedPublicEvidence(originalId)).rejects.toMatchObject({ status: 404 });
+  await expect(moderation.transition(actor, resolution)).rejects.toMatchObject({ code: "CONFLICT" });
+  await expect(moderation.transition(actor, { ...resolution, expectedRevision: 4 })).rejects.toMatchObject({ code: "CONFLICT" });
+  expect(await reports.getPublic(reference)).toBeNull();
+});
 it("persists a merge notification and opt-in email for both original reporters without canonical engagement", async () => {
   const moderation = getModerationModule();
   await moderation.accept(actor, acceptance);

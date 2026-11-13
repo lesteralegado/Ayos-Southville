@@ -15,12 +15,14 @@ import { ResolutionResponse } from "./resolution-response";
 export function ReportDetail({
   report,
   privateReceipt = false,
+  archived = false,
   canRespond = false,
   categoryLabel,
   demonstration = false,
 }: {
   report: PublicReportDetail;
   privateReceipt?: boolean;
+  archived?: boolean;
   canRespond?: boolean;
   categoryLabel?: { en: string; fil: string };
   demonstration?: boolean;
@@ -49,7 +51,7 @@ export function ReportDetail({
               (fil ? "Ulat ng komunidad" : "Community report")}
           </span>
           <span className="status status-review">
-            {reportStatusLabel(report.status, locale)}
+            {archived ? (fil ? "Naka-archive" : "Archived") : reportStatusLabel(report.status, locale)}
           </span>
         </div>
         <h1>{report.publicSummary}</h1>

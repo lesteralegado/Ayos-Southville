@@ -7,7 +7,7 @@ vi.mock("@/lib/firebase/admin", async () => {
   const db = firebaseBoundary(fixture.records);
   return { getFirebaseAdmin: () => ({ db }) };
 });
-import { changeResidentReport, listRemovalRequests } from "./resident-report-actions";
+import { archiveRequestedReport, changeResidentReport, listRemovalRequests } from "./resident-report-actions";
 import { evidenceAvailable } from "./evidence-module";
 beforeEach(() => {
   fixture.records.clear();
@@ -48,4 +48,44 @@ it("queues a private removal request once without changing published content", a
   expect(fixture.records.get("publicReports/AS-TEST01")).toEqual({ publicSummary: "Safe summary", approved: true });
   expect(await listRemovalRequests({ uid: "admin", roles: ["Administrator"] })).toMatchObject({ requests: [{ reference: "AS-TEST01", status: "requested" }] });
   await expect(listRemovalRequests({ uid: "resident", roles: ["Resident"] })).rejects.toMatchObject({ status: 403 });
+});
+
+it("archives an approved request once while preserving private records and evidence", async () => {
+  fixture.records.set("residentProfiles/admin", { roles: ["Administrator"] });
+  fixture.records.set("moderationReports/AS-TEST01", { revision: 2, history: [{ action: "accepted" }] });
+  fixture.records.set("publicReports/AS-TEST01", { approved: true });
+  await changeResidentReport("resident", "AS-TEST01", "request-removal");
+  const actor = { uid: "admin", roles: ["Administrator"] as const };
+  await archiveRequestedReport(actor, "AS-TEST01", "Resident requested privacy.");
+  await archiveRequestedReport(actor, "AS-TEST01", "Resident requested privacy.");
+  expect(fixture.records.has("publicReports/AS-TEST01")).toBe(false);
+  expect(fixture.records.get("privateReports/AS-TEST01")).toMatchObject({ reporterUid: "resident", archivedAt: expect.any(String) });
+  expect(fixture.records.get("moderationReports/AS-TEST01")).toMatchObject({ revision: 3, archivedAt: expect.any(String), history: [{ action: "accepted" }, { action: "archived", reason: "Resident requested privacy." }] });
+  expect(fixture.records.get(`evidenceUploads/${"a".repeat(64)}`)?.deleted).toBeUndefined();
+  expect((await listRemovalRequests(actor)).requests).toHaveLength(0);
+  expect([...fixture.records.keys()].filter(key => key.startsWith("auditEvents/"))).toHaveLength(2);
+});
+
+it("refuses forged operator roles, missing requests and blank archive reasons without changing public content", async () => {
+  fixture.records.set("publicReports/AS-TEST01", { approved: true });
+  const forged = { uid: "resident", roles: ["Administrator"] as const };
+  await expect(archiveRequestedReport(forged, "AS-TEST01", "Privacy")).rejects.toMatchObject({ status: 403 });
+  fixture.records.set("residentProfiles/admin", { roles: ["Administrator"] });
+  const actor = { uid: "admin", roles: ["Administrator"] as const };
+  fixture.records.get("residentProfiles/admin")!.pilotAccess = "revoked";
+  await expect(archiveRequestedReport(actor, "AS-TEST01", "Privacy")).rejects.toMatchObject({ status: 403 });
+  fixture.records.get("residentProfiles/admin")!.pilotAccess = "approved";
+  await expect(archiveRequestedReport(actor, "AS-TEST01", "Privacy")).rejects.toMatchObject({ status: 404 });
+  await expect(archiveRequestedReport(actor, "AS-TEST01", " ")).rejects.toMatchObject({ status: 422 });
+  expect(fixture.records.get("publicReports/AS-TEST01")).toEqual({ approved: true });
+});
+
+it("rolls back archiving when the audit secret is unavailable", async () => {
+  fixture.records.set("residentProfiles/admin", { roles: ["Administrator"] });
+  fixture.records.set("publicReports/AS-TEST01", { approved: true });
+  await changeResidentReport("resident", "AS-TEST01", "request-archive");
+  delete process.env.AUDIT_PSEUDONYM_SECRET;
+  await expect(archiveRequestedReport({ uid: "admin", roles: ["Administrator"] }, "AS-TEST01", "Privacy")).rejects.toMatchObject({ status: 503 });
+  expect(fixture.records.get("publicReports/AS-TEST01")).toEqual({ approved: true });
+  expect(fixture.records.get("privateReports/AS-TEST01")?.archivedAt).toBeUndefined();
 });

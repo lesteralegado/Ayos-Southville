@@ -204,7 +204,7 @@ export function OperatorWorkspace({
             "Suriin nang pribado, maingat na ilathala, at subaybayan hanggang malutas. Independent na pilot ng mga residente; internal na pilot desk ang mga destinasyon.",
           )}
         </p>
-        <RemovalRequestQueue />
+      <RemovalRequestQueue onArchived={() => void reload()} />
         <nav className="operator-groups" aria-label={operatorFlowCopy[locale].groups}>
           {(["new", "working", "waiting", "closed"] as const).map(group => <button className="button button-quiet" type="button" key={group} aria-current={filter === group ? "page" : undefined} disabled={pending || unconfirmed} onClick={() => void reload(null, group)}>{operatorFlowCopy[locale][group]}</button>)}
         </nav>
@@ -279,7 +279,7 @@ export function OperatorWorkspace({
                   onClick={() => void selectReport(report.reference)}
                 >
                   <strong>{report.reference}</strong>
-                  <span>{reportStatusLabels[locale][report.status]}</span>
+                  <span>{report.archivedAt ? t("Archived", "Naka-archive") : reportStatusLabels[locale][report.status]}</span>
                   {report.reviewExpectation?.overdue && <strong>{reviewCopy[locale].overdue}</strong>}
                   <span>
                     {reportCategoryLabels[locale][report.category] ??
@@ -405,6 +405,15 @@ function OperatorReport({
         destination: text("destination"),
       });
   }
+  if (report.archivedAt) return <section className="operator-private">
+    <h3>{t("Archived report", "Naka-archive na ulat")}</h3>
+    <p role="status">{t("Hidden from public view. Its private record and history are preserved.", "Hindi pampubliko. Napanatili ang pribadong rekord at kasaysayan.")}</p>
+    <p>{report.description}</p><p>{report.nearbyLandmark}</p>
+    {report.exactLocation && <p>{report.exactLocation.latitude}, {report.exactLocation.longitude}<br />{report.exactLocation.privateDetails}</p>}
+    <ul>{[...report.evidence, ...report.supportingEvidence, ...(report.resolutionEvidence ?? [])].map((asset, index) => <li key={asset.id + ":" + index}><a href={"/api/evidence/" + asset.id} target="_blank" rel="noreferrer">{t("Private evidence photo", "Pribadong larawan")} {index + 1}</a></li>)}</ul>
+    <h4>{t("Report history", "Kasaysayan ng ulat")}</h4>
+    <ol>{report.history.map((event, index) => <li key={index}><time dateTime={event.occurredAt}>{formatManilaDate(event.occurredAt, locale, true)}</time><p>{event.update ? <ReportUpdate update={event.update} locale={locale} /> : event.action}</p>{event.reason && <p>{event.reason}</p>}</li>)}</ol>
+  </section>;
   return (
     <>
       <PrimaryReportAction key={report.reference + ":" + report.status} report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />

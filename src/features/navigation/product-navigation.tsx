@@ -21,11 +21,11 @@ export function ProductNavigation({ roles = [], signedIn = false }: { roles?: re
   }, [signedIn]);
   const links = [
     { href: "/", label: copy.community, active: pathname === "/" || (pathname?.startsWith("/reports/") && pathname !== "/reports/new") },
-    { href: "/reports/new", label: copy.report, active: pathname === "/reports/new" },
-    { href: "/account/reports", label: copy.mine, active: pathname?.startsWith("/account/reports") || pathname === "/account/notifications" },
-    ...(canOperateReports(roles)
+    ...(signedIn ? [{ href: "/reports/new", label: copy.report, active: pathname === "/reports/new" },
+    { href: "/account/reports", label: copy.mine, active: pathname?.startsWith("/account/reports") || pathname === "/account/notifications" }] : []),
+    ...(signedIn && canOperateReports(roles)
       ? [{ href: "/moderation", label: copy.operations, active: pathname === "/moderation" }] : []),
-    { href: "/account", label: copy.account, active: pathname === "/account" || pathname?.startsWith("/administration") || pathname === "/account/privacy" },
+    ...(signedIn ? [{ href: "/account", label: copy.account, active: pathname === "/account" || pathname?.startsWith("/administration") || pathname === "/account/privacy" }] : []),
   ];
   return <header className="product-header">
     <Link className="brand" href="/"><span className="mark" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M7 19.5 14.5 27 29 10.5" /></svg></span>Ayos Southville</Link>

@@ -17,7 +17,7 @@ export default async function ReportPage({ params }: { params: Promise<{ referen
     const owned = resident ? await (await getReportModule()).getMine(resident.uid, reference.toUpperCase()) : null;
     if (!owned) notFound();
     if (owned.status === "Duplicate" && owned.canonicalReference) redirect("/reports/" + owned.canonicalReference);
-    return <ReportDetail privateReceipt report={residentReportDetail(owned)} />;
+    return <ReportDetail privateReceipt archived={!!owned.archivedAt} report={residentReportDetail(owned)} />;
   }
   const demonstration = discoveryMode() === "demo";
   const resident = !demonstration && report.status === "Resolved" ? await getVerifiedResident() : null;
