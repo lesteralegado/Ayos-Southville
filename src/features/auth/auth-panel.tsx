@@ -58,16 +58,11 @@ const authCopy = {
 
 export function AuthPanel({ mode }: AuthPanelProps) {
   const router = useRouter();
-  const { locale, chooseLocale } = useLocale();
+  const { locale } = useLocale();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const copy = authCopy[locale];
   const isRegister = mode === "register";
-
-  function toggleLocale() {
-    const next = locale === "en" ? "fil" : "en";
-    chooseLocale(next);
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -115,19 +110,15 @@ export function AuthPanel({ mode }: AuthPanelProps) {
   }
 
   return (
-    <main className="auth-page">
+    <main className="auth-page" data-mode={mode}>
       <section className="auth-intro">
-        <Link className="brand brand-light" href="/">Ayos Southville</Link>
         <div>
-          <span className="panel-kicker">{copy.pilotKicker}</span>
           <h1>{copy.introBefore} <em>{copy.introAccent}</em></h1>
           <p>{copy.introLead}</p>
         </div>
       </section>
       <section className="auth-form-wrap">
-        <button className="language-button auth-language" type="button" onClick={toggleLocale}>{copy.language}</button>
         <div className="auth-form-card">
-          <span className="eyebrow">Ayos Southville</span>
           <h2>{isRegister ? copy.registerTitle : copy.signInTitle}</h2>
           <p>{isRegister ? copy.registerLead : copy.signInLead}</p>
           <form onSubmit={submit}>
