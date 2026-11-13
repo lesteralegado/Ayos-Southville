@@ -44,6 +44,7 @@ export type EvidenceAsset = {
 };
 
 export type ResidentReport = {
+  archivedAt?: string;
   removalRequestedAt?: string;
   history?: Array<{
     action: string;

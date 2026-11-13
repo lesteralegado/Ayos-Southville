@@ -10,7 +10,7 @@ export async function POST(request: Request, context: { params: Promise<{ refere
     const resident = await getVerifiedResident();
     if (!resident) return NextResponse.json({ code: "AUTH" }, { status: 401, headers });
     const body = await readBoundedJson(request) as { action?: unknown; confirmed?: unknown } | null;
-    if (!body || body.confirmed !== true || (body.action !== "withdraw" && body.action !== "request-removal")) throw new ResidentReportActionError(422, "VALIDATION");
+    if (!body || body.confirmed !== true || (body.action !== "withdraw" && body.action !== "request-removal" && body.action !== "request-archive")) throw new ResidentReportActionError(422, "VALIDATION");
     return NextResponse.json(await changeResidentReport(resident.uid, (await context.params).reference, body.action), { headers });
   } catch (error) {
     const protectedFailure = protectionResponse(error); if (protectedFailure) return protectedFailure;

@@ -5,13 +5,15 @@ import { getFirebaseAdmin } from "@/lib/firebase/admin";
 import { assertWritable, minimizedAudit, protectMutation } from "@/features/pilot/firebase-protection";
 import type { Operator } from "./moderation-module";
 
-export type ResidentReportAction = "withdraw" | "request-removal";
+export type ResidentReportAction = "withdraw" | "request-removal" | "request-archive";
 export class ResidentReportActionError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }
 }
 const hashedDocumentId = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export async function changeResidentReport(uid: string, reference: string, action: ResidentReportAction) {
+  // Keep the existing request key so pending requests and retries survive the rename.
+  if (action === "request-archive") action = "request-removal";
   if (!/^AS-[A-Z0-9]{1,76}$/.test(reference) || !["withdraw", "request-removal"].includes(action)) throw new ResidentReportActionError(422, "VALIDATION");
   await protectMutation(uid, "report");
   const db = getFirebaseAdmin().db;
@@ -25,7 +27,7 @@ export async function changeResidentReport(uid: string, reference: string, actio
     const report = reportDoc.data();
     if (!report || report.reporterUid !== uid) throw new ResidentReportActionError(404, "NOT_FOUND");
     const submitted = report.status === "Submitted" && !publicDoc.exists;
-    if ((action === "withdraw" && !submitted) || (action === "request-removal" && (!publicDoc.exists || publicDoc.data()?.approved !== true))) throw new ResidentReportActionError(409, "CONFLICT");
+    if (report.archivedAt || (action === "withdraw" && !submitted) || (action === "request-removal" && (!publicDoc.exists || publicDoc.data()?.approved !== true))) throw new ResidentReportActionError(409, "CONFLICT");
     const createdAt = new Date().toISOString();
     const audit = minimizedAudit({ actorUid: uid, target: reference, action: action === "withdraw" ? "report.withdrawn" : "report.removal-requested", occurredAt: createdAt, reason: "" });
     const assetIds = action === "withdraw" && Array.isArray(report.evidence) ? report.evidence.map((asset: { id: string }) => asset.id) : [];
@@ -47,6 +49,46 @@ export async function changeResidentReport(uid: string, reference: string, actio
       transaction.delete(db.collection("residentNotifications").doc(hashedDocumentId(`${uid}:${reference}:submitted`)));
     }
     return { action, reference, status: action === "withdraw" ? "complete" : "requested" };
+  });
+}
+
+export async function archiveRequestedReport(actor: Operator, reference: string, reason: string) {
+  const roles = ["Moderator", "Coordinator", "Administrator"];
+  if (!actor.roles.some(role => roles.includes(role))) throw new ResidentReportActionError(403, "FORBIDDEN");
+  if (!/^AS-[A-Z0-9]{1,76}$/.test(reference) || typeof reason !== "string" || !reason.trim() || reason.trim().length > 500)
+    throw new ResidentReportActionError(422, "VALIDATION");
+  await protectMutation(actor.uid, "operator");
+  const db = getFirebaseAdmin().db;
+  return db.runTransaction(async transaction => {
+    const privateRef = db.collection("privateReports").doc(reference);
+    const moderationRef = db.collection("moderationReports").doc(reference);
+    const [reportDoc, moderationDoc] = await transaction.getAll(privateRef, moderationRef);
+    const report = reportDoc.data();
+    if (!report || typeof report.reporterUid !== "string") throw new ResidentReportActionError(404, "NOT_FOUND");
+    await assertWritable(transaction, actor.uid, [report.reporterUid], roles);
+    const operatorProfile = await transaction.get(db.collection("residentProfiles").doc(actor.uid));
+    if (operatorProfile.data()?.pilotAccess === "revoked") throw new ResidentReportActionError(403, "FORBIDDEN");
+    const requestRef = db.collection("reportRequests").doc(hashedDocumentId(`${report.reporterUid}:${reference}:request-removal`));
+    const [requestDoc, preferenceDoc] = await transaction.getAll(requestRef, db.collection("notificationPreferences").doc(report.reporterUid));
+    const request = requestDoc.data();
+    if (request?.reference !== reference || request?.residentUid !== report.reporterUid) throw new ResidentReportActionError(404, "NOT_FOUND");
+    if (request.status === "archived" && report.archivedAt) return { reference, status: "archived" };
+    if (request.status !== "requested" || report.archivedAt) throw new ResidentReportActionError(409, "CONFLICT");
+    const archivedAt = new Date().toISOString();
+    const update = { en: "Report archived. It is no longer publicly visible; your private record is retained.", fil: "Nai-archive ang ulat. Hindi na ito pampubliko; napanatili ang iyong pribadong rekord." };
+    const event = { action: "archived", actorUid: actor.uid, occurredAt: archivedAt, reason: reason.trim(), update };
+    const audit = minimizedAudit({ actorUid: actor.uid, target: reference, action: "report.archived", occurredAt: archivedAt, reason: reason.trim() });
+    transaction.update(privateRef, { archivedAt });
+    transaction.set(moderationRef, { archivedAt, revision: (moderationDoc.data()?.revision ?? 0) + 1, history: [...(moderationDoc.data()?.history ?? []), event] }, { merge: true });
+    transaction.update(requestRef, { status: "archived", decidedAt: archivedAt, decidedBy: actor.uid, reason: reason.trim() });
+    transaction.delete(db.collection("publicReports").doc(reference));
+    transaction.create(db.collection("auditEvents").doc(), audit);
+    if (preferenceDoc.data()?.statusUpdates !== false) {
+      const id = hashedDocumentId(`${report.reporterUid}:${reference}:archived`);
+      transaction.create(db.collection("residentNotifications").doc(id), { id, residentUid: report.reporterUid, reference, kind: "report-update", message: update.en, update, createdAt: archivedAt, read: false });
+      if (preferenceDoc.data()?.emailEnabled === true) transaction.create(db.collection("lifecycleEmailJobs").doc(id), { id, residentUid: report.reporterUid, reference, audience: "status", createdAt: archivedAt, status: "pending", attempts: 0, nextAttemptAt: archivedAt });
+    }
+    return { reference, status: "archived" };
   });
 }
 

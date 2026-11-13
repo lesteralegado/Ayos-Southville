@@ -11,7 +11,7 @@ export function ResidentReportAction({ reference, submitted, requested = false, 
     if (!confirmed || locked.current) return;
     locked.current = true; setPending(true); setError("");
     try {
-      const response = await fetch(`/api/reports/${reference}/request`, { method: "POST", signal: AbortSignal.timeout(20000), headers: { "content-type": "application/json" }, body: JSON.stringify({ action: submitted ? "withdraw" : "request-removal", confirmed: true }) });
+      const response = await fetch(`/api/reports/${reference}/request`, { method: "POST", signal: AbortSignal.timeout(20000), headers: { "content-type": "application/json" }, body: JSON.stringify({ action: submitted ? "withdraw" : "request-archive", confirmed: true }) });
       if (!response.ok) { setError(response.status === 409 ? copy.conflict : [401,403,404].includes(response.status) ? copy.forbidden : copy.failed); return; }
       setDone(true); window.dispatchEvent(new Event("ayos-updates-changed"));
       if (submitted) { window.dispatchEvent(new CustomEvent("ayos-report-withdrawn", { detail: { reference } })); onWithdraw(); }

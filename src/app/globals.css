@@ -100,6 +100,9 @@
 .embedded-updates h2 { font-size: 1.75rem; }
 .removal-request-queue { margin-block: 20px; }
 .removal-request-queue li { display: flex; flex-wrap: wrap; gap: 14px; margin-block: 14px; }
+.removal-request-queue form { flex-basis: 100%; display: grid; gap: 10px; max-width: 38rem; }
+.removal-request-queue textarea { width: 100%; min-height: 80px; padding: 10px; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+.removal-request-queue form .button { justify-self: start; }
 .optional-report-field summary:focus-visible, .resident-report-action summary:focus-visible, .removal-request-queue summary:focus-visible { outline: 3px solid var(--green); outline-offset: 4px; }
 @media (max-width: 560px) { .embedded-updates { width: calc(100% - 28px); } }
 .product-header :focus-visible, .advanced-toggle:focus-visible, .advanced-disclosure summary:focus-visible { outline: 3px solid var(--green); outline-offset: 4px; }

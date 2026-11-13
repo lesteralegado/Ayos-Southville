@@ -18,7 +18,7 @@ vi.mock("@/lib/firebase/admin", () => ({ getFirebaseAdmin() {
 } }));
 import { getReportModule } from "@/features/reports/firebase-report-store";
 import { getModerationModule } from "@/features/reports/firebase-moderation-store";
-import { changeResidentReport } from "@/features/reports/resident-report-actions";
+import { archiveRequestedReport, changeResidentReport } from "@/features/reports/resident-report-actions";
 import { getEngagementModule } from "@/features/reports/firebase-engagement-store";
 
 const run = randomUUID().replaceAll("-", "");
@@ -88,6 +88,25 @@ function submission() {
 function acceptance(reference: string) {
   return { reference, expectedRevision: 0, publicSummary: "SYNTHETIC CONTRACT TEST: light concern.", publicArea: "Synthetic court", approvedMedia: [], reason: "Synthetic privacy review." };
 }
+
+it("archives a report atomically with real SDK retries and retains the owner's private record", async () => {
+  const reports = await getReportModule(), moderation = getModerationModule();
+  const archiveUid = `${uid}-archive`;
+  await auth.createUser({ uid: archiveUid, email: `${archiveUid}@example.test`, emailVerified: true });
+  ownedOtherUsers.push(archiveUid);
+  await db.collection("residentProfiles").doc(archiveUid).set({ roles: ["Resident"], pilotAccess: "approved" });
+  await db.collection("pilotConsents").doc(archiveUid).set({ ...(await db.collection("pilotConsents").doc(uid).get()).data(), residentUid: archiveUid });
+  const { reference } = await reports.submit({ ...submission(), residentUid: archiveUid });
+  await moderation.accept(actor, acceptance(reference));
+  await changeResidentReport(archiveUid, reference, "request-archive");
+  await Promise.all([archiveRequestedReport(actor, reference, "Synthetic archive request."), archiveRequestedReport(actor, reference, "Synthetic archive request.")]);
+  expect(await reports.getPublic(reference)).toBeNull();
+  expect(await reports.getMine(archiveUid, reference)).toMatchObject({ archivedAt: expect.any(String), description: "SYNTHETIC CONTRACT TEST: private reporting details." });
+  const report = await moderation.getPrivateReport(actor, reference);
+  expect(report.history.filter(event => event.action === "archived")).toHaveLength(1);
+  await expect(moderation.transition(actor, { reference, expectedRevision: report.revision, to: "In progress", update: { en: "Must stay private.", fil: "" } })).rejects.toMatchObject({ code: "CONFLICT" });
+  expect((await db.collection("residentNotifications").where("reference", "==", reference).get()).docs.filter(doc => doc.data().message.includes("archived"))).toHaveLength(1);
+});
 
 it("completes the real-SDK journey through private dispute and confirmation", async () => {
   const reports = await getReportModule(), moderation = getModerationModule(), engagement = getEngagementModule();

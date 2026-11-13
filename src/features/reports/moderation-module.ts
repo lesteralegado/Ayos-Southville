@@ -53,6 +53,7 @@ export type TimelineEvent = {
   update?: BilingualUpdate;
 };
 export type ModerationReport = {
+  archivedAt?: string;
   reviewTakeoverAvailable?: boolean;
   externalFollowUp?: { phase: "forwarded" | "acknowledged" | "accepted" | "resolved"; organization: string; correspondence: string; occurredAt: string; actorUid: string; operationId: string }[];
   reviewOwnerUid?: string;
@@ -102,9 +103,9 @@ export type ModerationStore = {
   appendAudit(event: AuditEvent, id?: string): Promise<void>;
   listAudit(): Promise<AuditEvent[]>;
 };
-export type QueueReport = Pick<ModerationReport, "reference" | "category" | "status" | "submittedAt" | "revision" | "reviewOwnerUid" | "reviewExpectation"> & { reviewAcknowledgedAt?: string };
+export type QueueReport = Pick<ModerationReport, "reference" | "category" | "status" | "submittedAt" | "revision" | "reviewOwnerUid" | "reviewExpectation" | "archivedAt"> & { reviewAcknowledgedAt?: string };
 export function queueReport(report: ModerationReport): QueueReport {
-  return { reference: report.reference, category: report.category, status: report.status, submittedAt: report.submittedAt, revision: report.revision ?? 0, ...(report.reviewOwnerUid ? { reviewOwnerUid: report.reviewOwnerUid } : {}), ...(report.review?.acknowledgedAt ? { reviewAcknowledgedAt: report.review.acknowledgedAt } : {}) };
+  return { archivedAt: report.archivedAt, reference: report.reference, category: report.category, status: report.status, submittedAt: report.submittedAt, revision: report.revision ?? 0, ...(report.reviewOwnerUid ? { reviewOwnerUid: report.reviewOwnerUid } : {}), ...(report.review?.acknowledgedAt ? { reviewAcknowledgedAt: report.review.acknowledgedAt } : {}) };
 }
 export type EmailDelivery = {
   residentUid: string;
@@ -153,7 +154,8 @@ function requireText(value: string, label: string) {
     );
   return value.trim();
 }
-function requireRevision(report: ModerationReport, expected?: number) {
+function requireEditableRevision(report: ModerationReport, expected?: number) {
+  if (report.archivedAt) throw new ModerationConflictError();
   if (
     expected !== undefined &&
     (!Number.isSafeInteger(expected) || expected !== (report.revision ?? 0))
@@ -277,7 +279,7 @@ export function createModerationModule({
       const report = await findReport(input.reference);
       const operationId = requireText(input.operationId, "Operation reference");
       if (report.externalFollowUp?.some(event => event.operationId === operationId && event.actorUid === actor.uid)) return;
-      requireRevision(report, input.expectedRevision);
+      requireEditableRevision(report, input.expectedRevision);
       if (!["forwarded", "acknowledged", "accepted", "resolved"].includes(input.phase)) throw new ModerationValidationError("Choose the actual outside response stage.");
       if ((report.externalFollowUp?.length ?? 0) >= 100) throw new ModerationValidationError("Follow-up record limit reached.");
       const event = { phase: input.phase, organization: requireText(input.organization, "Outside organization"), correspondence: requireText(input.correspondence, "Private correspondence"), occurredAt: now().toISOString(), actorUid: actor.uid, operationId };
@@ -290,7 +292,7 @@ export function createModerationModule({
       const report = await findReport(input.reference);
       const operationId = requireText(input.operationId, "Operation reference");
       if (report.history.some(event => event.operationId === operationId && event.actorUid === actor.uid && event.action === "review-acknowledged")) return;
-      requireRevision(report, input.expectedRevision);
+      requireEditableRevision(report, input.expectedRevision);
       if (report.review || !["Submitted", "Under review", "Assigned", "In progress"].includes(report.status)) throw new ModerationValidationError("Review already acknowledged or report inactive.");
       report.review = { acknowledgedAt: now().toISOString(), nextStep: requireText(input.nextStep, "Next-step decision"), actorUid: actor.uid };
       report.reviewOwnerUid = actor.uid;
@@ -306,7 +308,7 @@ export function createModerationModule({
       const report = await findReport(input.reference);
       const operationId = requireText(input.operationId, "Operation reference");
       if (report.history.some(event => event.operationId === operationId && event.actorUid === actor.uid && event.action === "review-takeover")) return;
-      requireRevision(report, input.expectedRevision);
+      requireEditableRevision(report, input.expectedRevision);
       const dueAt = reviewDeadline(report.submittedAt, operating.reviewCalendar);
       if (!dueAt || now().getTime() <= Date.parse(dueAt) || report.review || !["Submitted", "Under review", "Assigned", "In progress"].includes(report.status))
         throw new ModerationValidationError("Takeover requires a confirmed overdue review without acknowledgement.");
@@ -400,7 +402,7 @@ export function createModerationModule({
     ) {
       requireRole(actor, moderatorRoles);
       const report = await findReport(input.reference);
-      requireRevision(report, input.expectedRevision);
+      requireEditableRevision(report, input.expectedRevision);
       requireStatus(report, "Submitted");
       const reason = requireText(input.reason, "Reason");
       if (input.publicSummary?.length > 1000 || input.publicArea?.length > 160) throw new ModerationValidationError("Use a public summary up to 1,000 characters and an area up to 160.");
@@ -476,7 +478,7 @@ export function createModerationModule({
     ) {
       requireRole(actor, moderatorRoles);
       const report = await findReport(input.reference);
-      requireRevision(report, input.expectedRevision);
+      requireEditableRevision(report, input.expectedRevision);
       requireStatus(report, "Submitted");
       if (
         ![
@@ -527,8 +529,8 @@ export function createModerationModule({
       const duplicate = await findReport(input.duplicateReference);
       const canonical = await findReport(input.canonicalReference);
       const occurredAt = now().toISOString();
-      requireRevision(duplicate, input.expectedRevision);
-      requireRevision(canonical, input.canonicalRevision);
+      requireEditableRevision(duplicate, input.expectedRevision);
+      requireEditableRevision(canonical, input.canonicalRevision);
       requireStatus(duplicate, "Submitted");
       if (
         !["Under review", "Assigned", "In progress"].includes(canonical.status)
@@ -583,7 +585,7 @@ export function createModerationModule({
     async reassignOwner(actor: Operator, input: { reference: string; expectedRevision: number; ownerUid: string; reason: string }) {
       requireRole(actor, ["Coordinator", "Administrator"]);
       const report = await findReport(input.reference);
-      requireRevision(report, input.expectedRevision);
+      requireEditableRevision(report, input.expectedRevision);
       if (!["Submitted", "Under review", "Assigned", "In progress"].includes(report.status)) throw new ModerationValidationError("Reassign only active reports.");
       const ownerUid = requireText(input.ownerUid, "Operator UID"), reason = requireText(input.reason, "Reassignment reason");
       if (ownerUid.length > 128) throw new ModerationValidationError("Choose a valid operator.");
@@ -604,7 +606,7 @@ export function createModerationModule({
     ) {
       requireRole(actor, ["Coordinator", "Administrator"]);
       const report = await findReport(input.reference);
-      requireRevision(report, input.expectedRevision);
+      requireEditableRevision(report, input.expectedRevision);
       requireStatus(report, "Under review");
       if (!["low", "normal", "high", "urgent"].includes(input.priority))
         throw new ModerationValidationError("Choose a valid priority.");
@@ -635,7 +637,7 @@ export function createModerationModule({
     ) {
       requireRole(actor, ["Coordinator", "Administrator"]);
       const report = await findReport(input.reference);
-      requireRevision(report, input.expectedRevision);
+      requireEditableRevision(report, input.expectedRevision);
       if (!["In progress", "Resolved"].includes(input.to))
         throw new ModerationValidationError("Choose a valid transition.");
       const update = requireUpdate(input.update);
@@ -678,7 +680,7 @@ export function createModerationModule({
       const report = await findReport(input.reference);
       if (actor.uid !== report.reporterUid)
         throw new ModerationForbiddenError();
-      requireRevision(report, input.expectedRevision);
+      requireEditableRevision(report, input.expectedRevision);
       requireStatus(report, "Resolved");
       if (!["confirm", "dispute"].includes(input.response))
         throw new ModerationValidationError("Choose confirm or dispute.");
