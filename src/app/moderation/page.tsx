@@ -4,6 +4,7 @@ import { getPublicPilotConfiguration } from "@/features/admin/firebase-administr
 import { getModerationModule } from "@/features/reports/firebase-moderation-store";
 import { ModerationForbiddenError } from "@/features/reports/moderation-module";
 import { OperatorWorkspace } from "@/features/reports/operator-workspace";
+import { isReportIndexPending, ReportIndexPending } from "@/features/reports/report-query-error";
 export default async function ModerationPage() {
   const actor = await getVerifiedOperator();
   if (!actor) redirect("/sign-in?next=/moderation");
@@ -16,6 +17,7 @@ export default async function ModerationPage() {
     configuration = await getPublicPilotConfiguration();
   } catch (error) {
     if (error instanceof ModerationForbiddenError) redirect("/account");
+    if (isReportIndexPending(error)) return <ReportIndexPending href="/moderation" />;
     throw error;
   }
   return (
