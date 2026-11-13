@@ -141,6 +141,11 @@ function createFirebaseReportStore(): ReportStore {
     async listByResident(residentUid: string) {
       return this.listResidentWindow(residentUid, null, reportPageSize);
     },
+    async countByResident(residentUid) {
+      if (await pilotRecordsExpired()) return 0;
+      const snapshot = await db.collection("privateReports").where("reporterUid", "==", residentUid).count().get();
+      return snapshot.data().count;
+    },
     async listResidentWindow(residentUid, after, limit) {
       if (await pilotRecordsExpired()) return [];
       const snapshot = await boundedReportQuery(db.collection("privateReports").where("reporterUid", "==", residentUid), after, limit).get();

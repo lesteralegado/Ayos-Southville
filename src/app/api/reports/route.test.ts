@@ -5,11 +5,12 @@ const mocks = vi.hoisted(() => ({
   hasPilotAccess: vi.fn(),
   submit: vi.fn(),
   listMinePage: vi.fn(),
+  countMine: vi.fn(),
 }));
 
 vi.mock("@/features/auth/session", () => ({ getVerifiedResident: mocks.getVerifiedResident, hasPilotAccess: mocks.hasPilotAccess }));
 vi.mock("@/features/reports/firebase-report-store", () => ({
-  getReportModule: () => ({ submit: mocks.submit, listMinePage: mocks.listMinePage }),
+  getReportModule: () => ({ submit: mocks.submit, listMinePage: mocks.listMinePage, countMine: mocks.countMine }),
 }));
 
 import { GET, POST } from "./route";
@@ -24,6 +25,22 @@ function postRequest(body: unknown) {
 
 describe("resident report application boundary", () => {
   beforeEach(() => { vi.clearAllMocks(); mocks.hasPilotAccess.mockResolvedValue(true); });
+
+  it("counts only the authenticated resident's reports without loading a page", async () => {
+    mocks.getVerifiedResident.mockResolvedValue({ uid: "resident-1" });
+    mocks.countMine.mockResolvedValue(27);
+    const response = await GET(new Request("https://ayos.test/api/reports?summary=1&residentUid=other"));
+    expect(await response.json()).toEqual({ reportCount: 27 });
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(mocks.countMine).toHaveBeenCalledWith("resident-1");
+    expect(mocks.listMinePage).not.toHaveBeenCalled();
+  });
+
+  it("requires authentication for report counts", async () => {
+    mocks.getVerifiedResident.mockResolvedValue(null);
+    expect((await GET(new Request("https://ayos.test/api/reports?summary=1"))).status).toBe(401);
+    expect(mocks.countMine).not.toHaveBeenCalled();
+  });
 
   it("denies a verified but unapproved resident directly at submission", async () => {
     mocks.getVerifiedResident.mockResolvedValue({ uid: "unapproved" });

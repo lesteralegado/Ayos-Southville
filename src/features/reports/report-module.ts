@@ -97,6 +97,7 @@ export type ReportStore = {
     report: StoredReport,
   ): Promise<{ reference: string; created: boolean; withdrawn?: true }>;
   listByResident(residentUid: string): Promise<ResidentReport[]>;
+  countByResident(residentUid: string): Promise<number>;
   listResidentWindow(residentUid: string, after: PagePosition | null, limit: number): Promise<ResidentReport[]>;
   getOwned(residentUid: string, reference: string): Promise<ResidentReport | null>;
   getPublic(reference: string): Promise<PublicReportDetail | null>;
@@ -302,6 +303,7 @@ export function createReportModule({
       });
     },
     listMine: (residentUid: string) => store.listByResident(residentUid),
+    countMine: (residentUid: string) => store.countByResident(residentUid),
     async listMinePage(residentUid: string, cursor?: string | null): Promise<ReportPage<ResidentReport>> {
       const scope = `resident:${residentUid}`;
       const rows = await store.listResidentWindow(residentUid, pagePosition(scope, cursor), reportPageSize + 1);
@@ -338,6 +340,9 @@ export function createMemoryReportStore(): ReportStore {
       return memoryWindow([...reports.values()]
         .map((report) => report.private)
         .filter((report) => report.reporterUid === residentUid), null, reportPageSize);
+    },
+    async countByResident(residentUid) {
+      return [...reports.values()].filter(report => report.private.reporterUid === residentUid).length;
     },
     async listResidentWindow(residentUid, after, limit) {
       return memoryWindow([...reports.values()].map(report => report.private).filter(report => report.reporterUid === residentUid), after, limit);
