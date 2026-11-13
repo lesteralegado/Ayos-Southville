@@ -5,7 +5,7 @@ import sharp from "sharp";
 import { chromium } from "@playwright/test";
 import { createServer, transformWithOxc } from "vite";
 const root = process.cwd();
-const artifacts = path.join(root, ".scratch/ayos-southville-production-completion/artifacts");
+const artifacts = path.join(root, ".scratch/simplified-product-flow/artifacts");
 await mkdir(artifacts, { recursive: true });
 const capture = !process.argv.includes("--functional-only");
 const fixture = `
@@ -14,7 +14,7 @@ import { createRoot } from 'react-dom/client';
 import { OperatorWorkspace } from '/src/features/reports/operator-workspace.tsx';
 import '/src/app/globals.css';
 const role = new URL(location.href).searchParams.get('role') || 'Administrator';
-fetch('/api/moderation?filter=active').then(r=>r.json()).then(async data=>{const detail=data.reports[0]?await fetch('/api/moderation?reference='+data.reports[0].reference).then(r=>r.json()):{report:null};createRoot(document.getElementById('root')).render(<OperatorWorkspace initialReports={data.reports} initialNextCursor={data.nextCursor} initialSelectedReport={detail.report} actor={{uid:'operator',roles:[role]}} destinations={[{id:'lighting',name:'Streetlight desk'}]} />)});
+fetch('/api/moderation?filter=new&ownedFirst=1').then(r=>r.json()).then(async data=>{const detail=data.reports[0]?await fetch('/api/moderation?reference='+data.reports[0].reference).then(r=>r.json()):{report:null};createRoot(document.getElementById('root')).render(<OperatorWorkspace initialFilter="new" initialReports={data.reports} initialNextCursor={data.nextCursor} initialSelectedReport={detail.report} actor={{uid:'operator',roles:[role]}} destinations={[{id:'lighting',name:'Streetlight desk'}]} />)});
 `;
 let boundaries;
 const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-operator-browser"),
@@ -70,7 +70,7 @@ const server = await createServer({ cacheDir: path.join(root, "node_modules/.vit
             else {
               const { action, input } = JSON.parse(body);
               if (action === "assign" && input.destination !== "lighting") throw new Error("Invalid desk");
-              if (!["accept", "reject", "merge", "assign", "transition"].includes(action)) throw new Error("Unknown action");
+              if (!["accept", "reject", "merge", "assign", "transition", "reassignOwner"].includes(action)) throw new Error("Unknown action");
               await moderation[action](actor, input); result = { ok: true };
             }
           } else if (url.pathname === "/api/evidence" && req.method === "GET") result = { assets: await evidence.list(actor.uid, url.searchParams.get("draftKey")) };
@@ -105,9 +105,9 @@ try {
   const errors = []; page.on("pageerror", error => errors.push(error.message));
   await page.goto("http://127.0.0.1:4180/");
   await page.getByRole("heading", { name: "Report operations" }).waitFor();
+  await page.getByText("Edit public details", { exact: true }).click();
   await page.getByLabel("Public summary", { exact: true }).fill("Broken streetlight beside the covered court.");
   await page.getByLabel("Public area", { exact: true }).fill("Phase 2 · Covered court");
-  await page.getByLabel("Decision reason").fill("Removed contact and household details.");
   await page.getByLabel("Approximate latitude").fill("14.28");
   await page.getByLabel("Approximate longitude").fill("121.13");
   for (const [name, width, height] of capture ? [["desktop", 1440, 1000], ["tablet", 768, 1024], ["mobile", 390, 844]] : []) {
@@ -132,14 +132,9 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "200% text zoom");
   if (capture) await page.screenshot({ path: path.join(artifacts, 'operator-zoom200.png'), fullPage: false });
   await page.evaluate(() => document.documentElement.style.fontSize = "");
-  await page.getByRole("button", { name: "Accept and publish" }).click();
-  await page.getByRole("button", { name: "Assign report" }).waitFor().catch(async error => { console.log("Acceptance diagnostics:", await page.locator("body").innerText(), await page.locator("input:invalid,textarea:invalid").evaluateAll(nodes => nodes.map(node => ({ name: node.name, value: node.value, validation: node.validationMessage })))); throw error; });
-  await page.getByLabel("Decision reason").fill("Dark walkway.");
-  await page.getByLabel("Priority", { exact: true }).selectOption("high");
-  await page.getByLabel("Internal destination", { exact: true }).selectOption("lighting");
-  await page.getByLabel("English update").fill("Assigned to the pilot lighting desk.");
-  await page.getByLabel("Filipino update").fill("Itinalaga sa pilot lighting desk.");
-  await page.getByRole("button", { name: "Assign report" }).click();
+  await page.locator(".admin-shell > details.advanced-disclosure > summary").click();
+  await page.getByLabel("Report status", { exact: true }).selectOption("active");
+  await page.getByRole("button", { name: "Approve and publish" }).click();
   await page.getByRole("button", { name: "Start work" }).waitFor();
   await page.getByLabel("English update").fill("Repair work has started.");
   await page.getByLabel("Filipino update").fill("Nagsimula ang pagkukumpuni.");
@@ -150,7 +145,7 @@ try {
   await page.getByRole("alert").filter({ hasText: "Connection interrupted" }).waitFor();
   assert.equal(await page.getByLabel("English update").inputValue(), "Repair work has started.");
   await page.unroute("**/api/moderation");
-  await page.getByRole("button", { name: "Reload workspace" }).click();
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
   await page.getByText("Latest reports loaded.", { exact: false }).waitFor();
   await page.getByRole("button", { name: "Start work" }).click();
   await page.getByRole("button", { name: "Mark resolved" }).waitFor();
@@ -164,17 +159,19 @@ try {
   await page.getByRole("button", { name: "Mark resolved" }).click();
   await page.getByRole("heading", { name: "AS-300001 · Resolved" }).waitFor();
   await page.getByRole("button", { name: /AS-300002/ }).click();
+  await page.locator(".operator-more > summary").click();
   await page.getByLabel("Review decision").selectOption("reject");
   await page.getByLabel("Decision reason").fill("Outside the controlled pilot scope.");
   await page.getByRole("button", { name: "Reject report" }).click();
   await page.getByRole("heading", { name: "AS-300002 · Rejected" }).waitFor();
   await page.getByRole("button", { name: /AS-300003/ }).click();
+  await page.getByText("Edit public details", { exact: true }).click();
   await page.getByLabel("Public summary", { exact: true }).fill("Another approved light concern.");
   await page.getByLabel("Public area", { exact: true }).fill("Court");
-  await page.getByLabel("Decision reason").fill("Reviewed safely.");
-  await page.getByRole("button", { name: "Accept and publish" }).click();
-  await page.getByRole("button", { name: "Assign report" }).waitFor();
+  await page.getByRole("button", { name: "Approve and publish" }).click();
+  await page.getByRole("button", { name: "Start work" }).waitFor();
   await page.getByRole("button", { name: /AS-300004/ }).click();
+  await page.locator(".operator-more > summary").click();
   await page.getByLabel("Review decision").selectOption("merge");
   await page.getByLabel("Canonical report", { exact: true }).fill("AS-300003");
   await page.getByRole("button", { name: "Find canonical report" }).click();
@@ -187,10 +184,12 @@ try {
   assert.ok(!/09171234567|Block 9|Synthetic block/.test(JSON.stringify(publicReport)));
   await assert.rejects(moderation.getPublicReport("AS-300002"));
   assert.equal((await moderation.getPrivateReport({ uid: "operator", roles: ["Administrator"] }, "AS-300001")).resolutionEvidence.length, 1);
-  assert.equal((await moderation.listAudit({ uid: "operator", roles: ["Administrator"] })).length, 7);
+  assert.equal((await moderation.listAudit({ uid: "operator", roles: ["Administrator"] })).length, 6);
   const moderatorPage = await browser.newPage({ extraHTTPHeaders: { "x-fixture-role": "Moderator" } });
   await moderatorPage.goto("http://127.0.0.1:4180/?role=Moderator");
   await moderatorPage.getByRole("heading", { name: "Report operations" }).waitFor();
+  await moderatorPage.locator(".admin-shell > details.advanced-disclosure > summary").click();
+  await moderatorPage.getByLabel("Report status", { exact: true }).selectOption("active");
   await moderatorPage.getByRole("button", { name: /AS-300003/ }).click();
   assert.equal(await moderatorPage.getByRole("button", { name: "Assign report" }).count(), 0);
   const forbidden = await moderatorPage.request.patch("http://127.0.0.1:4180/api/moderation", { data: { action: "assign", input: { reference: "AS-300003", expectedRevision: 1, priority: "high", destination: "lighting", reason: "forbidden", update: { en: "test", fil: "test" } } } });

@@ -14,6 +14,7 @@ import type { AuditEvent } from "@/features/reports/moderation-module";
 import { OperatingControls } from "./operating-controls";
 import { defaultPilotOperations, type PilotOperations } from "./pilot-operations";
 import { measurementCopy } from "@/features/pilot/measurement-copy";
+import { navigationCopy } from "@/features/navigation/navigation-copy";
 
 export type AdministrationSnapshot = {
   users: PilotUser[];
@@ -35,6 +36,7 @@ export function AdministrationWorkspace({
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [advanced, setAdvanced] = useState(false);
   const administrators = snapshot.users.filter(
     (user) => user.roles.includes("Administrator") && user.emailVerified,
   ).length;
@@ -135,20 +137,10 @@ export function AdministrationWorkspace({
           aria-label={t("administrationSections")}
         >
           <a href="#people">{t("people")}</a>
-          <a href="#coverage">{t("coverage")}</a>
           <a href="#invitations">{t("invitationsLabel")}</a>
-          <a href="#configuration">{t("configuration")}</a>
-          <a href="#audit">{t("auditHistory")}</a>
-          <Link href="/administration/operations">{t("privacyOperations")}</Link>
-          <Link href="/administration/measurement">{measurementCopy[locale].title}</Link>
+          <a href="#configuration">{t("reportCategories")}</a>
+          <a href="#advanced-settings">{navigationCopy[locale].advanced}</a>
         </nav>
-        <div className="admin-continuity" role="status">
-          {administrators >= 2
-            ? t("twoAdministratorAccountsAreVerifiedBackupCoverageStill")
-            : t("beforeLaunchAddASecondVerifiedAdministrator")}{" "}
-          {administrators}{" "}
-          {t("verifiedAdministrators")}.
-        </div>
         <p className="admin-feedback" role="status" aria-live="polite">
           {pending
             ? t("saving")
@@ -165,7 +157,6 @@ export function AdministrationWorkspace({
             </Link>
           </div>
         )}
-        <OperatingControls key={snapshot.operations?.revision ?? 0} confirmed={snapshot.operations ?? defaultPilotOperations} users={snapshot.users} pending={pending} locale={locale} save={input => mutate("update-operations", input)} />
         <section id="people" className="admin-section">
           <h2>{t("peopleAndAccess")}</h2>
           <p>
@@ -348,7 +339,7 @@ export function AdministrationWorkspace({
           )}
         </section>
         <section id="configuration" className="admin-section">
-          <h2>{t("reportingConfiguration")}</h2>
+          <h2>{t("reportCategories")}</h2>
           <p>
             {t("keepIdentifiersStableDeactivateEntriesInsteadOfRenaming")}
           </p>
@@ -364,7 +355,8 @@ export function AdministrationWorkspace({
               <legend className="sr-only">
                 {t("configuration")}
               </legend>
-              <h3>{t("responsibleDestinations")}</h3>
+              <details className="advanced-disclosure">
+              <summary>{t("responsibleDestinations")}</summary>
               {configuration.destinations.map((destination, index) => (
                 <div className="admin-config-row" key={index}>
                   <label>
@@ -438,7 +430,7 @@ export function AdministrationWorkspace({
               >
                 {t("addDestination")}
               </button>
-              <h3>{t("reportCategories")}</h3>
+              </details>
               {configuration.categories.map((category, index) => (
                 <div
                   className="admin-config-row admin-category-row"
@@ -556,9 +548,8 @@ export function AdministrationWorkspace({
               >
                 {t("addCategory")}
               </button>
-              <h3>
-                {t("verifiedEmergencyGuidance")}
-              </h3>
+              <details className="advanced-disclosure">
+              <summary>{t("verifiedEmergencyGuidance")}</summary>
               <div className="admin-emergency-grid">
                 {(["en", "fil"] as const).map((language) => (
                   <section key={language}>
@@ -594,6 +585,7 @@ export function AdministrationWorkspace({
                   </section>
                 ))}
               </div>
+              </details>
               <label>
                 {t("configurationChangeReason")}
                 <input required name="reason" maxLength={500} />
@@ -604,6 +596,23 @@ export function AdministrationWorkspace({
             </fieldset>
           </form>
         </section>
+        <section id="advanced-settings" className="admin-section">
+          <button type="button" className="advanced-toggle" aria-expanded={advanced} aria-controls="advanced-content" onClick={() => setAdvanced(!advanced)}>
+            {navigationCopy[locale].advanced}
+          </button>
+          <div id="advanced-content" hidden={!advanced}>
+            <p>{navigationCopy[locale].description}</p>
+            <nav className="admin-section-nav" aria-label={navigationCopy[locale].tools}>
+              <Link href="/administration/operations">{t("privacyOperations")}</Link>
+              <Link href="/administration/measurement">{measurementCopy[locale].title}</Link>
+              <Link href="/insights">{navigationCopy[locale].insights}</Link>
+              <Link href="/pilot">{navigationCopy[locale].pilot}</Link>
+            </nav>
+            <div className="admin-continuity" role="status">
+              {administrators >= 2 ? t("twoAdministratorAccountsAreVerifiedBackupCoverageStill") : t("beforeLaunchAddASecondVerifiedAdministrator")}{" "}
+              {administrators} {t("verifiedAdministrators")}.
+            </div>
+            <OperatingControls key={snapshot.operations?.revision ?? 0} confirmed={snapshot.operations ?? defaultPilotOperations} users={snapshot.users} pending={pending} locale={locale} save={input => mutate("update-operations", input)} />
         <section id="audit" className="admin-section">
           <h2>{t("auditHistory")}</h2>
           <p>
@@ -633,6 +642,8 @@ export function AdministrationWorkspace({
               ))}
             </ol>
           )}
+        </section>
+          </div>
         </section>
       </div>
     </main>

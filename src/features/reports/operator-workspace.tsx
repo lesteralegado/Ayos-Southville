@@ -1,12 +1,16 @@
 "use client";
+import { RemovalRequestQueue } from "./removal-request-queue";
+import { PrimaryReportAction } from "./primary-report-action";
+import { assignmentUpdateCopy, operatorFlowCopy } from "./operator-flow-copy";
+import { ReassignReportOwner } from "./reassign-report-owner";
+import { ReportUpdate } from "./report-update";
+import { OperatorUpdateFields } from "./operator-update-fields";
 
 import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
 import { useLocale } from "@/features/i18n/use-locale";
-import { EvidencePicker } from "./evidence-picker";
 import { OperatorReviewPanel } from "./operator-review-panel";
 import { reviewCopy } from "./review-copy";
-import type { EvidenceAsset } from "./report-module";
 import type { ModerationReport, Operator, QueueReport } from "./moderation-module";
 import {
   formatManilaDate,
@@ -21,6 +25,7 @@ type Props = {
   initialSelectedReport?: ModerationReport | null;
   actor: Operator;
   destinations: Destination[];
+  initialFilter?: string;
 };
 export function OperatorWorkspace({
   initialReports,
@@ -28,12 +33,13 @@ export function OperatorWorkspace({
   initialSelectedReport,
   actor,
   destinations,
+  initialFilter = "active",
 }: Props) {
   const { locale, chooseLocale } = useLocale();
   const t = (en: string, fil: string) => (locale === "fil" ? fil : en);
   const [reports, setReports] = useState<QueueReport[]>(initialReports);
   const [selected, setSelected] = useState(initialReports.find((report) => ["Submitted", "Under review", "Assigned", "In progress"].includes(report.status))?.reference ?? initialReports[0]?.reference ?? "");
-  const [filter, setFilter] = useState("active");
+  const [filter, setFilter] = useState(initialFilter);
   const [cursor, setCursor] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [chosen, setChosen] = useState<ModerationReport | null>(initialSelectedReport ?? (initialReports[0] && "history" in initialReports[0] ? initialReports[0] : null));
@@ -52,7 +58,7 @@ export function OperatorWorkspace({
   async function selectReport(reference: string) {
     if (busy.current) return;
     busy.current = true; setPending(true); setError("");
-    try { setChosen(await readDetail(reference)); setSelected(reference); setNotice(""); }
+    try { setChosen(await readDetail(reference)); setSelected(reference); setNotice(""); setTimeout(() => detailHeading.current?.focus(), 0); }
     catch { setError(t("Could not load this report. Reload and retry.", "Hindi ma-load ang ulat. I-reload at subukang muli.")); }
     finally { busy.current = false; setPending(false); }
   }
@@ -63,7 +69,7 @@ export function OperatorWorkspace({
     setError("");
     setNotice("");
     try {
-      const params = new URLSearchParams({ filter: requestedFilter });
+      const params = new URLSearchParams({ filter: requestedFilter, ownedFirst: "1" });
       if (pageCursor) params.set("cursor", pageCursor);
       const response = await fetch(`/api/moderation?${params}`, {
         cache: "no-store",
@@ -129,7 +135,7 @@ export function OperatorWorkspace({
         );
       }
       // A separate refresh can fail after a successful mutation. Never invite blind retry.
-      const params = new URLSearchParams({ filter });
+      const params = new URLSearchParams({ filter, ownedFirst: "1" });
       if (cursor) params.set("cursor", cursor);
       const current = await fetch(`/api/moderation?${params}`, {
         cache: "no-store",
@@ -198,6 +204,12 @@ export function OperatorWorkspace({
             "Suriin nang pribado, maingat na ilathala, at subaybayan hanggang malutas. Independent na pilot ng mga residente; internal na pilot desk ang mga destinasyon.",
           )}
         </p>
+        <RemovalRequestQueue />
+        <nav className="operator-groups" aria-label={operatorFlowCopy[locale].groups}>
+          {(["new", "working", "waiting", "closed"] as const).map(group => <button className="button button-quiet" type="button" key={group} aria-current={filter === group ? "page" : undefined} disabled={pending || unconfirmed} onClick={() => void reload(null, group)}>{operatorFlowCopy[locale][group]}</button>)}
+        </nav>
+        <p>{operatorFlowCopy[locale].owned}</p>
+        <details className="advanced-disclosure"><summary>{operatorFlowCopy[locale].more}</summary>
         <div className="operator-toolbar">
           <label>
             {t("Report status", "Estado ng ulat")}
@@ -207,6 +219,7 @@ export function OperatorWorkspace({
               disabled={pending || unconfirmed}
               onChange={(event) => void reload(null, event.target.value)}
             >
+              {(["new", "working", "waiting", "closed"] as const).map(group => <option key={group} value={group}>{operatorFlowCopy[locale][group]}</option>)}
               <option value="active">
                 {t("Actionable reports", "Mga ulat na kailangan ng aksyon")}
               </option>
@@ -230,6 +243,7 @@ export function OperatorWorkspace({
             {t("Reload workspace", "I-reload ang workspace")}
           </button>
         </div>
+        </details>
         <p role="status" aria-live="polite">
           {pending
             ? t(
@@ -241,6 +255,7 @@ export function OperatorWorkspace({
         {error && (
           <div className="admin-error" role="alert">
             {error}
+            <button className="button button-quiet" type="button" disabled={pending} onClick={() => void reload()}>{operatorFlowCopy[locale].retry}</button>
           </div>
         )}
         <div className="operator-layout">
@@ -289,7 +304,7 @@ export function OperatorWorkspace({
                 {chosen.reference} · {reportStatusLabels[locale][chosen.status]}
               </h2>
               <OperatorReport
-                key={chosen.reference + ":" + (chosen.revision ?? 0)}
+                key={chosen.reference}
                 report={chosen}
                 actor={actor}
                 destinations={destinations}
@@ -359,9 +374,7 @@ function OperatorReport({
   const canProcess = actor.roles.some((role) =>
     ["Coordinator", "Administrator"].includes(role),
   );
-  const [decision, setDecision] = useState("accept");
-  const [assets, setAssets] = useState<EvidenceAsset[]>([]);
-  const [uploadBlocked, setUploadBlocked] = useState(true);
+  const [decision, setDecision] = useState("reject");
   const [canonical, setCanonical] = useState<ModerationReport | null>(null);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -374,27 +387,7 @@ function OperatorReport({
       update: { en: text("en"), fil: text("fil") },
     };
     if (report.status === "Submitted") {
-      if (decision === "accept") {
-        const lat = text("latitude"),
-          lon = text("longitude");
-        void mutate("accept", {
-          ...base,
-          update: undefined,
-          publicSummary: text("summary"),
-          publicArea: text("area"),
-          ...(lat && lon
-            ? {
-                publicLocation: {
-                  latitude: Number(lat),
-                  longitude: Number(lon),
-                },
-              }
-            : {}),
-          approvedMedia: data
-            .getAll("approved")
-            .map((id) => ({ id, alt: text("alt-" + id) })),
-        });
-      } else if (decision === "reject")
+      if (decision === "reject")
         void mutate("reject", { ...base, category: text("category") });
       else {
         if (!canonical) return;
@@ -411,15 +404,12 @@ function OperatorReport({
         priority: text("priority"),
         destination: text("destination"),
       });
-    else
-      void mutate("transition", {
-        ...base,
-        to: report.status === "Assigned" ? "In progress" : "Resolved",
-        resolutionEvidence: assets,
-      });
   }
   return (
     <>
+      <PrimaryReportAction key={report.reference + ":" + report.status} report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />
+      <details className="operator-more"><summary>{operatorFlowCopy[locale].more}</summary>
+      <ReassignReportOwner report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />
       <OperatorReviewPanel report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />
       <section className="operator-private">
         <h3>
@@ -512,9 +502,7 @@ function OperatorReport({
       {(
         report.status === "Submitted"
           ? canReview
-          : ["Under review", "Assigned", "In progress"].includes(
-              report.status,
-            ) && canProcess
+          : report.status === "Under review" && canProcess
       ) ? (
         <form onSubmit={submit}>
           <fieldset disabled={pending}>
@@ -528,12 +516,6 @@ function OperatorReport({
                     value={decision}
                     onChange={(event) => setDecision(event.target.value)}
                   >
-                    <option value="accept">
-                      {t(
-                        "Accept with redaction",
-                        "Tanggapin na may pag-redact",
-                      )}
-                    </option>
                     <option value="reject">
                       {t("Reject with reason", "Tanggihan na may dahilan")}
                     </option>
@@ -542,67 +524,7 @@ function OperatorReport({
                     </option>
                   </select>
                 </label>
-                {decision === "accept" && (
-                  <>
-                    <p>
-                      {t(
-                        "Only these approved fields will become public. Coordinates are rounded to protect households. Selected photos become public; leave photos with identifying details unselected.",
-                        "Ang aprubadong mga field lamang ang ilalathala. Ni-round ang coordinate para protektahan ang tahanan. Pampubliko ang piniling litrato; huwag piliin ang may pribadong pagkakakilanlan.",
-                      )}
-                    </p>
-                    <label>
-                      {t("Public summary", "Pampublikong buod")}
-                      <textarea name="summary" required maxLength={4000} />
-                    </label>
-                    <label>
-                      {t("Public area", "Pampublikong lugar")}
-                      <input name="area" required maxLength={1000} />
-                    </label>
-                    <div className="operator-coordinate-row">
-                      <label>
-                        {t("Approximate latitude", "Tinatayang latitude")}
-                        <input
-                          name="latitude"
-                          type="number"
-                          step="0.01"
-                          min="-90"
-                          max="90"
-                        />
-                      </label>
-                      <label>
-                        {t("Approximate longitude", "Tinatayang longitude")}
-                        <input
-                          name="longitude"
-                          type="number"
-                          step="0.01"
-                          min="-180"
-                          max="180"
-                        />
-                      </label>
-                    </div>
-                    {report.evidence.map((asset, index) => (
-                      <div className="operator-approval" key={asset.id}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            name="approved"
-                            value={asset.id}
-                          />
-                          {t("Approve photo", "Aprubahan ang litrato")}{" "}
-                          {index + 1}
-                        </label>
-                        <label>
-                          {t(
-                            "Alternative text for photo",
-                            "Alternatibong teksto para sa litrato",
-                          )}{" "}
-                          {index + 1}
-                          <input name={"alt-" + asset.id} maxLength={1000} />
-                        </label>
-                      </div>
-                    ))}
-                  </>
-                )}
+
                 {decision === "reject" && (
                   <label>
                     {t("Rejection category", "Kategorya ng pagtanggi")}
@@ -675,71 +597,33 @@ function OperatorReport({
             )}
             {report.status !== "Submitted" && (
               <>
-                <label>
-                  {t("English update", "Update sa English")}
-                  <textarea name="en" required maxLength={4000} />
-                </label>
-                <label>
-                  {t("Filipino update", "Update sa Filipino")}
-                  <textarea name="fil" required maxLength={4000} />
-                </label>
+                <OperatorUpdateFields locale={locale} labels={assignmentUpdateCopy[locale]} />
                 <p>
                   {t(
-                    "Both updates are public. Keep private identity and exact locations out.",
-                    "Pampubliko ang dalawang update. Huwag isama ang pribadong pagkakakilanlan at eksaktong lokasyon.",
+                    "Your update and any translation are public. Keep private identity and exact locations out.",
+                    "Pampubliko ang update at anumang salin. Huwag isama ang pribadong pagkakakilanlan at eksaktong lokasyon.",
                   )}
                 </p>
               </>
             )}
-            {report.status === "In progress" && (
-              <>
-                <h3>
-                  {t(
-                    "Protected resolution evidence",
-                    "Pribadong ebidensya ng paglutas",
-                  )}
-                </h3>
-                <p>
-                  {t(
-                    "At least one completed upload is required before marking resolved.",
-                    "Kailangan ang kahit isang nakumpletong upload bago markahang nalutas.",
-                  )}
-                </p>
-                <EvidencePicker
-                  required
-                  owner={actor.uid}
-                  draftKey={"resolution_" + report.reference}
-                  locale={locale}
-                  onAssets={setAssets}
-                  onBlocked={setUploadBlocked}
-                />
-              </>
-            )}
+
             <button
               className="button button-primary"
               type="submit"
               disabled={
                 pending ||
-                (report.status === "Submitted" && decision === "merge" && !canonical) ||
-                (report.status === "In progress" &&
-                  (uploadBlocked || !assets.length))
+                (report.status === "Submitted" && decision === "merge" && !canonical)
               }
             >
               {report.status === "Submitted"
-                ? decision === "accept"
-                  ? t("Accept and publish", "Tanggapin at ilathala")
-                  : decision === "reject"
+                ? decision === "reject"
                     ? t("Reject report", "Tanggihan ang ulat")
                     : t("Merge duplicate", "Pagsamahin ang duplikado")
-                : report.status === "Under review"
-                  ? t("Assign report", "Italaga ang ulat")
-                  : report.status === "Assigned"
-                    ? t("Start work", "Simulan ang gawain")
-                    : t("Mark resolved", "Markahang nalutas")}
+                : t("Assign report", "Italaga ang ulat")}
             </button>
           </fieldset>
         </form>
-      ) : (
+      ) : canProcess && ["Assigned", "In progress"].includes(report.status) ? null : (
         <p>
           {["Resolved", "Resident confirmed", "Rejected", "Duplicate"].includes(
             report.status,
@@ -773,7 +657,7 @@ function OperatorReport({
                   {formatManilaDate(event.occurredAt, locale, true)}
                 </time>
                 {event.reason && <p>{event.reason}</p>}
-                {event.update && <p>{event.update[locale]}</p>}
+                {event.update && <p><ReportUpdate update={event.update} locale={locale} /></p>}
               </li>
             ))}
           </ol>
@@ -786,6 +670,7 @@ function OperatorReport({
           </p>
         )}
       </section>
+      </details>
     </>
   );
 }

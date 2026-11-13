@@ -9,6 +9,16 @@ const validDraft = {
 };
 
 describe("resident submission workflow", () => {
+  it("recovers withdrawal on another device without claiming successful submission", async () => {
+    localStorage.setItem("ayos-report-draft-v1:r1", JSON.stringify(validDraft));
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ reference: "AS-ORIGINAL", withdrawn: true })));
+    const { result } = renderHook(() => useReportSubmission({ residentUid: "r1", categories: [], locale: "en" }));
+    act(() => result.current.resumeDraft());
+    await act(async () => result.current.submit());
+    expect(result.current.phase).not.toBe("confirmed");
+    expect(result.current.reference).toBeUndefined();
+    expect(result.current.submitError).toMatch(/withdrawn/);
+  });
   beforeEach(() => localStorage.clear());
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 

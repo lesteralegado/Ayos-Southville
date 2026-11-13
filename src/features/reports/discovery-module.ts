@@ -24,7 +24,7 @@ export function createDiscoveryModule({ read, mode = "live", now = () => new Dat
     const timestamp = now().getTime();
     const filtered = (await all()).filter((report) =>
       (category === "all" || report.category === category) &&
-      (status === "all" || report.status === status) &&
+      (status === "all" || report.status === status || (status === "In progress" && report.status === "Assigned")) &&
       (days === "all" || Date.parse(report.submittedAt) >= timestamp - Number(days) * 86_400_000) &&
       (distance === "all" || (report.publicLocation && Math.hypot(
         (report.publicLocation.latitude - 14.281) * 111,

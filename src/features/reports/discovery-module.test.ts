@@ -8,6 +8,10 @@ const accepted = (reference = "AS-ABC123", extra = {}) => ({
 });
 
 describe("public discovery boundary", () => {
+  it("includes legacy assignment when filtering the simplified In progress stage", async () => {
+    const discovery = createDiscoveryModule({ read: async () => [accepted(), accepted("AS-WORK", { status: "In progress" })] });
+    expect((await discovery.list(new URLSearchParams({ status: "In progress" }))).reports).toHaveLength(2);
+  });
   it("isolates demo records and fails rather than reporting partial aggregates", async () => {
     const discovery = createDiscoveryModule({ mode: "demo", read: async () => [accepted(), accepted("DEMO-001", { demonstration: true })] });
     expect((await discovery.list(new URLSearchParams())).reports.map((report) => report.reference)).toEqual(["DEMO-001"]);

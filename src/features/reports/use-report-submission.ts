@@ -6,6 +6,7 @@ import type { PilotOperations } from "@/features/admin/pilot-operations";
 import type { EvidenceAsset } from "./report-module";
 import type { DuplicateSuggestion } from "./engagement-module";
 import { clearLocalPhotos } from "./evidence-drafts";
+import { residentFlowCopy } from "./resident-flow-copy";
 
 const draftKey = "ayos-report-draft-v1";
 const draftEvent = "ayos-report-draft-change";
@@ -222,9 +223,10 @@ export function useReportSubmission({ residentUid, categories, operatingStatus, 
             { cache: "no-store" },
           );
           if (response.ok) {
-            const receipt = (await response.json()) as { reference: string };
+            const receipt = (await response.json()) as { reference: string; withdrawn?: boolean };
             if (typeof receipt.reference !== "string" || !/^AS-[A-Z0-9]+$/.test(receipt.reference))
               throw new Error("Receipt unconfirmed");
+            if (receipt.withdrawn === true) { recoverWithdrawal(); return; }
             clearDraft();
             setReference(receipt.reference);
             setPhase("confirmed");
@@ -296,6 +298,7 @@ export function useReportSubmission({ residentUid, categories, operatingStatus, 
         });
         const result = (await response.json()) as {
           reference?: string;
+          withdrawn?: boolean;
           issues?: FieldIssues;
           code?: string;
         };
@@ -332,6 +335,7 @@ export function useReportSubmission({ residentUid, categories, operatingStatus, 
         }
         if (!response.ok || typeof result.reference !== "string" || !/^AS-[A-Z0-9]+$/.test(result.reference))
           throw new Error("Submission unconfirmed");
+        if (result.withdrawn === true) { recoverWithdrawal(); return; }
         clearDraft();
         setReference(result.reference);
         setPhase("confirmed");
@@ -350,6 +354,9 @@ export function useReportSubmission({ residentUid, categories, operatingStatus, 
     } finally {
       submitting.current = false;
     }
+  }
+  function recoverWithdrawal() {
+    clearDraft(); setDraft(blankDraft()); setEvidence([]); setUploadBlocked(false); setResumed(false); setReference(undefined); setPhase("refused"); setSubmitError(residentFlowCopy[locale].withdrawn);
   }
   async function supportSuggestion(reference: string) {
     if (submitting.current || pending || ambiguous || phase === "confirmed") return;

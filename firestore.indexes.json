@@ -1,5 +1,20 @@
 {
   "indexes": [
+    { "collectionGroup": "moderationReports", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "reviewOwnerUid", "order": "ASCENDING" }, { "fieldPath": "submittedAt", "order": "DESCENDING" }, { "fieldPath": "__name__", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "moderationReports", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "reviewOwnerUid", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "submittedAt", "order": "DESCENDING" }, { "fieldPath": "__name__", "order": "DESCENDING" }
+    ] },
+    {
+      "collectionGroup": "residentNotifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "residentUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
     {
       "collectionGroup": "privateReports",
       "queryScope": "COLLECTION",

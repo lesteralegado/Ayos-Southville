@@ -1,5 +1,7 @@
 # Current recorded readiness
 
+The [2026-11-13 simplified product verification](../../.scratch/simplified-product-flow/product-verification.md) records the current 77-file / 328-test local suite, seven real-emulator persistence contracts, browser journeys and remaining release gates. Older counts below remain historical evidence.
+
 Reviewed 2026-11-11 (Asia/Manila). Combined integration checks ran at `1a5475d`; targeted review-fix checks and the final standard production build passed at `864ccb7`. See the [architecture verification record](architecture-health-verification.md) for exact scope. No new deployment, human session or release decision is recorded.
 
 The controlled pilot remains **not approved for recruitment**. Local implementation and automated verification are recorded, while deployed, human and operational release gates remain unresolved.

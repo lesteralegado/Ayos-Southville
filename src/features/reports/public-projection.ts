@@ -32,7 +32,7 @@ export function publicProjection(value: unknown, mode: DiscoveryMode = "live"): 
     const event = object(entry), occurredAt = date(event.occurredAt), update = object(event.update);
     if (!status(event.status) || !occurredAt) return [];
     const en = text(update.en, 1000), fil = text(update.fil, 1000);
-    return [{ status: event.status, occurredAt, ...(en && fil ? { update: { en, fil } } : {}) }];
+    return [{ status: event.status, occurredAt, ...(en || fil ? { update: { en, fil } } : {}) }];
   });
   return { reference, category, publicSummary, publicArea, status: data.status, submittedAt, media, timeline,
     ...(publicLocation ? { publicLocation } : {}),

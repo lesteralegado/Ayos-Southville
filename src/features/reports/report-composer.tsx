@@ -2,6 +2,7 @@
 import { operatingCopy } from "@/features/i18n/operating-copy";
 
 import Link from "next/link";
+import { residentFlowCopy } from "./resident-flow-copy";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useRef } from "react";
 import { useReportSubmission } from "./use-report-submission";
@@ -111,6 +112,7 @@ export function ReportComposer({
   const { locale, chooseLocale } = useLocale();
   const fil = locale === "fil";
   const message = copy[locale];
+  const flowCopy = residentFlowCopy[locale];
   const guidance = emergencyGuidance[locale];
   const workflow = useReportSubmission({ residentUid, categories, operatingStatus, locale });
   const {
@@ -322,6 +324,8 @@ export function ReportComposer({
                   {issues.nearbyLandmark}
                 </p>
               )}
+              <details className="optional-report-field" open={!!(draft.latitude || draft.longitude || issues.exactLocation)}>
+              <summary>{flowCopy.location}</summary>
               <fieldset className="location-fieldset">
                 <legend>{message.location}</legend>
                 <p id="location-help" className="field-help">
@@ -381,7 +385,10 @@ export function ReportComposer({
                   </p>
                 )}
               </fieldset>
+              </details>
               {residentUid && !availability?.intakePaused && (
+                <details className="optional-report-field">
+                <summary>{flowCopy.photos}</summary>
                 <EvidencePicker
                   key={draft.idempotencyKey}
                   owner={residentUid}
@@ -390,10 +397,13 @@ export function ReportComposer({
                   onAssets={setEvidence}
                   onBlocked={setUploadBlocked}
                 />
+                </details>
               )}
               {issues.evidence && (
                 <p className="field-error">{issues.evidence}</p>
               )}
+              {((draft.category && draft.description.trim().length >= 20 && draft.nearbyLandmark.trim().length >= 3) || Object.keys(issues).length > 0 || draft.confirmNonEmergency || draft.confirmPublicSummary) && <section className="submission-confirmations" aria-label={flowCopy.ready}>
+              <h2>{flowCopy.ready}</h2>
               <label className="check-row">
                 <input
                   id="confirm-non-emergency"
@@ -438,6 +448,7 @@ export function ReportComposer({
                   {issues.confirmPublicSummary}
                 </p>
               )}
+              </section>}
             </fieldset>
             {suggestions.length > 0 && !duplicatesReviewed && (
               <section

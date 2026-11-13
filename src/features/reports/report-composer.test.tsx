@@ -21,6 +21,18 @@ const emergencyGuidance = {
 };
 
 describe("report composer", () => {
+  it("starts with essential fields and reveals optional location and submission confirmations when needed", async () => {
+    render(<ReportComposer emergencyGuidance={emergencyGuidance} />);
+    expect(screen.getByLabelText("Latitude")).not.toBeVisible();
+    expect(screen.queryByRole("checkbox", { name: /I confirm this is not/ })).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByText("Add map location (optional)"));
+    expect(screen.getByRole("textbox", { name: "Latitude" })).toBeVisible();
+    await user.selectOptions(screen.getByLabelText(/category/i), "streetlights");
+    await user.type(screen.getByLabelText(/describe/i), "The light near the court is broken.");
+    await user.type(screen.getByLabelText("Nearby landmark", { exact: true }), "Court");
+    expect(screen.getByRole("checkbox", { name: /I confirm this is not/ })).toBeVisible();
+  });
   it("keeps the draft and its retry key when the server pauses an in-flight submission", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/api/pilot-status"
       ? Response.json({ intakePaused: true, explanation: { en: "Coverage is under review.", fil: "Sinusuri ang coverage." }, resumesAt: "2026-10-15T11:00:00Z" })

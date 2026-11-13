@@ -48,7 +48,7 @@ function createFirebaseReportStore(): ReportStore {
         .doc(receiptId(key))
         .get();
       return receipt.exists
-        ? { reference: String(receipt.data()?.reference), created: false }
+        ? { reference: String(receipt.data()?.reference), created: false, ...(receipt.data()?.withdrawn === true ? { withdrawn: true as const } : {}) }
         : null;
     },
     async submitOnce(key: string, report: StoredReport) {
@@ -63,6 +63,7 @@ function createFirebaseReportStore(): ReportStore {
           return {
             reference: String(receipt.data()?.reference),
             created: false,
+            ...(receipt.data()?.withdrawn === true ? { withdrawn: true as const } : {}),
           };
         }
         const requestedIds = report.private.evidence.map((asset) => asset.id);

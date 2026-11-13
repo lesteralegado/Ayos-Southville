@@ -1,6 +1,8 @@
 import { defaultPilotOperations, type PilotOperations } from "@/features/admin/pilot-operations";
 import { filterStatuses, memoryWindow, pageCursor, pagePosition, queueFilter, reportPageSize, reportScanSize, type PagePosition, type QueueFilter, type ReportPage } from "./report-pages";
 import { reviewDeadline } from "./review-calendar";
+import { ownedReportPage } from "./owned-report-pages";
+import { resolutionOutcomeUpdate } from "./resolution-copy";
 import type {
   EvidenceAsset,
   ExactLocation,
@@ -94,6 +96,7 @@ export type ModerationStore = {
   commit(change: ModerationCommit): Promise<void>;
   listReports(): Promise<ModerationReport[]>;
   listWindow(filter: QueueFilter, after: PagePosition | null, limit: number): Promise<QueueReport[]>;
+  listOwnedWindow?(uid: string, filter: QueueFilter, after: PagePosition | null, limit: number): Promise<QueueReport[]>;
   getReport(reference: string): Promise<ModerationReport | null>;
   listNotifications(residentUid: string): Promise<ModerationNotification[]>;
   appendAudit(event: AuditEvent, id?: string): Promise<void>;
@@ -158,10 +161,9 @@ function requireRevision(report: ModerationReport, expected?: number) {
     throw new ModerationConflictError();
 }
 function requireUpdate(update: BilingualUpdate) {
-  return {
-    en: requireText(update?.en, "English update"),
-    fil: requireText(update?.fil, "Filipino update"),
-  };
+  if (!update || typeof update.en !== "string" || typeof update.fil !== "string" || update.en.length > 1000 || update.fil.length > 1000 || (!update.en.trim() && !update.fil.trim()))
+    throw new ModerationValidationError("Write an update in English or Filipino (up to 1000 characters per language).");
+  return { en: update.en.trim(), fil: update.fil.trim() };
 }
 function requireStatus(report: ModerationReport, expected: ModerationStatus) {
   if (report.status !== expected)
@@ -239,7 +241,7 @@ export function createModerationModule({
         ]).map((residentUid) => ({
           residentUid,
           reference: notifiedReport.reference,
-          message: `${update.en} / ${update.fil}`,
+          message: [update.en, update.fil].filter(Boolean).join(" / "),
           update,
           createdAt: occurredAt,
         }))
@@ -321,9 +323,13 @@ export function createModerationModule({
       const [reports, operating] = await Promise.all([store.listReports(), operations()]);
       return reports.map(report => withReviewExpectation(report, actor, operating));
     },
-    async listWorkspacePage(actor: Operator, input: { filter?: string; cursor?: string | null } = {}): Promise<ReportPage<QueueReport>> {
+    async listWorkspacePage(actor: Operator, input: { filter?: string; cursor?: string | null; ownedFirst?: boolean } = {}): Promise<ReportPage<QueueReport>> {
       requireRole(actor, operatorRoles);
       const filter = queueFilter(input.filter), scope = `operator:${actor.uid}:${filter}`;
+      if (input.ownedFirst && filter !== "overdue" && store.listOwnedWindow) {
+        const [page, operating] = await Promise.all([ownedReportPage({ listWindow: store.listWindow, listOwnedWindow: store.listOwnedWindow }, actor.uid, filter, input.cursor), operations()]);
+        return { ...page, reports: page.reports.map(row => ({ ...row, reviewExpectation: reviewState(row, operating) })) };
+      }
       const after = pagePosition(scope, input.cursor);
       const scanLimit = filter === "overdue" ? reportScanSize : reportPageSize;
       const [rows, operating] = await Promise.all([store.listWindow(filter, after, scanLimit + 1), operations()]);
@@ -397,6 +403,7 @@ export function createModerationModule({
       requireRevision(report, input.expectedRevision);
       requireStatus(report, "Submitted");
       const reason = requireText(input.reason, "Reason");
+      if (input.publicSummary?.length > 1000 || input.publicArea?.length > 160) throw new ModerationValidationError("Use a public summary up to 1,000 characters and an area up to 160.");
       const update = requireUpdate(
         input.update ?? {
           en: "The report was accepted for review.",
@@ -437,6 +444,8 @@ export function createModerationModule({
         };
       report.approved = true;
       report.status = "Under review";
+      report.reviewOwnerUid = actor.uid;
+      report.review ??= { acknowledgedAt: occurredAt, actorUid: actor.uid, nextStep: "Approved for public review; check the next action." };
       report.public = {
         summary: requireText(input.publicSummary, "Public summary"),
         area: requireText(input.publicArea, "Public area"),
@@ -571,6 +580,17 @@ export function createModerationModule({
         { ...duplicate, reference: canonical.reference },
       );
     },
+    async reassignOwner(actor: Operator, input: { reference: string; expectedRevision: number; ownerUid: string; reason: string }) {
+      requireRole(actor, ["Coordinator", "Administrator"]);
+      const report = await findReport(input.reference);
+      requireRevision(report, input.expectedRevision);
+      if (!["Submitted", "Under review", "Assigned", "In progress"].includes(report.status)) throw new ModerationValidationError("Reassign only active reports.");
+      const ownerUid = requireText(input.ownerUid, "Operator UID"), reason = requireText(input.reason, "Reassignment reason");
+      if (ownerUid.length > 128) throw new ModerationValidationError("Choose a valid operator.");
+      report.reviewOwnerUid = ownerUid;
+      report.history.push({ action: "owner-reassigned", occurredAt: now().toISOString(), reason });
+      await finish(actor, [report], "report.owner-reassigned", reason);
+    },
     async assign(
       actor: Operator,
       input: {
@@ -620,7 +640,9 @@ export function createModerationModule({
         throw new ModerationValidationError("Choose a valid transition.");
       const update = requireUpdate(input.update);
       const occurredAt = now().toISOString();
-      if (input.to === "In progress") requireStatus(report, "Assigned");
+      if (input.to === "In progress") {
+        if (!["Under review", "Assigned"].includes(report.status)) throw new ModerationValidationError("Start work on a reviewed report.");
+      }
       else {
         requireStatus(report, "In progress");
         validateResolutionEvidence(input.resolutionEvidence ?? []);
@@ -640,7 +662,7 @@ export function createModerationModule({
         actor,
         [report],
         input.to === "In progress" ? "report.started" : "report.resolved",
-        update.en,
+        update.en || update.fil,
         update,
       );
     },
@@ -661,9 +683,7 @@ export function createModerationModule({
       if (!["confirm", "dispute"].includes(input.response))
         throw new ModerationValidationError("Choose confirm or dispute.");
       const reason = requireText(input.reason, "Resident reason");
-      const update = input.response === "confirm"
-        ? { en: "The resident confirmed the resolution.", fil: "Kinumpirma ng residente ang resolusyon." }
-        : { en: "The resident reported that the problem remains.", fil: "Iniulat ng residente na nananatili ang problema." };
+      const update = resolutionOutcomeUpdate[input.response];
       const occurredAt = now().toISOString();
       const status =
         input.response === "confirm" ? "Resident confirmed" : "Under review";
@@ -730,6 +750,10 @@ export function createMemoryModerationStore(
     async listWindow(filter, after, limit) {
       const statuses = filterStatuses(filter);
       return memoryWindow([...reports.values()].filter(report => !statuses || statuses.includes(report.status)).map(queueReport), after, limit);
+    },
+    async listOwnedWindow(uid, filter, after, limit) {
+      const statuses = filterStatuses(filter);
+      return memoryWindow([...reports.values()].filter(report => report.reviewOwnerUid === uid && (!statuses || statuses.includes(report.status))).map(queueReport), after, limit);
     },
     async getReport(reference) {
       const report = reports.get(reference);

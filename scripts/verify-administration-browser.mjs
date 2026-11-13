@@ -7,13 +7,14 @@ import { createServer, transformWithOxc } from "vite";
 const root = process.cwd();
 const artifacts = path.join(
   root,
-  ".scratch/ayos-southville-production-completion/artifacts",
+  ".scratch/simplified-product-flow/artifacts",
 );
 await mkdir(artifacts, { recursive: true });
 const fixture = `
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { AdministrationWorkspace } from "/src/features/admin/administration-workspace.tsx";
+import { ProductNavigation } from "/src/features/navigation/product-navigation.tsx";
 import { createAdministrationModule, createMemoryAdministrationStore } from "/src/features/admin/administration-module.ts";
 import "/src/app/globals.css";
 const actor = { uid: "admin", roles: ["Administrator"] };
@@ -36,7 +37,7 @@ window.fetch = async (url, options = {}) => {
   }
   return Response.json(await snapshot());
 };
-createRoot(document.getElementById("root")).render(<AdministrationWorkspace initial={await snapshot()} />);
+createRoot(document.getElementById("root")).render(<><ProductNavigation roles={actor.roles} signedIn /><AdministrationWorkspace initial={await snapshot()} /></>);
 `;
 const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-administration-browser"),
   root,
@@ -50,8 +51,10 @@ const server = await createServer({ cacheDir: path.join(root, "node_modules/.vit
       name: "administration-verification-fixture",
       resolveId(id) {
         if (id === "/__admin_fixture.jsx") return "\0admin-fixture.jsx";
+        if (id === "next/navigation") return "\0navigation-fixture.js";
       },
       async load(id) {
+        if (id === "\0navigation-fixture.js") return 'export const usePathname = () => "/administration";';
         if (id === "\0admin-fixture.jsx")
           return (
             await transformWithOxc(fixture, "fixture.tsx", {
@@ -127,6 +130,7 @@ try {
   await person.getByLabel("Administrator", { exact: true }).check();
   await person.getByLabel("Role change reason").fill("Backup administrator");
   await person.getByRole("button", { name: "Save roles" }).click();
+  await page.getByRole("button", { name: "Advanced settings", exact: true }).click();
   await page
     .getByText("Two administrator accounts are verified;", { exact: false })
     .waitFor();
@@ -146,12 +150,18 @@ try {
       .inputValue(),
     "Roads and drainage pilot",
   );
+  await page.getByRole("button", { name: "Advanced settings", exact: true }).click();
+  assert.equal(await page.getByRole("heading", { name: "Audit history", exact: true }).isVisible(), false);
+  assert.equal(await page.getByRole("navigation", { name: "Primary navigation", exact: true }).getByRole("link").count(), 5);
   for (const [name, width, height] of [
     ["desktop", 1440, 1000],
     ["tablet", 768, 1024],
     ["mobile", 390, 844],
   ]) {
     await page.setViewportSize({ width, height });
+    for (const link of await page.getByRole("navigation", { name: "Primary navigation", exact: true }).getByRole("link").all()) {
+      assert.equal(await link.isVisible(), true, name + " primary destination is visible");
+    }
     await page.evaluate(() => window.scrollTo(0, 0));
     assert.ok(
       await page.evaluate(

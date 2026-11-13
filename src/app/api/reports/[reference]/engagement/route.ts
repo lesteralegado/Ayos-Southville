@@ -58,6 +58,8 @@ export async function POST(
   if (!input || typeof input !== "object" || Array.isArray(input) || (input.evidence !== undefined && !Array.isArray(input.evidence))) throw new EngagementValidationError("Choose a valid action.");
   // The persistence adapter verifies owned completed uploads and replaces client metadata.
   const engagement = getEngagementModule();
+    if (input.action === "updates" && typeof input.active === "boolean")
+      return NextResponse.json(await engagement.setUpdates({ residentUid: resident.uid, reference: reference.toUpperCase(), active: input.active }));
     if (input.action === "affected" && typeof input.active === "boolean")
       return NextResponse.json(
         await engagement.setAffected({

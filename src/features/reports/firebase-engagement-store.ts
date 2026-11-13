@@ -1,4 +1,5 @@
 import "server-only";
+import { FieldPath } from "firebase-admin/firestore";
 import { pilotRecordsExpired } from "@/features/pilot/pilot-expiry";
 import { assertParticipant, assertWritable, protectMutation } from "@/features/pilot/firebase-protection";
 import { ProtectionError } from "@/features/pilot/security-module";
@@ -76,8 +77,8 @@ function createFirebaseEngagementStore(): EngagementStore {
           if (!asset || !evidenceAvailable(asset) || asset.residentUid !== residentUid || asset.draftKey !== `support_${reference}` || (asset.attachedTo && asset.attachedTo !== reference) || !(await getEvidenceBucket().file(asset.path).exists())[0]) throw new EvidenceError("Choose completed owned supporting photos for this report.");
           return evidenceAsset(asset);
         }));
-        const next = { affected: change === "affected" ? state.affected : current?.affected ?? false,
-          following: change === "follow" ? state.following : current?.following ?? false,
+        const next = { affected: change === "affected" ? state.affected : change === "updates" && !state.following ? false : current?.affected ?? false,
+          following: change === "follow" || change === "updates" ? state.following : current?.following ?? false,
           supportingEvidence: change === "affected" && state.affected ? [...oldAssets, ...verified] : oldAssets };
         // Withdrawing the signal does not silently delete already submitted evidence.
         transaction.set(ref, { ...next, residentUid, reference, updatedAt: new Date().toISOString() });
@@ -112,8 +113,33 @@ function createFirebaseEngagementStore(): EngagementStore {
       }));
       return notices.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
+    async listNotificationWindow(residentUid, after, limit) {
+      if (await pilotRecordsExpired()) return [];
+      let query = db.collection("residentNotifications").where("residentUid", "==", residentUid).orderBy("createdAt", "desc").orderBy(FieldPath.documentId(), "desc");
+      if (after) query = query.startAfter(after.createdAt, after.id);
+      const snapshot = await query.limit(limit).get();
+      return snapshot.docs.map(doc => {
+        const value = doc.data() as ResidentNotification;
+        return { id: doc.id, residentUid, reference: value.reference, kind: value.kind, message: value.message, createdAt: value.createdAt, read: value.read === true, ...(value.update ? { update: { en: value.update.en, fil: value.update.fil } } : {}) };
+      });
+    },
+    async countUnreadNotifications(residentUid) {
+      if (await pilotRecordsExpired()) return 0;
+      const count = await db.collection("residentNotifications").where("residentUid", "==", residentUid).where("read", "==", false).count().get();
+      return count.data().count;
+    },
     async markNotificationRead(residentUid, id) {
       await protectMutation(residentUid, "engagement");
+      const direct = db.collection("residentNotifications").doc(id);
+      const found = await direct.get();
+      if (found.exists) {
+        await db.runTransaction(async transaction => {
+          await assertWritable(transaction, residentUid);
+          const notice = await transaction.get(direct);
+          if (notice.data()?.residentUid === residentUid) transaction.update(direct, { read: true });
+        });
+        return;
+      }
       const snapshot = await db
         .collection("residentNotifications")
         .where("residentUid", "==", residentUid)

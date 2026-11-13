@@ -1,5 +1,7 @@
 # Ticket 04: resident communication
 
+Current simplified flow (2026-11-13): see the [integrated product verification](../../.scratch/simplified-product-flow/product-verification.md). Get updates replaces separate everyday follow/impact controls. Stop updates clears both legacy subscription lanes while preserving protected evidence. Resident controls read Confirmed fixed and Still a problem; stored statuses remain compatible. Operator updates require one English or Filipino message and allow an optional translation. Display identifies the actual available language.
+
 ## Delivered behavior
 
 The bilingual notification center reads the authenticated resident's inbox, retains read state, and confirms preferences against the server before displaying success. Failed loads do not become empty inboxes; failed or uncertain writes retain previous visible state and ask for reload. Every primary state has English/Filipino copy, native controls, visible focus, and live announcements.

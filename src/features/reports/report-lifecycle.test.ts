@@ -11,6 +11,12 @@ const coordinator = { uid: "coordinator-1", roles: ["Coordinator"] as const };
 const reporter = { uid: "resident-1", roles: ["Resident"] as const };
 
 describe("report resolution lifecycle", () => {
+  it("accepts one authored language without inventing a translation", async () => {
+    const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [report()] }) });
+    await moderation.transition(coordinator, { reference: "AS-LIFE01", expectedRevision: 0, to: "In progress", update: { en: "Clearing has started.", fil: "" } });
+    expect(await moderation.getPublicReport("AS-LIFE01")).toMatchObject({ timeline: expect.arrayContaining([expect.objectContaining({ update: { en: "Clearing has started.", fil: "" } })]) });
+    await expect(moderation.transition(coordinator, { reference: "AS-LIFE01", expectedRevision: 1, to: "Resolved", update: { en: "", fil: "" } })).rejects.toMatchObject({ code: "VALIDATION" });
+  });
   it("moves an accepted report through resident-confirmed resolution with bilingual public history, notifications, audit, and evidence", async () => {
     const submitted = report();
     submitted.status = "Submitted";

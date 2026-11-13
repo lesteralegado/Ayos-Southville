@@ -32,7 +32,7 @@ export async function GET(request?: Request) {
     const reference = params.get("reference");
     return NextResponse.json(reference
       ? { report: await moderation.getPrivateReport(actor, reference) }
-      : await moderation.listWorkspacePage(actor, { filter: params.get("filter") ?? "all", cursor: params.get("cursor") }), { headers });
+      : await moderation.listWorkspacePage(actor, { filter: params.get("filter") ?? "all", cursor: params.get("cursor"), ownedFirst: params.get("ownedFirst") === "1" }), { headers });
   } catch (error) {
     return failure(error);
   }
@@ -100,6 +100,7 @@ export async function PATCH(request: Request) {
         actor,
         body.input as Parameters<typeof moderation.merge>[1],
       );
+    else if (body.action === "reassign-owner") await moderation.reassignOwner(actor, body.input as Parameters<typeof moderation.reassignOwner>[1]);
     else if (body.action === "assign") {
       const input = body.input as Parameters<typeof moderation.assign>[1];
       const configuration = await getPublicPilotConfiguration();

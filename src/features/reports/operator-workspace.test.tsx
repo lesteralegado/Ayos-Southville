@@ -72,3 +72,23 @@ it("preserves input and offers refresh when an operator encounters a stale repor
     screen.getByRole("button", { name: "Reload workspace" }),
   ).toBeInTheDocument();
 });
+it("retains an edited public draft and photo choices across conflict recovery to a newer revision", async () => {
+  const submitted = { ...report, status: "Submitted" as const, evidence: [{ id: "photo-1", name: "light.jpg", type: "image/jpeg" as const, size: 100, visibility: "restricted" as const }] };
+  vi.stubGlobal("fetch", vi.fn(async (url: string, options?: RequestInit) => {
+    if (options?.method === "PATCH") return Response.json({ code: "CONFLICT", error: "This report changed." }, { status: 409 });
+    if (url.includes("reference=")) return Response.json({ report: { ...submitted, revision: 2 } });
+    return Response.json({ reports: [{ ...submitted, revision: 2 }], nextCursor: null });
+  }));
+  render(<OperatorWorkspace initialReports={[submitted]} actor={{ uid: "operator", roles: ["Administrator"] }} destinations={[]} />);
+  fireEvent.click(screen.getByText("Edit public details"));
+  fireEvent.change(screen.getByLabelText("Public summary"), { target: { value: "Edited safe summary." } });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Approve photo 1" }));
+  fireEvent.change(screen.getByLabelText("Alternative text for photo 1"), { target: { value: "Reviewed light." } });
+  fireEvent.click(screen.getByRole("button", { name: "Approve and publish" }));
+  await screen.findByRole("alert");
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await screen.findByText("Latest reports loaded. Review the current state before retrying.");
+  expect(screen.getByLabelText("Public summary")).toHaveValue("Edited safe summary.");
+  expect(screen.getByRole("checkbox", { name: "Approve photo 1" })).toBeChecked();
+  expect(screen.getByLabelText("Alternative text for photo 1")).toHaveValue("Reviewed light.");
+});

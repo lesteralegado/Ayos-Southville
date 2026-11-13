@@ -5,7 +5,7 @@ export const reportScanSize = 100;
 export type PagePosition = { submittedAt: string; reference: string };
 export type ReportPage<T> = { reports: T[]; nextCursor: string | null };
 export const activeReportStatuses: ReportStatus[] = ["Submitted", "Under review", "Assigned", "In progress"];
-export const queueFilters = ["active", "all", "overdue", "canonical", ...activeReportStatuses, "Resolved", "Resident confirmed", "Rejected", "Duplicate"] as const;
+export const queueFilters = ["new", "working", "waiting", "closed", "active", "all", "overdue", "canonical", ...activeReportStatuses, "Resolved", "Resident confirmed", "Rejected", "Duplicate"] as const;
 export type QueueFilter = typeof queueFilters[number];
 export class ReportPageError extends Error {
   readonly code = "VALIDATION";
@@ -17,6 +17,10 @@ export function queueFilter(value: unknown): QueueFilter {
   return value as QueueFilter;
 }
 export function filterStatuses(filter: QueueFilter): readonly ReportStatus[] | null {
+  if (filter === "new") return ["Submitted"];
+  if (filter === "working") return ["Under review", "Assigned", "In progress"];
+  if (filter === "waiting") return ["Resolved"];
+  if (filter === "closed") return ["Resident confirmed", "Rejected", "Duplicate"];
   return filter === "all" ? null : filter === "active" || filter === "overdue" ? activeReportStatuses : filter === "canonical" ? ["Under review", "Assigned", "In progress"] : [filter];
 }
 export function pageCursor(scope: string, position: PagePosition): string {
