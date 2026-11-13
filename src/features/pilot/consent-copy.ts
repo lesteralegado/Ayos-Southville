@@ -1,5 +1,6 @@
 export const consentCopy = {
   en: {
+    confirmed: "Participation confirmed", details: "View participation details and receipt",
     title: "Choose whether to join the pilot", disclosure: "About this trial",
     trial: "Ayos Southville is an independent, resident-led Southville 1 trial, not an official government or repair service. The controlled pilot runs for four weeks after release approval, starting with 10 consenting adults. Reporting does not guarantee a repair or a response from an outside organization.",
     boundaries: "A reviewed safe summary, area, your selected issue pin and individually approved photos may become public. Place the pin on the concern. Your identity, contact details, household access details, original photos and internal notes stay private to authorized pilot operations. English and Filipino controls do not automatically translate your report.",
@@ -12,6 +13,7 @@ export const consentCopy = {
     loading: "Loading private participation status…", pending: "Confirming consent with the server…", failure: "Consent could not be confirmed. Keep your choices, check your connection and reload private status before retrying; the server may already have saved your receipt.", permission: "A verified invited or approved account is required. Your private-data controls remain available.", validation: "Acknowledge adulthood and voluntary consent before agreeing.", changed: "The disclosure changed. Reload and review it before agreeing.", limited: "Too many attempts. Wait an hour, then reload private status.", retry: "Reload private participation status",
   },
   fil: {
+    confirmed: "Nakumpirma ang pagsali", details: "Tingnan ang detalye ng pagsali at resibo",
     title: "Piliin kung sasali sa pilot", disclosure: "Tungkol sa pagsubok",
     trial: "Ang Ayos Southville ay independent na pagsubok ng mga residente sa Southville 1, hindi opisyal na serbisyo ng gobyerno o pagkukumpuni. Apat na linggo ang controlled pilot matapos aprubahan ang release, simula sa 10 adult na pumayag. Walang garantiyang pagkukumpuni o tugon mula sa panlabas na organisasyon.",
     boundaries: "Maaaring maging pampubliko ang sinuring ligtas na buod, lugar, pin na pinili para sa concern at bawat aprubadong litrato. Ilagay ang pin sa concern. Pribado sa awtorisadong operasyon ang pagkakakilanlan, contact details, detalye ng pagpunta sa bahay, orihinal na litrato at panloob na tala. Hindi awtomatikong isinasalin ang ulat ng English at Filipino na mga kontrol.",

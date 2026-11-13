@@ -9,12 +9,16 @@ const fixture = `
 import React from "react";
 import {createRoot} from "react-dom/client";
 import {ResidentPanel} from "/src/features/auth/resident-panel.tsx";
+import {ProductNavigation} from "/src/features/navigation/product-navigation.tsx";
 import {createAdministrationModule,createMemoryAdministrationStore} from "/src/features/admin/administration-module.ts";
 import {consentVersion} from "/src/features/pilot/participation-consent.ts";
 import "/src/app/globals.css";
 const resident={uid:"synthetic-resident",emailVerified:true};
 const administration=createAdministrationModule({store:createMemoryAdministrationStore({users:[{uid:resident.uid,roles:["Resident"],access:"approved"}]})});
+const shared=new URLSearchParams(location.search).has("confirmed");
+if(shared) await administration.acceptConsent(resident,{version:consentVersion,adultAcknowledged:true,consent:true,locale:"en"});
 window.fetch=async(url,options={})=>{
+ if(String(url)==="/api/reports?summary=1") return Response.json({reportCount:27});
  if(String(url)!=="/api/participation") throw Error("Unexpected synthetic request");
  if(options.method==="POST"){
    const receipt=await administration.acceptConsent(resident,JSON.parse(options.body));
@@ -23,7 +27,7 @@ window.fetch=async(url,options={})=>{
  }
  return Response.json({eligible:!window.__unapproved && await administration.canEnroll(resident),receipt:await administration.getConsent(resident),version:consentVersion});
 };
-createRoot(document.getElementById("root")).render(<ResidentPanel publicAlias="Synthetic neighbor" approved/>);
+createRoot(document.getElementById("root")).render(<>{shared && <ProductNavigation signedIn roles={["Administrator"]}/>}<ResidentPanel publicAlias={shared ? "LocalResidentWithALongAlias" : "Synthetic neighbor"} roles={shared ? ["Administrator"] : []} showLanguageControl={!shared} approved/></>);
 `;
 const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-consent-browser"),
   root, configFile: false, server: { watch: { ignored: ["**/.next/**", "**/.next-local/**", "**/.scratch/**"] }, host: "127.0.0.1", port: 4190, strictPort: true },
@@ -34,11 +38,11 @@ const server = await createServer({ cacheDir: path.join(root, "node_modules/.vit
     resolveId(id) { if (["/__consent.jsx", "next/link", "next/navigation"].includes(id)) return "\0" + id; },
     async load(id) {
       if (id === "\0next/link") return "import React from 'react'; export default function Link({children,...props}){return React.createElement('a',props,children)}";
-      if (id === "\0next/navigation") return "export const useRouter=()=>({push:()=>{},refresh:()=>{}})";
+      if (id === "\0next/navigation") return 'export const useRouter=()=>({push:()=>{},refresh:()=>{}});export const usePathname=()=>"/account";';
       if (id === "\0/__consent.jsx") return (await transformWithOxc(fixture, "fixture.tsx", { lang: "tsx", jsx: { runtime: "automatic" } })).code;
     },
     configureServer(vite) { vite.middlewares.use((req, res, next) => {
-      if (req.url !== "/") return next();
+      if (req.url?.split("?")[0] !== "/") return next();
       res.setHeader("Content-Type", "text/html");
       res.end('<!doctype html><html lang="en"><head><title>Synthetic consent verification</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script>window.process={env:{NODE_ENV:"development"}}</script><script type="module" src="/@vite/client"></script><script type="module" src="/__consent.jsx"></script></body></html>');
     }); },
@@ -87,6 +91,11 @@ try {
   assert.equal(await page.getByRole("heading", { name: "Your private consent receipt", exact: true }).count(), 0);
   await capture("account-offline");
   await page.getByRole("button", { name: "Reload private participation status", exact: true }).click();
+    await page.getByRole('heading', { name: 'Participation confirmed', exact: true }).waitFor();
+    assert.equal(await page.locator('.consent-details').getAttribute('open'), null);
+    await capture('account-confirmed');
+    await page.getByText('View participation details and receipt', { exact: true }).focus();
+    await page.keyboard.press('Enter');
   await page.getByRole("heading", { name: "Your private consent receipt", exact: true }).waitFor();
   assert.equal(await page.getByRole("link", { name: "Continue to report", exact: true }).getAttribute("href"), "/reports/new");
   await capture("account-receipt");
@@ -100,6 +109,21 @@ try {
   await page.getByText(/A verified invited or approved account is required/).waitFor();
   assert.equal(await page.getByLabel("I acknowledge that I am at least 18 years old", { exact: true }).isDisabled(), true);
   await capture("account-permission");
+    for (const [locale, width] of [['en', 1440], ['fil', 320]]) {
+        await page.evaluate(value => localStorage.setItem('ayos-locale', value), locale);
+        await page.goto('http://127.0.0.1:4190/?confirmed=1');
+        await page.getByRole('heading', { name: locale === 'en' ? 'Participation confirmed' : 'Nakumpirma ang pagsali', exact: true }).waitFor();
+        assert.equal(await page.locator('.language-button').count(), 1);
+        assert.equal(await page.locator('.consent-details').getAttribute('open'), null);
+        const signOut = page.getByRole('button', { name: locale === 'en' ? 'Sign out' : 'Mag-sign out', exact: true });
+        assert.ok(await signOut.isVisible());
+        assert.equal(await signOut.evaluate(button => button.closest('details')), null);
+        await capture(`account-shared-confirmed-${locale}`, width, 900);
+        await page.locator('.consent-details > summary').focus();
+        await page.keyboard.press('Enter');
+        assert.ok(await page.locator('.consent-receipt').isVisible());
+        await capture(`account-shared-expanded-${locale}`, width, 900);
+    }
   assert.deepEqual(errors, []);
   console.log("PASS: synthetic consent/decline, adult choice, lost acknowledgement/private receipt recovery; EN/FIL, desktop/tablet/mobile/400%-equivalent reflow, forced colors, reduced motion, keyboard and axe. Not deployed or human screen-reader evidence.");
 } finally { await browser?.close(); await server.close(); }
