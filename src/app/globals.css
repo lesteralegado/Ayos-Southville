@@ -79,7 +79,7 @@
 .product-header nav > a.navigation-primary[aria-current=page] { color: white; }
 /* The shared shell supplies the same home, account, and language controls. */
 .product-header ~ main .composer-header { display: none; }
-.product-header a:hover { text-decoration: underline; text-underline-offset: 7px; }
+.product-header a:not(.brand):hover { text-decoration: underline; text-underline-offset: 7px; }
 .product-utilities { display: flex; gap: 14px; align-items: center; }
 .unread-indicator { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; margin-inline-start: 6px; padding: 2px 6px; border-radius: 999px; background: var(--green-dark); color: white; font-size: .8rem; }
 .resident-report-action { margin-block-start: 20px; padding-block-start: 14px; border-block-start: 1px solid var(--line); }
