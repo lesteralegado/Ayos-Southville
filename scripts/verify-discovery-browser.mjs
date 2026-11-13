@@ -5,13 +5,13 @@ import { chromium } from "@playwright/test";
 import { createServer, transformWithOxc } from "vite";
 import sharp from "sharp";
 
-const root = process.cwd(), artifacts = path.join(root, ".scratch/ayos-southville-production-completion/artifacts");
+const root = process.cwd(), artifacts = path.join(root, ".scratch/simplified-product-flow/artifacts");
 const tile = await sharp({ create: { width: 256, height: 256, channels: 3, background: "#ebe5d7" } }).png().toBuffer();
 await mkdir(artifacts, { recursive: true });
 const capture = !process.argv.includes("--functional-only");
 const fixture = `import React,{useEffect,useState} from 'react';import {createRoot} from 'react-dom/client';
-import Home from '/src/app/page.tsx';import {PublicInsights} from '/src/features/admin/public-insights.tsx';import {ReportDetail} from '/src/features/reports/report-detail.tsx';import '/src/app/globals.css';
-function App(){const [data,setData]=useState(null);const ref=location.pathname.split('/')[2];useEffect(()=>{if(ref)fetch('/api/fixture-detail?reference='+ref).then(r=>r.json()).then(setData)},[ref]);return ref?data?<ReportDetail report={data} categoryLabel={{en:'Configured lighting',fil:'Nasuring ilaw'}}/>:<p role="status">Loading report</p>:location.pathname==='/insights'?<PublicInsights/>:<Home/>}createRoot(document.getElementById('root')).render(<App/>);`;
+import {useLocale} from '/src/features/i18n/use-locale.ts';import Home from '/src/app/page.tsx';import {PublicInsights} from '/src/features/admin/public-insights.tsx';import {ReportDetail} from '/src/features/reports/report-detail.tsx';import '/src/app/globals.css';
+function App(){const {locale,chooseLocale}=useLocale();const [data,setData]=useState(null);const ref=location.pathname.split('/')[2];useEffect(()=>{if(ref)fetch('/api/fixture-detail?reference='+ref).then(r=>r.json()).then(setData)},[ref]);return <><button type="button" onClick={()=>chooseLocale(locale==="en"?"fil":"en")}>{locale==="en"?"Filipino":"English"}</button>{ref?data?<ReportDetail report={data} categoryLabel={{en:'Configured lighting',fil:'Nasuring ilaw'}}/>:<p role="status">Loading report</p>:location.pathname==='/insights'?<PublicInsights/>:<Home/>}</>}createRoot(document.getElementById('root')).render(<App/>);`;
 let boundaries;
 const server = await createServer({ cacheDir: path.join(root, "node_modules/.vite", "verify-discovery-browser"), root, configFile: false, server: { host: "127.0.0.1", port: 4182, strictPort: true, watch: { ignored: ["**/.next/**", "**/.next-local/**", "**/.scratch/**"] } },
   resolve: { alias: { "@": path.join(root, "src") } }, oxc: { jsx: { runtime: "automatic" } }, define: { "process.env": "{}" },
@@ -32,7 +32,7 @@ const server = await createServer({ cacheDir: path.join(root, "node_modules/.vit
           category: "streetlights", status: index === 0 ? "Resolved" : "Assigned", publicSummary: `Reviewed streetlight concern ${index + 1}`,
           publicArea: "Reviewed court area", publicLocation: { latitude: 14.28 + (index % 2) * .01, longitude: 121.13 },
           submittedAt: "2026-10-10T00:00:00Z", media: index === 0 ? [{ id: "a".repeat(64), alt: "Reviewed broken streetlight beside the public court" }] : [],
-          timeline: [{ status: "Under review", occurredAt: "2026-10-10T01:00:00Z" }, { status: "Resolved", occurredAt: "2026-10-10T04:00:00Z", update: { en: "Light repaired and tested.", fil: "Naayos at nasubukan ang ilaw." } }],
+          timeline: [{ status: "Under review", occurredAt: "2026-10-10T01:00:00Z" }, { status: index === 0 ? "Resolved" : "Assigned", occurredAt: "2026-10-10T04:00:00Z", update: index === 0 ? { en: "Light repaired and tested.", fil: "Naayos at nasubukan ang ilaw." } : { en: "Assigned to an internal review desk.", fil: "Itinalaga sa panloob na review desk." } }],
           reporterEmail: "private@example.invalid", exactLocation: { privateDetails: "Private house" },
         }));
         boundaries = { discovery: createDiscoveryModule({ read: async () => records, now: () => new Date("2026-10-11T00:00:00Z") }), categories, createPilotInsights };
@@ -103,25 +103,25 @@ try {
   await page.getByRole("button", { name:"Next page" }).click(); await page.getByRole("status").filter({hasText:"Page 2 of 2"}).waitFor(); assert.equal(await page.locator(".report-card").count(),5);
   await page.getByLabel("Status", {exact:true}).selectOption("Resolved"); await page.getByRole("status").filter({hasText:"1 approved reports"}).waitFor(); assert.equal(await page.locator(".report-card").count(),1); assert.ok(!new URL(page.url()).searchParams.has("page"));
   await page.reload(); await page.getByRole("heading", { name: "Reviewed streetlight concern 1",exact:true }).waitFor(); assert.equal(await page.getByLabel("Status",{exact:true}).inputValue(),"Resolved");
-  await page.getByRole("button", {name:"Filipino",exact:true}).click(); await page.locator(".report-card").getByText("Nasuring ilaw",{exact:true}).waitFor();
+  await page.getByRole("button", {name:"Filipino",exact:true}).first().click(); await page.locator(".report-card").getByText("Nasuring ilaw",{exact:true}).waitFor();
   await inspect("filipino-filtered");
-  await page.getByRole("button", {name:"English",exact:true}).click();
+  await page.getByRole("button", {name:"English",exact:true}).first().click();
   await page.getByLabel("Category",{exact:true}).selectOption("streetlights"); await page.goBack(); assert.equal(await page.getByLabel("Category",{exact:true}).inputValue(),"all");
   await page.goto(base + "/?date=invalid"); await page.getByRole("alert").waitFor(); await page.getByRole("button",{name:"Clear filters"}).click(); await page.locator(".report-card").first().waitFor();
   await page.route("**/api/public-reports**", route => route.abort("failed")); await page.reload(); await page.getByRole("alert").waitFor(); assert.equal(await page.locator(".report-card").count(),0); await page.unroute("**/api/public-reports**"); await page.getByRole("button",{name:"Retry",exact:true}).click(); await page.locator(".report-card").first().waitFor();
   await page.goto(base + "/?category=no-match"); await page.getByText(/No approved reports match/).waitFor();
   await page.goto(base + "/insights"); await page.getByText("25", {exact:true}).first().waitFor(); await inspect("insights");
-  await page.getByRole("button",{name:"Filipino",exact:true}).click(); await page.getByRole("heading",{name:"Mga resulta ng komunidad"}).waitFor(); await inspect("insights-filipino");
-  await page.goto(base + "/reports/AS-000000"); await page.getByRole("heading",{name:"Reviewed streetlight concern 1"}).waitFor(); await page.getByRole("img",{name:"Reviewed broken streetlight beside the public court"}).waitFor(); await page.getByText("Naayos at nasubukan ang ilaw.",{exact:true}).waitFor(); await inspect("detail");
+  await page.getByRole("button",{name:"Filipino",exact:true}).first().click(); await page.getByRole("heading",{name:"Mga resulta ng komunidad"}).waitFor(); await inspect("insights-filipino");
+  await page.goto(base + "/reports/AS-000000"); await page.getByRole("heading",{name:"Reviewed streetlight concern 1"}).waitFor(); await page.getByRole("img",{name:"Reviewed broken streetlight beside the public court"}).waitFor(); await page.getByText("Naayos at nasubukan ang ilaw.",{exact:false}).waitFor(); await page.goto(base + "/reports/AS-000001"); await page.getByRole("heading",{name:"Reviewed streetlight concern 2"}).waitFor(); await inspect("detail");
   await page.route("**/api/reports/*/engagement", async route => {
     if (route.request().method() !== "POST") return route.continue();
     await new Promise(resolve => setTimeout(resolve,600));
     return route.abort("failed");
   });
-  await page.getByRole("button",{name:"Apektado rin ako",exact:true}).click();
+  await page.getByRole("button",{name:"Tumanggap ng mga update",exact:true}).click();
   await page.getByRole("status").filter({hasText:"Sine-save ang inyong pinili"}).waitFor();
   await page.getByRole("status").filter({hasText:"Hindi na-save ang pagbabago"}).waitFor();
-  assert.equal(await page.getByRole("button",{name:"Apektado rin ako",exact:true}).getAttribute("aria-pressed"),"false");
+  assert.equal(await page.getByRole("button",{name:"Tumanggap ng mga update",exact:true}).getAttribute("aria-pressed"),"false");
   await page.unroute("**/api/reports/*/engagement");
   await page.keyboard.press("Tab"); assert.ok(await page.evaluate(() => document.activeElement !== document.body));
   await page.evaluate(() => document.documentElement.style.fontSize="200%"); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),"200% text zoom");

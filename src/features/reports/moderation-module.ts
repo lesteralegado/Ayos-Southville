@@ -2,6 +2,7 @@ import { defaultPilotOperations, type PilotOperations } from "@/features/admin/p
 import { filterStatuses, memoryWindow, pageCursor, pagePosition, queueFilter, reportPageSize, reportScanSize, type PagePosition, type QueueFilter, type ReportPage } from "./report-pages";
 import { reviewDeadline } from "./review-calendar";
 import { ownedReportPage } from "./owned-report-pages";
+import { resolutionOutcomeUpdate } from "./resolution-copy";
 import type {
   EvidenceAsset,
   ExactLocation,
@@ -160,10 +161,9 @@ function requireRevision(report: ModerationReport, expected?: number) {
     throw new ModerationConflictError();
 }
 function requireUpdate(update: BilingualUpdate) {
-  return {
-    en: requireText(update?.en, "English update"),
-    fil: requireText(update?.fil, "Filipino update"),
-  };
+  if (!update || typeof update.en !== "string" || typeof update.fil !== "string" || update.en.length > 1000 || update.fil.length > 1000 || (!update.en.trim() && !update.fil.trim()))
+    throw new ModerationValidationError("Write an update in English or Filipino (up to 1000 characters per language).");
+  return { en: update.en.trim(), fil: update.fil.trim() };
 }
 function requireStatus(report: ModerationReport, expected: ModerationStatus) {
   if (report.status !== expected)
@@ -241,7 +241,7 @@ export function createModerationModule({
         ]).map((residentUid) => ({
           residentUid,
           reference: notifiedReport.reference,
-          message: `${update.en} / ${update.fil}`,
+          message: [update.en, update.fil].filter(Boolean).join(" / "),
           update,
           createdAt: occurredAt,
         }))
@@ -662,7 +662,7 @@ export function createModerationModule({
         actor,
         [report],
         input.to === "In progress" ? "report.started" : "report.resolved",
-        update.en,
+        update.en || update.fil,
         update,
       );
     },
@@ -683,9 +683,7 @@ export function createModerationModule({
       if (!["confirm", "dispute"].includes(input.response))
         throw new ModerationValidationError("Choose confirm or dispute.");
       const reason = requireText(input.reason, "Resident reason");
-      const update = input.response === "confirm"
-        ? { en: "The resident confirmed the resolution.", fil: "Kinumpirma ng residente ang resolusyon." }
-        : { en: "The resident reported that the problem remains.", fil: "Iniulat ng residente na nananatili ang problema." };
+      const update = resolutionOutcomeUpdate[input.response];
       const occurredAt = now().toISOString();
       const status =
         input.response === "confirm" ? "Resident confirmed" : "Under review";

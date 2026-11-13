@@ -1,5 +1,6 @@
 import type { Locale } from "@/features/i18n/messages";
 import type { ReportCategory, ReportStatus } from "./report-module";
+import { resolutionOutcomeUpdate } from "./resolution-copy";
 
 export const reportCategoryLabels: Record<Locale, Record<ReportCategory, string>> = {
   en: { "roads-drainage": "Roads and drainage", streetlights: "Broken streetlight", "waste-collection": "Waste collection" },
@@ -20,5 +21,17 @@ export function formatManilaDate(value: string, locale: Locale, includeTime = fa
 }
 
 export function reportStatusLabel(status: ReportStatus, locale: Locale) {
+  if (status === "Assigned") return reportStatusLabels[locale]["In progress"];
+  if (status === "Resident confirmed") return locale === "fil" ? "Kinumpirmang ayos na" : "Confirmed fixed";
   return reportStatusLabels[locale][status];
+}
+
+export function publicTimelineLabel(event: { status: ReportStatus; update?: { en: string; fil: string } }, locale: Locale) {
+  if (event.status === "Under review" && event.update?.en === resolutionOutcomeUpdate.dispute.en) return locale === "fil" ? "May problema pa rin" : "Still a problem";
+  return reportStatusLabel(event.status, locale);
+}
+
+export function presentUpdate(update: { en: string; fil: string }, locale: Locale) {
+  const lang = update[locale]?.trim() ? locale : locale === "en" ? "fil" : "en";
+  return { text: update[lang], lang, label: lang === "en" ? "English" : "Filipino" };
 }

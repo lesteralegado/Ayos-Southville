@@ -77,8 +77,8 @@ function createFirebaseEngagementStore(): EngagementStore {
           if (!asset || !evidenceAvailable(asset) || asset.residentUid !== residentUid || asset.draftKey !== `support_${reference}` || (asset.attachedTo && asset.attachedTo !== reference) || !(await getEvidenceBucket().file(asset.path).exists())[0]) throw new EvidenceError("Choose completed owned supporting photos for this report.");
           return evidenceAsset(asset);
         }));
-        const next = { affected: change === "affected" ? state.affected : current?.affected ?? false,
-          following: change === "follow" ? state.following : current?.following ?? false,
+        const next = { affected: change === "affected" ? state.affected : change === "updates" && !state.following ? false : current?.affected ?? false,
+          following: change === "follow" || change === "updates" ? state.following : current?.following ?? false,
           supportingEvidence: change === "affected" && state.affected ? [...oldAssets, ...verified] : oldAssets };
         // Withdrawing the signal does not silently delete already submitted evidence.
         transaction.set(ref, { ...next, residentUid, reference, updatedAt: new Date().toISOString() });

@@ -6,9 +6,10 @@ import type { PublicReportDetail } from "./report-module";
 import {
   formatManilaDate,
   reportCategoryLabels,
-  reportStatusLabels,
+  reportStatusLabel, publicTimelineLabel,
 } from "./report-presentation";
 import { ReportEngagement } from "./report-engagement";
+import { ReportUpdate } from "./report-update";
 import { ResolutionResponse } from "./resolution-response";
 
 export function ReportDetail({
@@ -48,7 +49,7 @@ export function ReportDetail({
               (fil ? "Ulat ng komunidad" : "Community report")}
           </span>
           <span className="status status-review">
-            {reportStatusLabels[locale][report.status]}
+            {reportStatusLabel(report.status, locale)}
           </span>
         </div>
         <h1>{report.publicSummary}</h1>
@@ -88,9 +89,9 @@ export function ReportDetail({
               <li key={`${event.status}-${event.occurredAt}`}>
                 <span className="timeline-dot" />
                 <div>
-                  <strong>{reportStatusLabels[locale][event.status]}</strong>
+                  <strong>{publicTimelineLabel(event, locale)}</strong>
                   {event.update && (
-                    <p>{fil ? event.update.fil : event.update.en}</p>
+                    <p><ReportUpdate update={event.update} locale={locale} /></p>
                   )}
                   <time dateTime={event.occurredAt}>
                     {formatManilaDate(event.occurredAt, locale, true)}
@@ -101,7 +102,7 @@ export function ReportDetail({
           </ol>
         </section>
         {report.status === "Resolved" && canRespond && (
-          <ResolutionResponse key={report.reference + ":" + report.revision} reference={report.reference} fil={fil} revision={report.revision ?? 0} />
+          <ResolutionResponse key={report.reference} reference={report.reference} fil={fil} revision={report.revision ?? 0} />
         )}
         {privateReceipt ? (
           <p>

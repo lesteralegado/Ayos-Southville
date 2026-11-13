@@ -67,7 +67,6 @@ try {
   }
   assert.equal((await json(backup, '/api/moderation?reference=' + receipt.reference)).report.reference, receipt.reference);
   await act('accept', { publicSummary: 'SYNTHETIC TEST: streetlight near a covered court.', publicArea: 'Synthetic court', approvedMedia: [], reason: 'Synthetic local workflow exercise.', update: { en: 'Test report accepted for review.', fil: 'Tinanggap ang pansubok na ulat para sa pagsusuri.' } });
-  await act('assign', { priority: 'normal', destination: 'lighting', reason: 'Internal test desk.', update: { en: 'Assigned to the internal test desk.', fil: 'Itinalaga sa panloob na pansubok na desk.' } });
   await act('transition', { to: 'In progress', update: { en: 'Synthetic test work started.', fil: 'Nagsimula ang pansubok na gawain.' } });
   async function resolve() {
     const proof = await upload(operator, 'resolution_' + receipt.reference);
@@ -78,34 +77,33 @@ try {
   const page = await resident.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(base + '/reports/' + receipt.reference);
-  await page.getByRole('button', { name: 'Problem remains' }).waitFor();
+  await page.getByRole('button', { name: 'Still a problem' }).waitFor();
   await page.getByLabel(/Reason/).fill('Synthetic test: the issue remains.');
-  await page.getByRole('button', { name: 'Problem remains' }).click();
-  await page.getByRole('button', { name: 'Problem remains' }).waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Still a problem' }).click();
+  await page.getByRole('button', { name: 'Still a problem' }).waitFor({ state: 'hidden' });
   await page.getByText('Under review', { exact: true }).first().waitFor();
-  await act('assign', { priority: 'normal', destination: 'lighting', reason: 'Synthetic second attempt.', update: { en: 'Reassigned for a test.', fil: 'Muling itinalaga para sa pagsubok.' } });
   await act('transition', { to: 'In progress', update: { en: 'Second test started.', fil: 'Nagsimula ang ikalawang pagsubok.' } });
   await resolve(); await page.reload();
-  await page.getByRole('button', { name: 'Confirm resolution' }).waitFor();
+  await page.getByRole('button', { name: 'Confirmed fixed' }).waitFor();
   await page.getByLabel(/Reason/).fill('Synthetic test: resolution confirmed.');
-  await page.getByRole('button', { name: 'Confirm resolution' }).click();
-  await page.getByRole('button', { name: 'Confirm resolution' }).waitFor({ state: 'hidden' });
-  await page.getByText('Resident confirmed', { exact: true }).first().waitFor();
-  await page.reload(); await page.getByText('Resident confirmed', { exact: true }).first().waitFor();
+  await page.getByRole('button', { name: 'Confirmed fixed' }).click();
+  await page.getByRole('button', { name: 'Confirmed fixed' }).waitFor({ state: 'hidden' });
+  await page.getByText('Confirmed fixed', { exact: true }).first().waitFor();
+  await page.reload(); await page.getByText('Confirmed fixed', { exact: true }).first().waitFor();
   assert.equal((await current()).status, 'Resident confirmed');
   const publicPage = await publicContext.newPage();
   await publicPage.goto(base + '/reports/' + receipt.reference);
   await publicPage.getByRole('heading', { name: 'SYNTHETIC TEST: streetlight near a covered court.' }).waitFor();
   assert.ok(!(await publicPage.locator('body').innerText()).includes('09171234567'));
-  assert.equal(await publicPage.getByRole('button', { name: 'Confirm resolution' }).count(), 0);
+  assert.equal(await publicPage.getByRole('button', { name: 'Confirmed fixed' }).count(), 0);
   assert.ok((await json(resident, '/api/notifications')).notifications.some(notice => notice.reference === receipt.reference));
   const rejected = await json(resident, '/api/reports', 'POST', { ...submission, idempotencyKey: crypto.randomUUID(), evidence: [] }, 201);
   const queued = (await json(operator, '/api/moderation?reference=' + rejected.reference)).report;
   await json(operator, '/api/moderation', 'PATCH', { action: 'reject', input: { reference: rejected.reference, expectedRevision: queued.revision ?? 0, category: 'out-of-scope', reason: 'Synthetic test concern is outside the pilot categories.' } });
   await page.goto(base + '/reports/' + rejected.reference);
-  await page.getByText('Synthetic test concern is outside the pilot categories.', { exact: true }).waitFor();
+  await page.getByText('Synthetic test concern is outside the pilot categories.', { exact: false }).waitFor();
   assert.ok(!(await page.locator('body').innerText()).includes('until it is approved'));
-  const artifacts = '.scratch/ayos-southville-production-completion/artifacts';
+  const artifacts = '.scratch/simplified-product-flow/artifacts';
   await mkdir(artifacts, { recursive: true });
   for (const [device, width] of [['mobile', 390], ['desktop', 1440]]) {
     await page.setViewportSize({ width, height: 900 });

@@ -3,6 +3,8 @@ import { RemovalRequestQueue } from "./removal-request-queue";
 import { PrimaryReportAction } from "./primary-report-action";
 import { assignmentUpdateCopy, operatorFlowCopy } from "./operator-flow-copy";
 import { ReassignReportOwner } from "./reassign-report-owner";
+import { ReportUpdate } from "./report-update";
+import { OperatorUpdateFields } from "./operator-update-fields";
 
 import Link from "next/link";
 import { useRef, useState, type FormEvent } from "react";
@@ -595,18 +597,11 @@ function OperatorReport({
             )}
             {report.status !== "Submitted" && (
               <>
-                <label>
-                  {assignmentUpdateCopy[locale].english}
-                  <textarea name="en" required maxLength={4000} />
-                </label>
-                <label>
-                  {assignmentUpdateCopy[locale].filipino}
-                  <textarea name="fil" required maxLength={4000} />
-                </label>
+                <OperatorUpdateFields locale={locale} labels={assignmentUpdateCopy[locale]} />
                 <p>
                   {t(
-                    "Both updates are public. Keep private identity and exact locations out.",
-                    "Pampubliko ang dalawang update. Huwag isama ang pribadong pagkakakilanlan at eksaktong lokasyon.",
+                    "Your update and any translation are public. Keep private identity and exact locations out.",
+                    "Pampubliko ang update at anumang salin. Huwag isama ang pribadong pagkakakilanlan at eksaktong lokasyon.",
                   )}
                 </p>
               </>
@@ -662,7 +657,7 @@ function OperatorReport({
                   {formatManilaDate(event.occurredAt, locale, true)}
                 </time>
                 {event.reason && <p>{event.reason}</p>}
-                {event.update && <p>{event.update[locale]}</p>}
+                {event.update && <p><ReportUpdate update={event.update} locale={locale} /></p>}
               </li>
             ))}
           </ol>

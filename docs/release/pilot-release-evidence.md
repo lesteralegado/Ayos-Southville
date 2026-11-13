@@ -9,7 +9,7 @@ Start with [current recorded readiness](readiness-status.md) for dated local res
 1. Configure Firebase Auth, Firestore, authorized domains, and server credentials from `.env.example`.
 2. Deploy Firestore rules, run `npm run build`, then deploy the Next.js application.
 3. For a demonstration environment only, set `NEXT_PUBLIC_DEMO_MODE=true`, `DEMO_MODE=true`, and a temporary `DEMO_SEED_PASSWORD` of at least 12 characters, then run `npm run seed:demo`. Never run the seed against a real pilot project.
-4. Verify the deployed journey: verified resident signs in → submits a non-emergency report → moderator accepts → coordinator assigns and progresses with bilingual updates/evidence → reporter confirms or disputes → public insights update.
+4. Verify the deployed journey: verified resident submits a non-emergency report → authorized operator reviews the prepared draft and selects Approve and publish → authorized operator selects Start work, then Mark resolved with evidence → original reporter selects Confirmed fixed or Still a problem → public/resident timeline and notifications update. Operator messages need one language; translation is optional. Deploy required composite indexes and confirm READY first.
 5. Capture deployment URL, build SHA, date, tester, and outcome below before release.
 
 | Build / environment | Tester / date | Resident → operator → resident result |

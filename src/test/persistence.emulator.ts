@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { initializeApp, deleteApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getAuth, type Auth } from "firebase-admin/auth";
+import { getStorage } from "firebase-admin/storage";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { assertLocalEmulatorServer, localEmulatorHosts, localEmulatorProject } from "@/lib/firebase/local-emulator";
 import { defaultPilotConfiguration } from "@/features/admin/administration-module";
@@ -27,6 +28,8 @@ const databaseId = `contracts-${run}`;
 let app: App;
 let db: Firestore;
 let auth: Auth;
+const ownedStoragePaths: string[] = [];
+const ownedOtherUsers: string[] = [];
 const previousEnvironment = { ...process.env };
 
 beforeAll(async () => {
@@ -48,7 +51,8 @@ beforeAll(async () => {
     DEMO_MODE: "false",
   });
   expect(assertLocalEmulatorServer(process.env)).toBe(true);
-  app = initializeApp({ projectId: localEmulatorProject }, databaseId);
+  process.env.FIREBASE_STORAGE_BUCKET = `${localEmulatorProject}.appspot.com`;
+  app = initializeApp({ projectId: localEmulatorProject });
   db = getFirestore(app, databaseId);
   auth = getAuth(app);
   connection.current = { db, auth };
@@ -62,12 +66,14 @@ beforeAll(async () => {
 afterAll(async () => {
   // Never clear the shared default database, other test databases or accounts.
   try {
+    if (app) for (const path of ownedStoragePaths) await getStorage(app).bucket(process.env.FIREBASE_STORAGE_BUCKET).file(path).delete({ ignoreNotFound: true });
     if (db && db.databaseId === databaseId && databaseId === `contracts-${run}`) {
       for (const collection of await db.listCollections()) {
         for (const doc of (await collection.get()).docs) await doc.ref.delete();
       }
     }
     if (auth) await auth.deleteUser(uid);
+    if (auth) for (const otherUid of ownedOtherUsers) await auth.deleteUser(otherUid);
   } finally {
     if (app) await deleteApp(app);
     connection.current = null;
@@ -82,6 +88,46 @@ function submission() {
 function acceptance(reference: string) {
   return { reference, expectedRevision: 0, publicSummary: "SYNTHETIC CONTRACT TEST: light concern.", publicArea: "Synthetic court", approvedMedia: [], reason: "Synthetic privacy review." };
 }
+
+it("completes the real-SDK journey through private dispute and confirmation", async () => {
+  const reports = await getReportModule(), moderation = getModerationModule(), engagement = getEngagementModule();
+  await engagement.setPreferences(uid, { emailEnabled: true, statusUpdates: true, followUpdates: true });
+  const receipt = await reports.submit(submission()), reference = receipt.reference;
+  await moderation.accept(actor, acceptance(reference));
+  const followerUid = `${uid}-follower`;
+  await auth.createUser({ uid: followerUid, emailVerified: true }); ownedOtherUsers.push(followerUid);
+  await db.collection("residentProfiles").doc(followerUid).set({ roles: ["Resident"], pilotAccess: "approved" });
+  await db.collection("pilotConsents").doc(followerUid).set({ id: randomUUID(), residentUid: followerUid, version: consentVersion, consentedAt: new Date().toISOString(), adultAcknowledged: true, locale: "en" });
+  await engagement.setUpdates({ residentUid: followerUid, reference, active: true });
+  await moderation.transition(actor, { reference, expectedRevision: 1, to: "In progress", update: { en: "Synthetic work started.", fil: "" } });
+  async function resolve(revision: number) {
+    const id = createHash("sha256").update(`${run}:${revision}`).digest("hex"), path = `contracts/${run}/${id}.jpg`;
+    ownedStoragePaths.push(path);
+    await getStorage(app).bucket(process.env.FIREBASE_STORAGE_BUCKET).file(path).save(Buffer.from("Synthetic protected test evidence"), { contentType: "image/jpeg" });
+    const evidence = { id, name: "synthetic.jpg", type: "image/jpeg" as const, size: 33, visibility: "restricted" as const };
+    await db.collection("evidenceUploads").doc(id).set({ ...evidence, path, residentUid: uid, draftKey: `resolution_${reference}`, slotId: `contract_${revision}`, createdAt: new Date().toISOString() });
+    await moderation.transition(actor, { reference, expectedRevision: revision, to: "Resolved", update: { en: "", fil: "Synthetic na gawaing natapos." }, resolutionEvidence: [evidence] });
+  }
+  await resolve(2);
+  expect((await engagement.listNotifications(followerUid)).filter(notice => notice.reference === reference)).toHaveLength(2);
+  await engagement.setAffected({ residentUid: followerUid, reference, active: true, evidence: [] });
+  await engagement.setUpdates({ residentUid: followerUid, reference, active: false });
+  expect(await engagement.getResidentState(followerUid, reference)).toMatchObject({ affected: false, following: false });
+  expect(await reports.getMine(uid, reference)).toMatchObject({ status: "Resolved" });
+  expect((await engagement.listNotifications(uid)).some(notice => notice.reference === reference && notice.update?.fil === "Synthetic na gawaing natapos.")).toBe(true);
+  await moderation.respondToResolution(actor, { reference, expectedRevision: 3, response: "dispute", reason: "SYNTHETIC private explanation at my gate." });
+  expect(await moderation.getPrivateReport(actor, reference)).toMatchObject({ status: "Under review", history: expect.arrayContaining([expect.objectContaining({ reason: "SYNTHETIC private explanation at my gate." })]) });
+  await expect(moderation.respondToResolution(actor, { reference, expectedRevision: 3, response: "dispute", reason: "Duplicate stale request." })).rejects.toMatchObject({ code: "CONFLICT" });
+  await moderation.transition(actor, { reference, expectedRevision: 4, to: "In progress", update: { en: "Synthetic follow-up.", fil: "" } });
+  await resolve(5);
+  await moderation.respondToResolution(actor, { reference, expectedRevision: 6, response: "confirm", reason: "Synthetic check passed." });
+  expect(await reports.getMine(uid, reference)).toMatchObject({ status: "Resident confirmed" });
+  const published = await reports.getPublic(reference);
+  expect(published).toMatchObject({ status: "Resident confirmed", revision: 7 });
+  expect(JSON.stringify(published)).not.toMatch(/private explanation|reviewOwnerUid|reporterUid|private reporting details/);
+  expect((await db.collection("lifecycleEmailJobs").where("reference", "==", reference).get()).size).toBe(7);
+  expect((await engagement.listNotifications(followerUid)).filter(notice => notice.reference === reference && notice.kind === "report-update")).toHaveLength(2);
+});
 
 it("publishes with ownership and starts work without assignment using the real transaction and queue", async () => {
   const reports = await getReportModule(), moderation = getModerationModule();

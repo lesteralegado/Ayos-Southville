@@ -1,0 +1,20 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { vi } from "vitest";
+import { ResolutionResponse } from "./resolution-response";
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
+it("keeps the resident explanation through conflict recovery to a new revision", async () => {
+  const request = vi.fn().mockResolvedValueOnce(new Response(null, { status: 409 })).mockResolvedValueOnce(new Response("{}", { status: 200 }));
+  vi.stubGlobal("fetch", request);
+  const view = render(<ResolutionResponse reference="AS-RESPONSE" fil={false} revision={4} />);
+  await userEvent.type(screen.getByLabelText(/Reason/), "The light still flickers.");
+  await userEvent.click(screen.getByRole("button", { name: "Still a problem" }));
+  await screen.findByRole("alert");
+  await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+  view.rerender(<ResolutionResponse reference="AS-RESPONSE" fil={false} revision={5} />);
+  expect(screen.getByLabelText(/Reason/)).toHaveValue("The light still flickers.");
+  await userEvent.click(screen.getByRole("button", { name: "Still a problem" }));
+  expect(JSON.parse(request.mock.calls[1][1].body)).toMatchObject({ input: { expectedRevision: 5, reason: "The light still flickers.", response: "dispute" } });
+});

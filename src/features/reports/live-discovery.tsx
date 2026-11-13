@@ -69,7 +69,7 @@ export function LiveDiscovery() {
         {params.has("category") && !categories.some((category) => category.id === params.get("category")) && <option value={params.get("category")!}>{params.get("category")}</option>}
       </select></label>
       <label>{copy.status}<select aria-label={copy.status} value={params.get("status") ?? "all"} onChange={(event) => filter("status", event.target.value)}>
-        <option value="all">{copy.all}</option>{publicStatuses.map((status) => <option key={status} value={status}>{reportStatusLabel(status, locale)}</option>)}
+        <option value="all">{copy.all}</option>{publicStatuses.filter(status => status !== "Assigned").map((status) => <option key={status} value={status}>{reportStatusLabel(status, locale)}</option>)}
       </select></label>
       <label>{copy.date}<select aria-label={copy.date} value={params.get("date") ?? "all"} onChange={(event) => filter("date", event.target.value)}>
         <option value="all">{copy.anyTime}</option>{[7, 30].map((days) => <option key={days} value={days}>{days} {copy.days}</option>)}

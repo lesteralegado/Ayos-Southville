@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "@/features/i18n/use-locale";
 import { formatManilaDate } from "./report-presentation";
 import type { NotificationPreferences, ResidentNotification } from "./engagement-module";
+import { ReportUpdate } from "./report-update";
 import { residentFlowCopy } from "./resident-flow-copy";
 const defaults: NotificationPreferences = { emailEnabled: false, statusUpdates: true, followUpdates: true };
 
@@ -83,7 +84,7 @@ export function NotificationCenter({ embedded = false }: { embedded?: boolean })
     {error && <div className="form-alert" role="alert"><p>{error === "auth" ? t("Sign in again to view or update your private notifications.", "Mag-sign in muli upang makita o baguhin ang iyong pribadong abiso.") : error === "load" ? t("Notifications could not be loaded. Reload to try again.", "Hindi ma-load ang mga abiso. I-reload upang subukan muli.") : t("The update could not be confirmed. Your previous settings remain shown. Reload before retrying.", "Hindi makumpirma ang update. Ipinapakita pa rin ang dating mga setting. I-reload bago subukan muli.")}</p>{error === "auth" && <Link href="/sign-in?next=/account/notifications">{t("Sign in", "Mag-sign in")}</Link>}</div>}
     <ul className="notification-list" aria-busy={busy}>{notifications.map(notice => <li key={notice.id} className={notice.read ? "is-read" : ""}><div>
       <span className="notification-read-state">{notice.read ? t("Read", "Nabasa") : t("Unread", "Hindi pa nababasa")}</span>
-      <strong>{notice.update ? notice.update[locale] : notice.kind === "follow" ? t("You are now following this report.", "Sinusundan mo na ang ulat na ito.") : notice.kind === "affected" ? t("You marked this report as affecting you.", "Minarkahan mong nakaaapekto sa iyo ang ulat na ito.") : notice.message}</strong>
+      <strong>{notice.update ? <ReportUpdate update={notice.update} locale={locale} /> : notice.kind === "follow" ? t("You are now following this report.", "Sinusundan mo na ang ulat na ito.") : notice.kind === "affected" ? t("You marked this report as affecting you.", "Minarkahan mong nakaaapekto sa iyo ang ulat na ito.") : notice.message}</strong>
       <Link href={`/reports/${notice.reference}`}>{t("View report", "Tingnan ang ulat")} {notice.reference}</Link>
       <time dateTime={notice.createdAt}>{formatManilaDate(notice.createdAt, locale, true)}</time>
     </div>{!notice.read && <button type="button" className="button button-quiet" disabled={busy} onClick={() => void update({ notificationId: notice.id })}>{t("Mark read", "Markahang nabasa")}</button>}</li>)}</ul>

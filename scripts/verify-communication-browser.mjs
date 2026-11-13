@@ -3,7 +3,7 @@ import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "@playwright/test";
 import { createServer, transformWithOxc } from "vite";
-const root = process.cwd(), artifacts = path.join(root, ".scratch/ayos-southville-production-completion/artifacts");
+const root = process.cwd(), artifacts = path.join(root, ".scratch/simplified-product-flow/artifacts");
 await mkdir(artifacts, { recursive: true });
 const capture = !process.argv.includes("--functional-only");
 const resolutionOnly = process.argv.includes("--resolution-only");
@@ -42,6 +42,9 @@ const server = await createServer({ cacheDir: path.join(root, "node_modules/.vit
         if (url.pathname === "/api/notifications") {
           if (req.method === "PATCH") { if (input.notificationId) await engagement.markNotificationRead(uid, input.notificationId); else await engagement.setPreferences(uid, input.preferences); result = { ok: true }; }
           else result = { notifications: await engagement.listNotifications(uid), preferences: await engagement.getPreferences(uid) };
+        } else if (/^\/api\/reports\/[^/]+\/engagement$/.test(url.pathname)) {
+          const reference = url.pathname.split("/")[3];
+          result = req.method === "POST" ? await engagement.setUpdates({ residentUid: uid, reference, active: input.active }) : await engagement.getResidentState(uid, reference);
         } else if (url.pathname === "/api/fixture-report") {
           const report = await store.getReport(url.searchParams.get("reference"));
           result = { report: { revision: report.revision, reference: report.reference, category: report.category, publicSummary: report.public.summary, publicArea: report.public.area, media: [], status: report.status, submittedAt: report.submittedAt, timeline: report.history.map(event => ({ status: event.status, occurredAt: event.occurredAt, update: event.update })) }, canRespond: uid === report.reporterUid };
@@ -76,14 +79,15 @@ try {
   await page.keyboard.press("Tab"); assert.ok(await page.evaluate(() => document.activeElement !== document.body));
   await page.evaluate(() => document.documentElement.style.fontSize="200%"); assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),"text zoom"); await page.evaluate(() => document.documentElement.style.fontSize="");
   await page.getByRole("button", { name:"Mark read" }).click(); await page.getByText("Notification marked read.").waitFor();
+  await page.locator("details.preferences-panel > summary").click();
   await page.getByLabel("Email important updates",{exact:true}).click(); await page.getByText("Preferences saved.").waitFor();
-  await page.reload(); await page.getByLabel("Email important updates",{exact:true}).waitFor(); assert.equal(await page.getByLabel("Email important updates",{exact:true}).isChecked(),true);
+  await page.reload(); await page.locator("details.preferences-panel > summary").click(); await page.getByLabel("Email important updates",{exact:true}).waitFor(); assert.equal(await page.getByLabel("Email important updates",{exact:true}).isChecked(),true);
   await page.route("**/api/notifications",route=>route.abort("failed")); await page.getByRole("button",{name:"Reload notifications"}).click(); await page.getByRole("alert").waitFor(); await page.unroute("**/api/notifications"); await page.getByRole("button",{name:"Reload notifications"}).click(); await page.getByRole("alert").waitFor({state:"hidden"});
-  await page.getByRole("link",{name:"View report AS-400001"}).click(); await page.getByRole("button",{name:"Confirm resolution"}).waitFor(); await inspect("resolution");
-  await page.getByLabel("Reason (3–4,000 characters)").fill("The streetlight works normally now."); await page.getByRole("button",{name:"Confirm resolution"}).click(); await page.getByText("Resident confirmed",{exact:true}).first().waitFor();
+  await page.getByRole("link",{name:"View report AS-400001"}).click(); await page.getByRole("button",{name:"Confirmed fixed"}).waitFor(); await inspect("resolution");
+  await page.getByLabel("Reason (3–4,000 characters)").fill("The streetlight works normally now."); await page.getByRole("button",{name:"Confirmed fixed"}).click(); await page.getByText("Confirmed fixed",{exact:true}).first().waitFor();
   await page.goto("http://127.0.0.1:4181/reports/AS-400002"); await page.getByLabel("Reason (3–4,000 characters)").fill("Private phone 09171234567; light still flickers.");
-  await page.route("**/api/moderation",route=>route.abort("failed")); await page.getByRole("button",{name:"Problem remains"}).click(); await page.getByRole("alert").waitFor(); assert.match(await page.getByLabel("Reason (3–4,000 characters)").inputValue(),/still flickers/); await page.unroute("**/api/moderation"); await page.reload(); await page.getByLabel("Reason (3–4,000 characters)").fill("Private phone 09171234567; light still flickers."); await page.getByRole("button",{name:"Problem remains"}).click(); await page.getByText("Under review",{exact:true}).first().waitFor();
-  const neighbor = await browser.newPage({extraHTTPHeaders:{"x-fixture-uid":"neighbor"}}); await neighbor.goto("http://127.0.0.1:4181/reports/AS-400001"); await neighbor.getByRole("heading",{name:"Streetlight repaired near the court"}).waitFor(); assert.equal(await neighbor.getByRole("button",{name:"Confirm resolution"}).count(),0);
+  await page.route("**/api/moderation",route=>route.abort("failed")); await page.getByRole("button",{name:"Still a problem"}).click(); await page.getByRole("alert").waitFor(); assert.match(await page.getByLabel("Reason (3–4,000 characters)").inputValue(),/still flickers/); await page.unroute("**/api/moderation"); await page.locator(".resolution-panel").getByRole("button",{name:"Retry",exact:true}).click(); assert.match(await page.getByLabel("Reason (3–4,000 characters)").inputValue(),/still flickers/); await page.getByRole("button",{name:"Still a problem"}).click(); await page.getByText("Under review",{exact:true}).first().waitFor();
+  const neighbor = await browser.newPage({extraHTTPHeaders:{"x-fixture-uid":"neighbor"}}); await neighbor.goto("http://127.0.0.1:4181/reports/AS-400001"); await neighbor.getByRole("heading",{name:"Streetlight repaired near the court"}).waitFor(); assert.equal(await neighbor.getByRole("button",{name:"Confirmed fixed"}).count(),0);
   const forbidden = await neighbor.request.patch("http://127.0.0.1:4181/api/moderation",{data:{action:"respond-to-resolution",input:{reference:"AS-400001",expectedRevision:4,response:"confirm",reason:"Looks fine."}}}); assert.equal(forbidden.status(),403);
   const stale = await page.request.patch("http://127.0.0.1:4181/api/moderation",{data:{action:"respond-to-resolution",input:{reference:"AS-400002",expectedRevision:4,response:"dispute",reason:"Old request."}}}); assert.equal(stale.status(),409);
   const report = await boundaries.moderation.getPrivateReport({uid:"operator",roles:["Administrator"]},"AS-400002"); assert.equal(report.resolutionEvidence.length,1); assert.equal(report.history.length,2); assert.ok(!JSON.stringify(await boundaries.moderation.getPublicReport("AS-400002")).includes("09171234567")); assert.deepEqual(errors,[]);

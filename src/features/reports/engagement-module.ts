@@ -47,7 +47,7 @@ export type EngagementStore = {
     residentUid: string,
     reference: string,
     state: ResidentReportState,
-    change?: "affected" | "follow",
+    change?: "affected" | "follow" | "updates",
   ): Promise<void | ResidentReportState>;
   addNotificationOnce(
     key: string,
@@ -167,6 +167,12 @@ export function createEngagementModule({
     },
     getResidentState: (residentUid: string, reference: string) =>
       store.getResidentState(residentUid, reference),
+    async setUpdates(input: { residentUid: string; reference: string; active: boolean }) {
+      const current = await store.getResidentState(input.residentUid, input.reference);
+      const next = { ...current, following: input.active, affected: input.active && current.affected };
+      const saved = await store.setResidentState(input.residentUid, input.reference, next, "updates");
+      return saved ?? next;
+    },
     async setAffected(input: {
       residentUid: string;
       reference: string;

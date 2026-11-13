@@ -5,6 +5,7 @@ import type { ModerationReport, Operator } from "./moderation-module";
 import { EvidencePicker } from "./evidence-picker";
 import { preparePublicDraft } from "./public-report-draft";
 import { operatorFlowCopy } from "./operator-flow-copy";
+import { OperatorUpdateFields } from "./operator-update-fields";
 
 export function PrimaryReportAction({ report, actor, locale, pending, mutate }: { report: ModerationReport; actor: Operator; locale: "en" | "fil"; pending: boolean; mutate(action: string, input: Record<string, unknown>): Promise<void> }) {
   const copy = operatorFlowCopy[locale];
@@ -41,8 +42,7 @@ export function PrimaryReportAction({ report, actor, locale, pending, mutate }: 
           <label>{copy.alt} {index + 1}<input name={`alt-${asset.id}`} maxLength={400} /></label>
         </div>)}</div>}
       </> : <>
-        <label htmlFor="primary-update-en">{copy.english}</label><textarea id="primary-update-en" name="en" required maxLength={1000} defaultValue={resolving ? "" : copy.started} />
-        <label htmlFor="primary-update-fil">{copy.filipino}</label><textarea id="primary-update-fil" name="fil" required maxLength={1000} defaultValue={resolving ? "" : copy.startedFil} />
+        <OperatorUpdateFields locale={locale} labels={copy} initial={resolving ? { en: "", fil: "" } : { en: copy.started, fil: copy.startedFil }} />
         {resolving && <><h3>{copy.evidence}</h3><p>{copy.evidenceHelp}</p><EvidencePicker required owner={actor.uid} draftKey={`resolution_${report.reference}`} locale={locale} onAssets={setAssets} onBlocked={setUploadBlocked} /></>}
       </>}
       <button className="button button-primary" type="submit" disabled={pending || (resolving && (uploadBlocked || !assets.length))}>{pending ? copy.saving : publishing ? copy.publish : resolving ? copy.resolve : copy.start}</button>

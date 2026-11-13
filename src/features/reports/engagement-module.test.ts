@@ -1,6 +1,12 @@
 import { createEngagementModule, createMemoryEngagementStore } from "./engagement-module";
 
 describe("report engagement boundary", () => {
+  it("stops both legacy affected and following updates without deleting protected evidence", async () => {
+    const engagement = createEngagementModule({ store: createMemoryEngagementStore() });
+    await engagement.setAffected({ residentUid: "r1", reference: "AS-UPDATES", active: true, evidence: [{ id: "photo", name: "proof.jpg", size: 10, type: "image/jpeg", visibility: "restricted" }] });
+    await engagement.setUpdates({ residentUid: "r1", reference: "AS-UPDATES", active: false });
+    expect(await engagement.getResidentState("r1", "AS-UPDATES")).toMatchObject({ affected: false, following: false, supportingEvidence: [{ id: "photo" }] });
+  });
   it("explains nearby unresolved duplicate suggestions and excludes weak matches", async () => {
     const engagement = createEngagementModule({ store: createMemoryEngagementStore({
       reports: [
