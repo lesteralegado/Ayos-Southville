@@ -14,6 +14,20 @@ it("prefills an editable draft and submits only explicitly selected photos", asy
   fireEvent.click(screen.getByRole("button", { name: "Approve and publish" }));
   await waitFor(() => expect(mutate).toHaveBeenCalledWith("accept", expect.objectContaining({ publicSummary: "Reviewed light concern.", publicArea: "Covered court", approvedMedia: [] })));
 });
+it("keeps the resident pin precise and accepts its decimal coordinates in the approval form", async () => {
+  const mutate = vi.fn().mockResolvedValue(undefined);
+  const pin = { latitude: 14.281234567, longitude: 121.126789123 };
+  render(<PrimaryReportAction report={{ ...report, exactLocation: { ...pin, privateDetails: "Private gate" } }} actor={{ uid: "moderator", roles: ["Moderator"] }} locale="en" pending={false} mutate={mutate} />);
+  fireEvent.click(screen.getByText("Edit public details"));
+  const latitude = screen.getByLabelText("Pin latitude") as HTMLInputElement;
+  const longitude = screen.getByLabelText("Pin longitude") as HTMLInputElement;
+  expect(latitude.valueAsNumber).toBe(pin.latitude);
+  expect(longitude.valueAsNumber).toBe(pin.longitude);
+  expect(latitude.checkValidity()).toBe(true);
+  expect(longitude.checkValidity()).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Approve and publish" }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledWith("accept", expect.objectContaining({ publicLocation: pin })));
+});
 it.each([
   ["Moderator", "Submitted", "Approve and publish"], ["Coordinator", "Submitted", null],
   ["Moderator", "Under review", null], ["Coordinator", "Under review", "Start work"],

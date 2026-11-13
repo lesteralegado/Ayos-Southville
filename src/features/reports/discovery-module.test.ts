@@ -29,7 +29,7 @@ describe("public discovery boundary", () => {
     ] });
     const result = await discovery.list(new URLSearchParams());
     expect(result.total).toBe(2);
-    expect(result.reports[1].publicLocation).toEqual({ latitude: 14.28, longitude: 121.13 });
+    expect(result.reports[1].publicLocation).toEqual({ latitude: 14.28123, longitude: 121.12789 });
     expect(JSON.stringify(result)).not.toMatch(/private@example|House 12|internalNotes|exactLocation|reporterEmail/);
   });
   it("filters against the actual current date and shares a bounded result page between map and list", async () => {

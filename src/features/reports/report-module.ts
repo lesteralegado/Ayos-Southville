@@ -289,8 +289,8 @@ export function createReportModule({
           ...(input.exactLocation
             ? {
                 publicLocation: {
-                  latitude: Number(input.exactLocation.latitude.toFixed(2)),
-                  longitude: Number(input.exactLocation.longitude.toFixed(2)),
+                  latitude: input.exactLocation.latitude,
+                  longitude: input.exactLocation.longitude,
                 },
               }
             : {}),

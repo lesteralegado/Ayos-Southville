@@ -23,7 +23,7 @@ export function publicProjection(value: unknown, mode: DiscoveryMode = "live"): 
   const latitude = location.latitude, longitude = location.longitude;
   const publicLocation = typeof latitude === "number" && typeof longitude === "number" &&
     Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
-    ? { latitude: Number(latitude.toFixed(2)), longitude: Number(longitude.toFixed(2)) } : undefined;
+    ? { latitude, longitude } : undefined;
   const media = (Array.isArray(data.media) ? data.media : []).slice(0, 5).flatMap((entry) => {
     const asset = object(entry), id = typeof asset.id === "string" ? asset.id : "", alt = text(asset.alt, 400);
     return /^[a-f0-9]{64}$/.test(id) && alt ? [{ id, alt }] : [];

@@ -20,6 +20,7 @@ import { getReportModule } from "@/features/reports/firebase-report-store";
 import { getModerationModule } from "@/features/reports/firebase-moderation-store";
 import { archiveRequestedReport, changeResidentReport } from "@/features/reports/resident-report-actions";
 import { getEngagementModule } from "@/features/reports/firebase-engagement-store";
+import { preparePublicDraft } from "@/features/reports/public-report-draft";
 
 const run = randomUUID().replaceAll("-", "");
 const uid = `contracts-${run}`;
@@ -96,8 +97,11 @@ it("archives a report atomically with real SDK retries and retains the owner's p
   ownedOtherUsers.push(archiveUid);
   await db.collection("residentProfiles").doc(archiveUid).set({ roles: ["Resident"], pilotAccess: "approved" });
   await db.collection("pilotConsents").doc(archiveUid).set({ ...(await db.collection("pilotConsents").doc(uid).get()).data(), residentUid: archiveUid });
-  const { reference } = await reports.submit({ ...submission(), residentUid: archiveUid });
-  await moderation.accept(actor, acceptance(reference));
+  const pin = { latitude: 14.281234567, longitude: 121.126789123 };
+  const { reference } = await reports.submit({ ...submission(), residentUid: archiveUid, exactLocation: { ...pin, privateDetails: "Synthetic private access details." } });
+  const draft = preparePublicDraft(await moderation.getPrivateReport(actor, reference));
+  await moderation.accept(actor, { ...acceptance(reference), publicLocation: { latitude: Number(draft.latitude), longitude: Number(draft.longitude) } });
+  expect((await reports.getPublic(reference))?.publicLocation).toEqual(pin);
   await changeResidentReport(archiveUid, reference, "request-archive");
   await Promise.all([archiveRequestedReport(actor, reference, "Synthetic archive request."), archiveRequestedReport(actor, reference, "Synthetic archive request.")]);
   expect(await reports.getPublic(reference)).toBeNull();

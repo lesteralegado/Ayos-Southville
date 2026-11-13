@@ -16,6 +16,7 @@ import { getModerationModule } from "./firebase-moderation-store";
 import { getReportModule } from "./firebase-report-store";
 import { readApprovedPublicEvidence } from "./firebase-evidence-store";
 import { archiveRequestedReport, changeResidentReport } from "./resident-report-actions";
+import { preparePublicDraft } from "./public-report-draft";
 const actor = { uid: "operator", roles: ["Administrator"] as const };
 const reference = "AS-300001", originalId = "b".repeat(64), resolutionId = "a".repeat(64);
 const upload = (id: string) => ({ id, name: "evidence.jpg", type: "image/jpeg", size: 500, visibility: "restricted", path: "private-evidence/file.jpg", residentUid: "operator", draftKey: "resolution_" + reference, createdAt: new Date().toISOString() });
@@ -37,6 +38,16 @@ async function start() {
   await moderation.transition(actor, { reference, expectedRevision: 2, to: "In progress", update: { en: "Started.", fil: "Nagsimula." } });
   return moderation;
 }
+it("publishes the resident's selected pin without shifting its coordinates", async () => {
+  const pin = { latitude: 14.281234567, longitude: 121.126789123 };
+  fixture.records.get("privateReports/" + reference)!.exactLocation = { ...pin, privateDetails: "Private gate instructions" };
+  const moderation = getModerationModule();
+  const draft = preparePublicDraft(await moderation.getPrivateReport(actor, reference));
+  await moderation.accept(actor, { ...acceptance, publicLocation: { latitude: Number(draft.latitude), longitude: Number(draft.longitude) } });
+  const published = await (await getReportModule()).getPublic(reference);
+  expect(published?.publicLocation).toEqual(pin);
+  expect(JSON.stringify(published)).not.toContain("Private gate instructions");
+});
 it("withholds archived reports and public photos permanently, including stale and fresh operator updates", async () => {
   const moderation = await start();
   await changeResidentReport("resident", reference, "request-archive");

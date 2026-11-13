@@ -14,7 +14,7 @@ import type { PilotOperations } from "@/features/admin/pilot-operations";
 const copy = {
   en: {
     title: "Tell us what needs attention.",
-    lead: "For non-emergency concerns in Southville 1. Your identity, exact location, and original photos stay private. Only a reviewed safe summary may become public.",
+    lead: "For non-emergency concerns in Southville 1. Your selected issue pin may become public after review. Your identity, household access details, and original photos stay private.",
     draft: "You have an unfinished private draft on this device.",
     resume: "Resume draft",
     discard: "Discard draft",
@@ -28,13 +28,13 @@ const copy = {
     landmark: "Nearby landmark",
     landmarkHelp:
       "Use an approximate, recognizable public place. Operators review it before publication.",
-    location: "Issue location · private",
+    location: "Issue location · public after approval",
     locationHelp:
-      "Optional coordinates and household details stay private. Any public point is deliberately approximate.",
+      "Place the pin on the concern. The approved public map will use this same pin. Household access details below stay private.",
     privateDetails: "Private block, lot, or access details",
     nonEmergency: "I confirm this is not an emergency.",
     publicSummary:
-      "I understand that only a reviewed safe summary and approximate area may appear publicly.",
+      "I understand that a reviewed safe summary, area and my selected issue pin may appear publicly.",
     submit: "Submit report",
     submitting: "Submitting…",
     errorTitle: "Please review the highlighted fields.",
@@ -43,7 +43,7 @@ const copy = {
   },
   fil: {
     title: "Ibahagi kung ano ang kailangang ayusin.",
-    lead: "Para sa hindi emergency na concern sa Southville 1. Pribado ang iyong identity, eksaktong lokasyon, at orihinal na litrato. Reviewed na ligtas na summary lamang ang maaaring makita sa publiko.",
+    lead: "Para sa hindi emergency na concern sa Southville 1. Maaaring maging pampubliko ang pin ng concern matapos suriin. Pribado ang iyong identity, detalye ng pagpunta sa bahay, at orihinal na litrato.",
     draft: "May hindi natapos na pribadong draft sa device na ito.",
     resume: "Ipagpatuloy ang draft",
     discard: "Burahin ang draft",
@@ -57,13 +57,13 @@ const copy = {
     landmark: "Malapit na landmark",
     landmarkHelp:
       "Gumamit ng tinatayang pampublikong lugar na madaling makilala. Susuriin ito bago ilathala.",
-    location: "Lokasyon ng concern · pribado",
+    location: "Lokasyon ng concern · pampubliko kapag naaprubahan",
     locationHelp:
-      "Opsyonal at pribado ang coordinates at household details. Tinatayang lokasyon lamang ang makikita sa publiko.",
+      "Ilagay ang pin sa concern. Gagamitin ang parehong pin sa aprubadong pampublikong mapa. Pribado ang detalye ng pagpunta sa bahay sa ibaba.",
     privateDetails: "Pribadong block, lot, o detalye ng pagpunta",
     nonEmergency: "Kinukumpirma kong hindi ito emergency.",
     publicSummary:
-      "Nauunawaan kong reviewed na ligtas na summary at tinatayang lugar lamang ang maaaring makita sa publiko.",
+      "Nauunawaan kong maaaring maging pampubliko ang sinuring ligtas na buod, lugar at pin na pinili ko para sa concern.",
     submit: "Isumite ang ulat",
     submitting: "Isinusumite…",
     errorTitle: "Suriin ang mga field na may marka.",

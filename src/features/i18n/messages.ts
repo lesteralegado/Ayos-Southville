@@ -22,7 +22,7 @@ export const messages = {
     ],
     neighborhood: "Around the neighborhood",
     reportsTitle: "Reports in view",
-    privacy: "Public locations are intentionally approximate to protect residents’ privacy.",
+    privacy: "Approved reports use the selected issue pin. Household access details stay private.",
     affected: "residents affected",
   },
   fil: {
@@ -46,7 +46,7 @@ export const messages = {
     ],
     neighborhood: "Sa ating komunidad",
     reportsTitle: "Mga ulat na makikita",
-    privacy: "Tinatantiya lamang ang pampublikong lokasyon upang maprotektahan ang privacy ng mga residente.",
+    privacy: "Gamit ang napiling pin sa aprubadong ulat. Pribado ang detalye ng pagpunta sa bahay.",
     affected: "residenteng apektado",
   },
 } as const;
