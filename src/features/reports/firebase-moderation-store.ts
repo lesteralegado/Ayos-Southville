@@ -117,6 +117,13 @@ function createFirebaseModerationStore(): ModerationStore {
           db.collection("moderationReports").doc(report.reference),
         );
         const current = await transaction.getAll(...refs);
+        if (change.audit.action === "report.owner-reassigned") {
+          await assertWritable(transaction, change.actorUid, [], ["Coordinator", "Administrator"]);
+          const ownerUid = change.reports[0].reviewOwnerUid!;
+          await assertParticipant(transaction, ownerUid, false);
+          const owner = await transaction.get(db.collection("residentProfiles").doc(ownerUid));
+          if (!owner.data()?.roles?.some((role: string) => ["Moderator", "Coordinator", "Administrator"].includes(role))) throw new ModerationValidationError("Choose a verified active operator.");
+        }
         if (change.audit.action === "report.review-takeover") {
           const operating = pilotOperations((await transaction.get(db.collection("pilotOperations").doc("current"))).data());
           const dueAt = reviewDeadline(change.reports[0].submittedAt, operating.reviewCalendar);
@@ -347,6 +354,17 @@ function createFirebaseModerationStore(): ModerationStore {
         const data = doc.data() as ResidentReport & { reviewAcknowledgedAt?: string };
         const state = moderation[index].data();
         return { reference: doc.id, category: data.category, status: data.status, submittedAt: data.submittedAt, revision: state?.revision ?? 0, ...(state?.reviewOwnerUid ? { reviewOwnerUid: state.reviewOwnerUid } : {}), ...((state?.review?.acknowledgedAt ?? data.reviewAcknowledgedAt) ? { reviewAcknowledgedAt: state?.review?.acknowledgedAt ?? data.reviewAcknowledgedAt } : {}) };
+      });
+    },
+    async listOwnedWindow(uid, filter, after, limit) {
+      if (await pilotRecordsExpired()) return [];
+      const statuses = filterStatuses(filter);
+      let query = db.collection("moderationReports").where("reviewOwnerUid", "==", uid);
+      if (statuses) query = query.where("status", "in", statuses);
+      const snapshot = await boundedReportQuery(query, after, limit).select("category", "status", "submittedAt", "revision", "reviewOwnerUid", "review").get();
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return { reference: doc.id, category: data.category, status: data.status, submittedAt: data.submittedAt, revision: data.revision ?? 0, reviewOwnerUid: uid, ...(data.review?.acknowledgedAt ? { reviewAcknowledgedAt: data.review.acknowledgedAt } : {}) };
       });
     },
     async getReport(reference) {

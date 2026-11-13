@@ -1,4 +1,19 @@
 .operator-toolbar { display: flex; align-items: end; gap: 20px; flex-wrap: wrap; margin-block: 28px; }
+.operator-groups { display: flex; flex-wrap: wrap; gap: 10px; margin-block: 28px 14px; }
+.operator-groups .button-quiet { display: inline-flex; cursor: pointer; }
+.operator-groups button[aria-current=page] { background: var(--green-dark); color: white; }
+.operator-more > summary { min-height: 44px; padding-block: 14px; cursor: pointer; color: var(--green-dark); font-weight: 700; }
+.operator-more { margin-block: 28px; border-block-start: 1px solid var(--line); }
+.operator-more[open] > summary { margin-block-end: 20px; }
+.publication-comparison { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+.publication-comparison section { min-width: 0; overflow-wrap: anywhere; }
+.publication-comparison h3 { margin-block-start: 0; }
+.publication-comparison p { white-space: pre-wrap; }
+.publication-warning { background: var(--deep-paper); padding: 16px; border-radius: 12px; }
+.publication-media { display: grid; gap: 20px; }
+.operator-detail .primary-report-action fieldset { margin-inline: 0; }
+.operator-more > summary:focus-visible, .operator-groups button:focus-visible { outline: 3px solid var(--green); outline-offset: 4px; }
+@media (max-width: 850px) { .publication-comparison { grid-template-columns: minmax(0, 1fr); gap: 20px; } .operator-page .operator-queue { max-height: 420px; overflow: auto; overscroll-behavior: contain; } }
 .operator-toolbar label { display: grid; gap: 6px; }
 .operator-layout { display: grid; grid-template-columns: minmax(220px, .32fr) minmax(0, 1fr); gap: 28px; align-items: start; }
 .operator-queue { display: grid; gap: 10px; }

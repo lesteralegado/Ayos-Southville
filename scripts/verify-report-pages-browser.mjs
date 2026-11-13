@@ -61,6 +61,7 @@ try {
   await page.goto("http://127.0.0.1:4194/");
   await page.getByRole("heading", { name: /AS-PAGE000120/ }).waitFor();
   await capture("report-pages-operator-desktop", 1440);
+  await page.locator(".admin-shell > details.advanced-disclosure > summary").click();
   await page.getByRole("button", { name: "Next reports", exact: true }).click();
   await page.getByRole("heading", { name: /AS-PAGE000100/ }).waitFor();
   await page.getByRole("button", { name: "Start of list" }).click();
@@ -70,6 +71,7 @@ try {
   await page.getByRole("heading", { name: /AS-PAGE000020/ }).waitFor();
   await page.getByLabel("Report status", { exact: true }).selectOption("active");
   await page.getByRole("heading", { name: /AS-PAGE000120/ }).waitFor();
+  await page.locator(".operator-more > summary").click();
   await page.getByLabel("Review decision", { exact: true }).selectOption("merge");
   await page.getByLabel("Canonical report", { exact: true }).fill("AS-PAGE000000");
   await page.getByRole("button", { name: "Find canonical report" }).click();

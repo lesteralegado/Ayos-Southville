@@ -83,6 +83,20 @@ function acceptance(reference: string) {
   return { reference, expectedRevision: 0, publicSummary: "SYNTHETIC CONTRACT TEST: light concern.", publicArea: "Synthetic court", approvedMedia: [], reason: "Synthetic privacy review." };
 }
 
+it("publishes with ownership and starts work without assignment using the real transaction and queue", async () => {
+  const reports = await getReportModule(), moderation = getModerationModule();
+  const receipt = await reports.submit(submission());
+  await moderation.accept(actor, acceptance(receipt.reference));
+  expect(await moderation.getPrivateReport(actor, receipt.reference)).toMatchObject({ reviewOwnerUid: uid, status: "Under review", revision: 1, review: { actorUid: uid } });
+  const owned = await moderation.listWorkspacePage(actor, { filter: "working", ownedFirst: true });
+  expect(owned.reports.some(report => report.reference === receipt.reference && report.reviewOwnerUid === uid)).toBe(true);
+  await moderation.transition(actor, { reference: receipt.reference, expectedRevision: 1, to: "In progress", update: { en: "Synthetic work started.", fil: "Nagsimula ang synthetic na gawain." } });
+  expect(await reports.getMine(uid, receipt.reference)).toMatchObject({ status: "In progress" });
+  const published = await reports.getPublic(receipt.reference);
+  expect(published).toMatchObject({ status: "In progress" });
+  expect(JSON.stringify(published)).not.toContain("reviewOwnerUid");
+});
+
 it("withdraws atomically on the real SDK, preserves receipt deduplication, and pages private updates", async () => {
   const reports = await getReportModule(), input = submission();
   const receipt = await reports.submit(input);
