@@ -72,7 +72,7 @@
 }
 
 .product-header { max-width: 1220px; margin-inline: auto; padding: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; border-block-end: 1px solid var(--line); }
-.product-header nav { display: flex; flex-wrap: wrap; gap: 6px 14px; flex: 1; }
+.product-header nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; flex: 1; }
 .product-header nav > a:not(.button), .product-utilities a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); text-decoration: none; font-size: .9rem; }
 .product-header nav a[aria-current=page] { color: var(--green); font-weight: 700; text-decoration: underline; text-underline-offset: 7px; }
 .product-header nav > a.navigation-primary:not(.button) { background: var(--green); color: white; padding-inline: 16px; border-radius: 999px; }
