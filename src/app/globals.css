@@ -74,12 +74,12 @@
 .product-header { max-width: 1220px; margin-inline: auto; padding: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; border-block-end: 1px solid var(--line); }
 .product-header nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; flex: 1; }
 .product-header nav > a:not(.button), .product-utilities a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); text-decoration: none; font-size: .9rem; }
-.product-header nav a[aria-current=page] { color: var(--green); font-weight: 700; text-decoration: underline; text-underline-offset: 7px; }
+.product-header nav a[aria-current=page] { color: var(--green); font-weight: 700; }
 .product-header nav > a.navigation-primary:not(.button) { background: var(--green); color: white; padding-inline: 16px; border-radius: 999px; }
 .product-header nav > a.navigation-primary[aria-current=page] { color: white; }
 /* The shared shell supplies the same home, account, and language controls. */
 .product-header ~ main .composer-header { display: none; }
-:root a[href]:hover { text-decoration: none; }
+:root a[href] { text-decoration: none; }
 .product-utilities { display: flex; gap: 14px; align-items: center; }
 .unread-indicator { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; margin-inline-start: 6px; padding: 2px 6px; border-radius: 999px; background: var(--green-dark); color: white; font-size: .8rem; }
 .resident-report-action { margin-block-start: 20px; padding-block-start: 14px; border-block-start: 1px solid var(--line); }
@@ -124,6 +124,10 @@ body {
   font-family: var(--font-sans), sans-serif;
 }
 a { color: inherit; }
+a[href], .language-button { transition: filter 180ms cubic-bezier(.16, 1, .3, 1); }
+@media (hover: hover) {
+  a[href]:hover, .language-button:hover { filter: brightness(.75); }
+}
 
 .site-header {
   width: min(1180px, calc(100% - 40px));
@@ -139,7 +143,7 @@ a { color: inherit; }
 .mark svg { width: 23px; fill: none; stroke: var(--lime); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
 nav { display: flex; align-items: center; gap: 26px; }
 nav > a:not(.button) { font-size: 0.86rem; font-weight: 700; text-decoration: none; }
-.language-button { border: 0; background: transparent; color: inherit; font: inherit; font-size: .78rem; font-weight: 800; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.language-button { border: 0; background: transparent; color: inherit; font: inherit; font-size: .78rem; font-weight: 800; text-decoration: none; cursor: pointer; }
 .button { min-height: 44px; padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; font-weight: 800; font-size: 0.88rem; text-decoration: none; border: 1px solid transparent; }
 .button-quiet { border-color: var(--line); background: rgba(255,255,255,.35); }
 .button-dark { background: var(--ink); color: white; }
