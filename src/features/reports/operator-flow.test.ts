@@ -3,7 +3,7 @@ import { preparePublicDraft } from "./public-report-draft";
 const actor = { uid: "operator", roles: ["Administrator"] as const };
 const report: ModerationReport = { reference: "AS-FLOW01", reporterUid: "resident", category: "streetlights", description: "The light near the court is broken.", nearbyLandmark: "Covered court", exactLocation: { latitude: 14.281234, longitude: 121.127234, privateDetails: "Private gate" }, evidence: [{ id: "photo", name: "private.jpg", type: "image/jpeg", size: 100, visibility: "restricted" }], status: "Submitted", submittedAt: "2026-11-12T00:00:00Z", public: { summary: "", area: "", media: [] }, followers: [], affectedResidents: [], supportingEvidence: [], history: [] };
 it("prepares editable public fields without selecting photos or copying private location details", () => {
-  expect(preparePublicDraft(report)).toEqual({ summary: report.description, area: "Covered court", latitude: "14.28", longitude: "121.13" });
+  expect(preparePublicDraft(report)).toEqual({ summary: report.description, area: "Covered court", latitude: "14.281234", longitude: "121.127234" });
 });
 it("publishes edited fields, assigns review ownership and goes directly to work with atomic notifications", async () => {
   const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [report] }) });

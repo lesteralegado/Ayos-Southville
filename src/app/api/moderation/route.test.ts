@@ -73,7 +73,7 @@ it("publishes explicit redaction and returns a conflict on a repeated stale requ
   expect((await detail.json()).report).toMatchObject({
     status: "Under review",
     revision: 1,
-    public: { location: { latitude: 14.28, longitude: 121.13 } },
+    public: { location: { latitude: 14.281234, longitude: 121.126789 } },
   });
   const repeated = await PATCH(request("accept", acceptance));
   expect(repeated.status).toBe(409);

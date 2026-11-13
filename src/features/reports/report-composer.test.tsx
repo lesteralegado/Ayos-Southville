@@ -45,7 +45,7 @@ describe("report composer", () => {
     await user.click(screen.getByLabelText("Nearby landmark", { exact: true }));
     await user.paste("Covered court");
     await user.click(screen.getByLabelText("I confirm this is not an emergency."));
-    await user.click(screen.getByLabelText(/I understand that only/));
+    await user.click(screen.getByLabelText(/I understand that a/));
     const before = localStorage.getItem("ayos-report-draft-v1");
     await user.click(screen.getByRole("button", { name: "Submit report" }));
     await waitFor(() => expect(screen.getByText(/New reports are paused/)).toBeInTheDocument());
@@ -174,7 +174,7 @@ describe("report composer", () => {
       "confirm-non-emergency-error",
     );
     expect(
-      screen.getByRole("checkbox", { name: /tinatayang lugar lamang/i }),
+      screen.getByRole("checkbox", { name: /pin na pinili ko/i }),
     ).toHaveAttribute("aria-describedby", "confirm-public-summary-error");
   });
 
@@ -218,7 +218,7 @@ describe("report composer", () => {
       screen.getByLabelText(/confirm this is not an emergency/i),
     );
     await user.click(
-      screen.getByLabelText(/reviewed safe summary and approximate area/i),
+      screen.getByLabelText(/reviewed safe summary, area and my selected issue pin/i),
     );
 
     await user.click(screen.getByRole("button", { name: /submit report/i }));
@@ -260,7 +260,7 @@ describe("report composer", () => {
       screen.getByLabelText(/confirm this is not an emergency/i),
     );
     await user.click(
-      screen.getByLabelText(/reviewed safe summary and approximate area/i),
+      screen.getByLabelText(/reviewed safe summary, area and my selected issue pin/i),
     );
     await user.click(screen.getByRole("button", { name: /submit report/i }));
     expect(push).toHaveBeenCalledWith("/reports/AS-LANDMARK");

@@ -437,13 +437,8 @@ export function createModerationModule({
           Math.abs(input.publicLocation.longitude) > 180)
       )
         throw new ModerationValidationError(
-          "Choose valid approximate public coordinates.",
+          "Choose valid public coordinates.",
         );
-      if (input.publicLocation)
-        input.publicLocation = {
-          latitude: Math.round(input.publicLocation.latitude * 100) / 100,
-          longitude: Math.round(input.publicLocation.longitude * 100) / 100,
-        };
       report.approved = true;
       report.status = "Under review";
       report.reviewOwnerUid = actor.uid;
