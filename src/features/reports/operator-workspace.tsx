@@ -1,6 +1,7 @@
 "use client";
 import { RemovalRequestQueue } from "./removal-request-queue";
 import { PrimaryReportAction } from "./primary-report-action";
+import { OperatorClarification } from "./operator-clarification";
 import { assignmentUpdateCopy, operatorFlowCopy } from "./operator-flow-copy";
 import { ReassignReportOwner } from "./reassign-report-owner";
 import { ReportUpdate } from "./report-update";
@@ -416,7 +417,8 @@ function OperatorReport({
   </section>;
   return (
     <>
-      <PrimaryReportAction key={report.reference + ":" + report.status} report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />
+      <OperatorClarification key={report.reference + ":" + report.revision} report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />
+      <PrimaryReportAction key={report.reference + ":" + report.status + ":" + (report.clarifications?.filter(request => request.decision?.outcome === "accepted").map(request => request.decision?.revision).join(",") ?? "")} report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />
       <details className="operator-more"><summary>{operatorFlowCopy[locale].more}</summary>
       <ReassignReportOwner report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />
       <OperatorReviewPanel report={report} actor={actor} locale={locale} pending={pending} mutate={mutate} />

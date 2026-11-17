@@ -44,6 +44,8 @@ export type EvidenceAsset = {
 };
 
 export type ResidentReport = {
+  clarifications?: import("./report-clarification").ReportClarification[];
+  revision?: number;
   archivedAt?: string;
   removalRequestedAt?: string;
   history?: Array<{

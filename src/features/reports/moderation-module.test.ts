@@ -44,10 +44,10 @@ describe("report moderation application boundary", () => {
 
   it("publishes only moderator-approved text, approximate location, and media", async () => {
     const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [submittedReport()] }), now: () => new Date("2026-10-10T03:00:00.000Z") });
-    await expect(moderation.accept(resident, { reference: "AS-REVIEW1", publicSummary: "Broken light near the covered court.", publicArea: "Phase 2 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Covered court", publicLocation: { latitude: 14.28, longitude: 121.13 }, approvedMedia: [{ id: "photo-1", alt: "Unlit streetlight" }], reason: "Private details removed." })).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await moderation.accept(moderator, { reference: "AS-REVIEW1", publicSummary: "Broken light near the covered court.", publicArea: "Phase 2 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Covered court", publicLocation: { latitude: 14.28, longitude: 121.13 }, approvedMedia: [{ id: "photo-1", alt: "Unlit streetlight" }], reason: "Private details removed." });
+    await expect(moderation.accept(resident, { reference: "AS-REVIEW1", publicSummary: "Broken light near the covered court.", publicArea: "Phase 2 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Covered court", publicLocation: { latitude: 14.281234, longitude: 121.126789 }, approvedMedia: [{ id: "photo-1", alt: "Unlit streetlight" }], reason: "Private details removed." })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await moderation.accept(moderator, { reference: "AS-REVIEW1", publicSummary: "Broken light near the covered court.", publicArea: "Phase 2 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Covered court", publicLocation: { latitude: 14.281234, longitude: 121.126789 }, approvedMedia: [{ id: "photo-1", alt: "Unlit streetlight" }], reason: "Private details removed." });
     const publicReport = await moderation.getPublicReport("AS-REVIEW1");
-    expect(publicReport).toMatchObject({ status: "Under review", summary: "Broken light near the covered court.", area: "Phase 2 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Covered court", location: { latitude: 14.28, longitude: 121.13 }, media: [{ id: "photo-1" }] });
+    expect(publicReport).toMatchObject({ status: "Under review", summary: "Broken light near the covered court.", area: "Phase 2 ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Covered court", location: { latitude: 14.281234, longitude: 121.126789 }, media: [{ id: "photo-1" }] });
     expect(JSON.stringify(publicReport)).not.toMatch(/09171234567|Block 9|Blue gate|home.jpg/i);
   });
 

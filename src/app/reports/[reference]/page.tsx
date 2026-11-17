@@ -17,11 +17,12 @@ export default async function ReportPage({ params }: { params: Promise<{ referen
     const owned = resident ? await (await getReportModule()).getMine(resident.uid, reference.toUpperCase()) : null;
     if (!owned) notFound();
     if (owned.status === "Duplicate" && owned.canonicalReference) redirect("/reports/" + owned.canonicalReference);
-    return <ReportDetail privateReceipt archived={!!owned.archivedAt} report={residentReportDetail(owned)} />;
+    return <ReportDetail privateReceipt archived={!!owned.archivedAt} ownedReport={owned} report={residentReportDetail(owned)} />;
   }
   const demonstration = discoveryMode() === "demo";
-  const resident = !demonstration && report.status === "Resolved" ? await getVerifiedResident() : null;
-  const canRespond = !!resident && await hasPilotAccess(resident) && !!(await (await getReportModule()).getMine(resident.uid, report.reference));
+  const resident = !demonstration ? await getVerifiedResident() : null;
+  const owned = resident ? await (await getReportModule()).getMine(resident.uid, report.reference) : undefined;
+  const canRespond = report.status === "Resolved" && !!resident && !!owned && await hasPilotAccess(resident);
   const categoryLabel = (await getDiscoveryCategories()).find(category => category.id === report.category)?.label;
-  return <ReportDetail report={report} canRespond={canRespond} categoryLabel={categoryLabel} demonstration={demonstration} />;
+  return <ReportDetail report={report} ownedReport={owned ?? undefined} canRespond={canRespond} categoryLabel={categoryLabel} demonstration={demonstration} />;
 }

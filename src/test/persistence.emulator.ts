@@ -89,6 +89,28 @@ function submission() {
 function acceptance(reference: string) {
   return { reference, expectedRevision: 0, publicSummary: "SYNTHETIC CONTRACT TEST: light concern.", publicArea: "Synthetic court", approvedMedia: [], reason: "Synthetic privacy review." };
 }
+it("persists private clarification and reviewed corrections without publishing questions or replacing originals", async () => {
+  const reports = await getReportModule(), moderation = getModerationModule();
+  const { reference } = await reports.submit(submission());
+  const question = { reference, expectedRevision: 0, operationId: randomUUID(), question: "SYNTHETIC private entrance question" };
+  await moderation.requestClarification(actor, question);
+  await moderation.requestClarification(actor, question);
+  const pin = { latitude: 14.281234567, longitude: 121.126789123 };
+  const response = { reference, expectedRevision: 1, operationId: randomUUID(), requestId: question.operationId, explanation: "SYNTHETIC private answer", description: "SYNTHETIC corrected light concern", location: pin };
+  await moderation.respondToClarification({ uid, roles: ["Resident"] }, response);
+  await moderation.respondToClarification({ uid, roles: ["Resident"] }, response);
+  expect(await reports.getPublic(reference)).toBeNull();
+  expect((await reports.getMine(uid, reference))?.description).toBe("SYNTHETIC CONTRACT TEST: private reporting details.");
+  await moderation.reviewClarification(actor, { reference, expectedRevision: 2, operationId: randomUUID(), requestId: question.operationId, decision: "accepted", reason: "Synthetic correction reviewed" });
+  // Recreate the module to prove the reviewed source was persisted, not just kept in memory.
+  const draft = preparePublicDraft(await getModerationModule().getPrivateReport(actor, reference));
+  expect(draft.summary).toBe(response.description);
+  await moderation.accept(actor, { ...acceptance(reference), expectedRevision: 3, publicSummary: draft.summary, publicLocation: { latitude: Number(draft.latitude), longitude: Number(draft.longitude) } });
+  const published = await reports.getPublic(reference);
+  expect(published?.publicLocation).toEqual(pin);
+  expect(JSON.stringify(published)).not.toMatch(/private entrance question|private answer/);
+  expect((await reports.getMine(uid, reference))?.clarifications?.[0].response?.explanation).toBe(response.explanation);
+});
 
 it("counts all owned reports beyond the first page with the real SDK", async () => {
   const reports = await getReportModule();

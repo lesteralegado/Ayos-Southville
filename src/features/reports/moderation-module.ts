@@ -3,6 +3,7 @@ import { filterStatuses, memoryWindow, pageCursor, pagePosition, queueFilter, re
 import { reviewDeadline } from "./review-calendar";
 import { ownedReportPage } from "./owned-report-pages";
 import { resolutionOutcomeUpdate } from "./resolution-copy";
+import { createClarificationModule, pendingClarification, reviewedReportSource, unpublishedCorrection, type ReportClarification } from "./report-clarification";
 import type {
   EvidenceAsset,
   ExactLocation,
@@ -53,6 +54,8 @@ export type TimelineEvent = {
   update?: BilingualUpdate;
 };
 export type ModerationReport = {
+  clarificationPublishedRevision?: number;
+  clarifications?: ReportClarification[];
   archivedAt?: string;
   reviewTakeoverAvailable?: boolean;
   externalFollowUp?: { phase: "forwarded" | "acknowledged" | "accepted" | "resolved"; organization: string; correspondence: string; occurredAt: string; actorUid: string; operationId: string }[];
@@ -87,6 +90,7 @@ export type ModerationReport = {
   history: TimelineEvent[];
 };
 export type ModerationCommit = {
+  privateOnly?: boolean;
   operatingRevision?: number;
   reports: ModerationReport[];
   audit: AuditEvent;
@@ -274,6 +278,7 @@ export function createModerationModule({
     }
   }
   return {
+    ...createClarificationModule({ store, now }),
     async recordExternalFollowUp(actor: Operator, input: { reference: string; expectedRevision: number; operationId: string; phase: "forwarded" | "acknowledged" | "accepted" | "resolved"; organization: string; correspondence: string }) {
       requireRole(actor, ["Coordinator", "Administrator"]);
       const report = await findReport(input.reference);
@@ -405,6 +410,7 @@ export function createModerationModule({
       requireEditableRevision(report, input.expectedRevision);
       requireStatus(report, "Submitted");
       const reason = requireText(input.reason, "Reason");
+      if (pendingClarification(report)) throw new ModerationValidationError("Handle the pending clarification before publishing.");
       if (input.publicSummary?.length > 1000 || input.publicArea?.length > 160) throw new ModerationValidationError("Use a public summary up to 1,000 characters and an area up to 160.");
       const update = requireUpdate(
         input.update ?? {
@@ -440,6 +446,9 @@ export function createModerationModule({
           "Choose valid public coordinates.",
         );
       report.approved = true;
+      report.clarificationPublishedRevision = report.revision ?? 0;
+      const selectedPin = reviewedReportSource(report).exactLocation;
+      if (input.publicLocation && (!selectedPin || input.publicLocation.latitude !== selectedPin.latitude || input.publicLocation.longitude !== selectedPin.longitude)) throw new ModerationValidationError("Request and review a resident clarification before changing the selected pin.");
       report.status = "Under review";
       report.reviewOwnerUid = actor.uid;
       report.review ??= { acknowledgedAt: occurredAt, actorUid: actor.uid, nextStep: "Approved for public review; check the next action." };
@@ -635,6 +644,8 @@ export function createModerationModule({
       requireEditableRevision(report, input.expectedRevision);
       if (!["In progress", "Resolved"].includes(input.to))
         throw new ModerationValidationError("Choose a valid transition.");
+      if (pendingClarification(report)) throw new ModerationValidationError("Handle the pending clarification before changing progress.");
+      if (unpublishedCorrection(report)) throw new ModerationValidationError("Have a moderator publish the reviewed correction before changing progress.");
       const update = requireUpdate(input.update);
       const occurredAt = now().toISOString();
       if (input.to === "In progress") {

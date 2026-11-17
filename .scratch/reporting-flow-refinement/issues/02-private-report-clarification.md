@@ -1,6 +1,6 @@
 # 02: Add private report clarification
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: none
 
@@ -32,3 +32,25 @@ Cover legitimate request/response/review, cross-owner denial, operator role deni
 ## Comments
 
 Preserve original selected coordinates at full precision. Never infer resident agreement from a staff edit or automatically approve submitted photos.
+
+## Answer
+
+Implemented private report clarification across the domain, Firebase transaction boundary, API, owner-only report detail, resident tracking and operator workspace. Staff ask one bounded question; the verified owner replies with an explanation and optional corrected concern, landmark or explicitly selected replacement pin. Operators accept or decline the proposal, preserving the original submission and private decision history. Follow-ups require handling the previous request.
+
+Questions, replies and proposed corrections remain private until authorized reviewed publication. Publication retains the reviewed pin at full precision and individual photo review. Pending questions and unpublished accepted corrections take priority over normal lifecycle actions. Closed or archived reports reject obsolete answers. Revision checks and stable operation references prevent duplicate actions and notifications; failed replies retain entered text. Request notifications reach only the owner without exposing question content in audit records or follower notifications.
+
+### Verification
+
+- All 364 tests across 82 files pass with `npm test -- --maxWorkers=2`. The initial run found a draft-reset regression; fixed it and confirmed focused tests and the full rerun.
+- TypeScript and repository lint pass.
+- Ten real Firebase emulator persistence tests pass, including private history, deduplication, reviewed pin publication and public isolation. Transaction-failure tests verify rollback.
+- English desktop and Filipino mobile browser checks pass: keyboard disclosure, success focus, lost-acknowledgement retry, explicit review, precise corrected pin, original retention, responsive overflow and axe. Existing operator browser regression passes.
+- Desktop and mobile screenshots inspected. No design detector ignores added.
+
+### Standards
+
+Independent review against baseline `5697561`: no documented-standard violations. One low-priority duplicated eligibility rule was consolidated into `canClarifyReport`.
+
+### Spec
+
+Independent specification review: zero actionable findings or scope additions. Browser evidence uses synthetic local fixtures; Firebase persistence evidence uses local emulators.

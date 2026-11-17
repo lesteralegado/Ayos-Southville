@@ -79,7 +79,17 @@ export async function PATCH(request: Request) {
         "Provide English and Filipino updates.",
       );
     const moderation = getModerationModule();
-    if (body.action === "acknowledge-review")
+    if (body.action === "request-clarification")
+      await moderation.requestClarification(actor, body.input as Parameters<typeof moderation.requestClarification>[1]);
+    else if (body.action === "review-clarification")
+      await moderation.reviewClarification(actor, body.input as Parameters<typeof moderation.reviewClarification>[1]);
+    else if (body.action === "publish-clarification")
+      await moderation.publishClarification(actor, body.input as Parameters<typeof moderation.publishClarification>[1]);
+    else if (body.action === "respond-to-clarification") {
+      if (!(await hasPilotAccess({ uid: actor.uid, email: actor.email, email_verified: true }))) return Response.json({ code: "CONSENT_REQUIRED" }, { status: 403, headers });
+      await moderation.respondToClarification(actor, body.input as Parameters<typeof moderation.respondToClarification>[1]);
+    }
+    else if (body.action === "acknowledge-review")
       await moderation.acknowledgeReview(actor, body.input as Parameters<typeof moderation.acknowledgeReview>[1]);
     else if (body.action === "take-over-review")
       await moderation.takeOverReview(actor, body.input as Parameters<typeof moderation.takeOverReview>[1]);

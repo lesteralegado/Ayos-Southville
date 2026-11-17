@@ -6,6 +6,7 @@ import { EvidencePicker } from "./evidence-picker";
 import { preparePublicDraft } from "./public-report-draft";
 import { operatorFlowCopy } from "./operator-flow-copy";
 import { OperatorUpdateFields } from "./operator-update-fields";
+import { pendingClarification, unpublishedCorrection } from "./report-clarification";
 
 export function PrimaryReportAction({ report, actor, locale, pending, mutate }: { report: ModerationReport; actor: Operator; locale: "en" | "fil"; pending: boolean; mutate(action: string, input: Record<string, unknown>): Promise<void> }) {
   const copy = operatorFlowCopy[locale];
@@ -13,7 +14,7 @@ export function PrimaryReportAction({ report, actor, locale, pending, mutate }: 
   const [assets, setAssets] = useState<EvidenceAsset[]>([]), [uploadBlocked, setUploadBlocked] = useState(true);
   const publishing = report.status === "Submitted";
   const permitted = publishing ? actor.roles.some(role => ["Moderator", "Administrator"].includes(role)) : actor.roles.some(role => ["Coordinator", "Administrator"].includes(role));
-  if (!permitted || !["Submitted", "Under review", "Assigned", "In progress"].includes(report.status)) return null;
+  if (!permitted || pendingClarification(report) || unpublishedCorrection(report) || !["Submitted", "Under review", "Assigned", "In progress"].includes(report.status)) return null;
   const resolving = report.status === "In progress";
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,7 +35,8 @@ export function PrimaryReportAction({ report, actor, locale, pending, mutate }: 
         <details className="advanced-disclosure"><summary>{copy.edit}</summary>
           <label htmlFor="public-draft-summary">{copy.summary}</label><textarea id="public-draft-summary" name="summary" value={draft.summary} required maxLength={1000} onChange={event => setDraft(current => ({ ...current, summary: event.target.value }))} />
           <label>{copy.area}<input name="area" value={draft.area} required maxLength={160} onChange={event => setDraft(current => ({ ...current, area: event.target.value }))} /></label>
-          <div className="operator-coordinate-row"><label>{copy.latitude}<input type="number" step="any" min="-90" max="90" value={draft.latitude} onChange={event => setDraft(current => ({ ...current, latitude: event.target.value }))} /></label><label>{copy.longitude}<input type="number" step="any" min="-180" max="180" value={draft.longitude} onChange={event => setDraft(current => ({ ...current, longitude: event.target.value }))} /></label></div>
+          <p>{locale === "en" ? "Edit wording or remove private information here. Request clarification before changing the concern or its selected pin." : "Iwasto ang pananalita o alisin ang pribadong impormasyon dito. Humingi ng paglilinaw bago baguhin ang concern o napiling pin."}</p>
+          <div className="operator-coordinate-row"><label>{copy.latitude}<input type="number" step="any" min="-90" max="90" value={draft.latitude} readOnly /></label><label>{copy.longitude}<input type="number" step="any" min="-180" max="180" value={draft.longitude} readOnly /></label></div>
         </details>
         {report.evidence.length > 0 && <div className="publication-media">{report.evidence.map((asset, index) => <div key={asset.id}>
           <a href={`/api/evidence/${asset.id}`} target="_blank" rel="noreferrer">{copy.approvePhoto} {index + 1}</a>
