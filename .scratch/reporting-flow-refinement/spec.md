@@ -1,6 +1,6 @@
 # Reporting flow refinement
 
-Status: ready-for-agent
+Status: resolved
 
 Date: 2026-11-13 (Asia/Manila)
 

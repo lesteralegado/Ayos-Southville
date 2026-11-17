@@ -1,6 +1,6 @@
 # 04: Make notifications actionable and verify the integrated journey
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: 02, 03
 
@@ -31,3 +31,29 @@ Exercise anonymous, owner, another resident, and permitted/denied operator roles
 ## Comments
 
 Existing publication, pin accuracy and archive implementations are regression requirements. Do not rebuild them or deploy to production as part of this ticket.
+
+## Answer
+
+Implemented quieter, actionable notifications. Follow/affected subscription changes confirm inline without adding inbox items; existing subscriptions and historical notices remain. Internal assignment stays in report history/audit but no longer creates resident notifications or email jobs. Publication, work started, clarification, resolution, decline and archive remain meaningful updates. Existing submission receipts, resident confirmation/dispute updates and overdue-review takeover alerts are intentionally retained as acknowledgement, outcome and operating-safety semantics.
+
+Notification links preserve their report destination through verified sign-in before public/canonical routing. Duplicate owners reach their own private decision and related report; canonical followers continue to receive the canonical destination without private reasons. Missing, withdrawn, deleted or inaccessible private targets explain recovery through Updates, My reports and Account/privacy controls. No deleted record is restored. Ordinary public browsing remains available.
+
+Decline notices point to the private reason rather than copying it into notifications. Existing category preferences, optional generic email, atomic outbox, read state, pagination and navbar owned-report/unread separation remain intact. Removed legacy inbox canonical rewriting so persisted destinations match paginated results. Added bilingual inline subscription confirmations and fixed read-timestamp contrast plus mobile recovery-link visibility; no design ignores added.
+
+### Verification
+
+- All 382 regression tests in 86 files pass (`npm test -- --maxWorkers=2`); TypeScript and repository lint pass.
+- All 10 real Firebase SDK contracts pass (`npm run test:persistence`) against local Auth/Firestore/Storage emulators with an owned named database, synthetic users/photos and cleanup. Expanded one connected journey: submit photo/description -> clarification request/replay -> resident correction/replay -> explicit review -> restart/recreate module -> prefilled approval with exact pin and approved original photo -> start -> resolve with separate owned resolution evidence -> dispute -> request archive -> concurrent archive retry -> public disappearance and retained private history. Seven distinct notices include the existing submission receipt; six lifecycle email jobs are recorded once. Cross-owner access and denied operator transitions are rejected; private clarification/dispute text stays out of notices and public data. Separate contracts cover confirmation, stale revisions, pagination, total counts, transaction failure and durable receipt recovery.
+- Production Turbopack build passes in an isolated HEAD worktree with this ticket's source files. A temporary worktree-only `turbopack.root` points at C:/project so its shared node_modules junction resolves; no production config change or dev build overwrite.
+- New notification browser check passes English desktop and Filipino mobile: report destination, keyboard mark-read, inline preference save, preserved inbox, missing-report recovery links, no overflow and axe accessibility checks. Desktop/mobile screenshots visually inspected together; corrected timestamp contrast and a mobile-hidden secondary recovery link, then confirmed.
+- Existing clarification and progress browser checks pass bilingual owner/public contexts, reviewed precise-pin publication, lost acknowledgement replay, status/action matrix and archive history. Communication browser check passes persisted read/preferences, confirmation/dispute, private reason, another-resident denial, stale conflict and network recovery. Updated its old exact status assertion to ticket 03's existing dispute label. Consent/privacy browser check passes English/Filipino, responsive/reflow/forced-colors, keyboard and recovery; advanced and privacy controls remain reachable.
+
+### Standards
+
+Independent standards review against baseline `805d094`: no actionable findings.
+
+### Spec
+
+Independent spec review found signed-out notification routing could skip private duplicate decisions or owner resolution actions. Added failing duplicate/public regressions, authenticated notification-origin requests before either branch, and confirmed the fix; reviewer reports no remaining findings.
+
+Verification uses local synthetic browser fixtures and real local Firebase emulators. Production/Vercel, actual email-provider delivery, human screen-reader and field usability testing were not performed. No deployment or production-data changes.

@@ -10,6 +10,7 @@ it("recognizes affected-only subscriptions and stops them through the unified ac
   render(<ReportEngagement reference="AS-LEGACY" />);
   await userEvent.click(await screen.findByRole("button", { name: "Stop updates" }));
   await screen.findByRole("button", { name: "Get updates" });
+  expect(screen.getByRole("status")).toHaveTextContent("Updates stopped for this report.");
   expect(JSON.parse(request.mock.calls.find(call => call[1]?.method === "POST")![1]!.body as string)).toMatchObject({ action: "updates", active: false });
 });
 it("announces Filipino pending/failure states and restores the previous affected choice", async () => {

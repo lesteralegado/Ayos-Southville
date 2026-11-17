@@ -95,6 +95,8 @@ export type ModerationCommit = {
   reports: ModerationReport[];
   audit: AuditEvent;
   notifications: ModerationNotification[];
+  /** Public fan-out template, independent of an owner's private destination; null disables fan-out. */
+  notificationTemplate?: ModerationNotification | null;
   actorUid: string;
 };
 export type ModerationStore = {
@@ -241,9 +243,9 @@ export function createModerationModule({
     operatingRevision?: number,
   ) {
     const occurredAt = now().toISOString();
-    const notifications = update
+    const notifications = update && action !== "report.assigned"
       ? unique([
-          ...reports.flatMap(report => [report.reporterUid, ...report.followers, ...report.affectedResidents]),
+          ...reports.flatMap(report => action === "report.rejected" ? [report.reporterUid] : [report.reporterUid, ...report.followers, ...report.affectedResidents]),
         ]).map((residentUid) => ({
           residentUid,
           reference: notifiedReport.reference,
@@ -252,11 +254,21 @@ export function createModerationModule({
           createdAt: occurredAt,
         }))
       : [];
+    const notificationTemplate = action === "report.rejected" ? null : notifications[0];
+    if (action === "report.merged") {
+      const duplicateNotice = notifications.find(notice => notice.residentUid === reports[0].reporterUid);
+      if (duplicateNotice) {
+        duplicateNotice.reference = reports[0].reference;
+        duplicateNotice.update = { en: "Your report is a duplicate. Open your private report for the decision and related report.", fil: "Duplikado ang iyong ulat. Buksan ang pribadong ulat para sa pasya at kaugnay na ulat." };
+        duplicateNotice.message = duplicateNotice.update.en;
+      }
+    }
     await store.commit({
       ...(operatingRevision !== undefined ? { operatingRevision } : {}),
       actorUid: actor.uid,
       reports,
       notifications,
+      notificationTemplate: notificationTemplate ? { ...notificationTemplate, reference: notifiedReport.reference, update, message: [update?.en, update?.fil].filter(Boolean).join(" / ") } : null,
       audit: {
         actorUid: actor.uid,
         occurredAt,
@@ -510,8 +522,8 @@ export function createModerationModule({
         reason,
       });
       await finish(actor, [report], "report.rejected", reason, {
-        en: reason,
-        fil: "Hindi tinanggap ang ulat. Tingnan ang dahilan ng operator.",
+        en: "Report declined. Open your private report to read the reason.",
+        fil: "Hindi tinanggap ang ulat. Buksan ang pribadong ulat upang basahin ang dahilan.",
       });
     },
     async merge(

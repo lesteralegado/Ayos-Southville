@@ -20,3 +20,10 @@ it("shows a recoverable load failure instead of claiming an empty inbox", async 
   fireEvent.click(screen.getByRole("button", { name: "Reload notifications" }));
   expect(await screen.findByText(/No notifications yet/)).toBeInTheDocument();
 });
+it("keeps historical notices and read state while linking to report recovery", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ notifications: [{ id: "old", residentUid: "resident", reference: "AS-OLD", kind: "follow", message: "Old follow confirmation", createdAt: "2026-11-17T00:00:00Z", read: true }], preferences: { emailEnabled: false, statusUpdates: true, followUpdates: true } })));
+  render(<NotificationCenter />);
+  expect(await screen.findByRole("link", { name: "View report AS-OLD" })).toHaveAttribute("href", "/reports/AS-OLD?from=notification");
+  expect(screen.getByText("Read")).toBeInTheDocument();
+  expect(screen.getByText("You are now following this report.")).toBeInTheDocument();
+});

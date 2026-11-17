@@ -232,10 +232,10 @@ function createFirebaseModerationStore(): ModerationStore {
             ...verified.map(evidenceAsset),
           ];
         const notifications = new Map(change.notifications.map(notice => [notice.residentUid, notice]));
-        const template = change.notifications[0];
+        const template = change.notificationTemplate === undefined ? change.notifications[0] : change.notificationTemplate;
         const currentStates = engagements.flatMap(snapshot => snapshot.docs.map(doc => doc.data()));
         if (template && !change.privateOnly) for (const state of currentStates)
-          if (state.following || state.affected) notifications.set(state.residentUid, { ...template, residentUid: state.residentUid });
+          if ((state.following || state.affected) && !notifications.has(state.residentUid)) notifications.set(state.residentUid, { ...template, residentUid: state.residentUid });
         const recipientIds = [...notifications.keys()];
         await assertWritable(transaction, change.actorUid, recipientIds);
         const preferences = recipientIds.length ? await transaction.getAll(...recipientIds.map(uid => db.collection("notificationPreferences").doc(uid))) : [];

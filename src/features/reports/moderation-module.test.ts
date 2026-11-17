@@ -15,6 +15,14 @@ const coordinator = { uid: "coordinator-1", roles: ["Coordinator"] as const };
 const resident = { uid: "resident-1", roles: ["Resident"] as const };
 
 describe("report moderation application boundary", () => {
+  it("notifies meaningful progress without an extra internal assignment alert", async () => {
+    const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [submittedReport()] }) });
+    await moderation.accept(moderator, { reference: "AS-REVIEW1", publicSummary: "Broken light", publicArea: "Court", approvedMedia: [], reason: "Reviewed" });
+    await moderation.assign(coordinator, { reference: "AS-REVIEW1", priority: "normal", destination: "lighting", reason: "Internal routing", update: { en: "Assigned internally", fil: "Itinalaga" } });
+    expect(await moderation.listNotifications("resident-1")).toHaveLength(1);
+    await moderation.transition(coordinator, { reference: "AS-REVIEW1", to: "In progress", update: { en: "Work started", fil: "Nagsimula ang gawain" } });
+    expect(await moderation.listNotifications("resident-1")).toHaveLength(2);
+  });
   it("accepts only one concurrent decision and keeps one timeline, notification, and audit set", async () => {
     const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [submittedReport()] }) });
     const input = { reference: "AS-REVIEW1", expectedRevision: 0, publicSummary: "Broken light near the court.", publicArea: "Court", approvedMedia: [], reason: "Reviewed safely." };
@@ -70,7 +78,7 @@ describe("report moderation application boundary", () => {
     await moderation.merge(moderator, { duplicateReference: "AS-DUPE", canonicalReference: "AS-CANON", reason: "Same broken streetlight." });
     expect(await moderation.getPublicReport("AS-DUPE")).toEqual({ reference: "AS-DUPE", status: "Duplicate", canonicalReference: "AS-CANON", outcomeReason: "Same broken streetlight." });
     expect(await moderation.getPrivateReport(moderator, "AS-CANON")).toMatchObject({ followers: ["resident-1", "resident-2", "resident-3"], affectedResidents: ["resident-1", "resident-2"], supportingEvidence: expect.arrayContaining([expect.objectContaining({ id: "support-1" })]), history: expect.arrayContaining([expect.objectContaining({ action: "merged-from:AS-DUPE" })]) });
-    expect(await moderation.listNotifications("resident-2")).toEqual([expect.objectContaining({ reference: "AS-CANON", message: expect.stringContaining("AS-CANON") })]);
+    expect(await moderation.listNotifications("resident-2")).toEqual([expect.objectContaining({ reference: "AS-DUPE", message: expect.stringContaining("duplicate") })]);
   });
 
   it("lets coordinators assign priority and destination but denies moderators", async () => {
@@ -99,4 +107,11 @@ it("notifies the canonical original reporter even when they do not follow their 
   expect(await moderation.listNotifications("canonical-reporter")).toHaveLength(1);
   expect((await moderation.listNotifications("canonical-reporter"))[0].reference).toBe("AS-CAN001");
   expect(await moderation.listNotifications("duplicate-reporter")).toHaveLength(1);
+  expect((await moderation.listNotifications("duplicate-reporter"))[0].reference).toBe("AS-DUP001");
+});
+it("keeps decline reasons out of feed text while retaining them on the private report", async () => {
+  const moderation = createModerationModule({ store: createMemoryModerationStore({ reports: [submittedReport()] }) });
+  await moderation.reject(moderator, { reference: "AS-REVIEW1", category: "out-of-scope", reason: "Private reason about resident contact" });
+  expect(JSON.stringify(await moderation.listNotifications("resident-1"))).not.toContain("Private reason");
+  expect((await moderation.getPrivateReport(moderator, "AS-REVIEW1")).history.at(-1)?.reason).toBe("Private reason about resident contact");
 });

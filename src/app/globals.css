@@ -486,7 +486,7 @@ body:has(> .auth-page[data-mode="sign-in"]) .product-utilities > a[href="/sign-i
 .notifications-page .notification-list li.is-read{opacity:1;background:var(--paper-deep)}
 .notifications-page .notification-list li div{min-width:0;overflow-wrap:anywhere}
 .notification-read-state{font-size:.875rem;font-weight:700;color:var(--green)}
-.notifications-page time{font-size:.875rem;color:var(--muted)}
+.notifications-page time{font-size:.875rem;color:var(--ink)}
 .notifications-page .preferences-panel p{margin:0;line-height:1.6}
 .notifications-page .preferences-panel label{min-height:44px;align-items:center;line-height:1.5}
 .notifications-page input[type=checkbox]{width:20px;height:20px;flex-shrink:0;accent-color:var(--green)}
@@ -522,3 +522,5 @@ body:has(> .auth-page[data-mode="sign-in"]) .product-utilities > a[href="/sign-i
 .public-insights-page h1 { font-size: 2.5rem; line-height: 1.15; letter-spacing: -.025em; }
 .public-insights-page h2 { font-size: 1.5rem; margin-top: 32px; }
 @media (max-width: 560px) { .discovery-toolbar { gap: 14px; } .public-community-map { height: 300px; } .site-header nav { flex-wrap: wrap; } }
+
+.report-unavailable .button-quiet { display: inline-flex; }

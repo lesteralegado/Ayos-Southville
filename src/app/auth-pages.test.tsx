@@ -62,8 +62,8 @@ describe("resident authentication", () => {
     expect(screen.getByText(/email stays private/i)).toBeInTheDocument();
   });
 
-  it("offers an accessible sign-in form for returning residents", () => {
-    render(<SignInPage />);
+  it("offers an accessible sign-in form for returning residents", async () => {
+    render(await SignInPage({}));
 
     expect(screen.getByRole("heading", { name: /welcome back/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/email address/i)).toBeRequired();
@@ -95,7 +95,7 @@ describe("resident authentication", () => {
     const user = userEvent.setup();
     const firebaseUser = { emailVerified: false };
     mocks.signIn.mockResolvedValue({ user: firebaseUser });
-    render(<SignInPage />);
+    render(await SignInPage({}));
 
     await user.type(screen.getByLabelText(/email address/i), "resident@example.com");
     await user.type(screen.getByLabelText(/password/i), "safe-password");
@@ -112,7 +112,7 @@ describe("resident authentication", () => {
     mocks.signIn.mockResolvedValue({ user: { emailVerified: true, getIdToken } });
     const fetchSession = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal("fetch", fetchSession);
-    render(<SignInPage />);
+    render(await SignInPage({}));
 
     await user.type(screen.getByLabelText(/email address/i), "resident@example.com");
     await user.type(screen.getByLabelText(/password/i), "safe-password");

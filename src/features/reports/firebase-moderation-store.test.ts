@@ -87,7 +87,11 @@ it("persists a merge notification and opt-in email for both original reporters w
   const duplicateReference = "AS-300002";
   fixture.records.set("privateReports/" + duplicateReference, { ...fixture.records.get("privateReports/" + reference), reference: duplicateReference, reporterUid: "duplicate-reporter", status: "Submitted" });
   for (const uid of ["resident", "duplicate-reporter"]) fixture.records.set("notificationPreferences/" + uid, { emailEnabled: true, statusUpdates: true, followUpdates: true });
+  fixture.records.set("reportEngagements/late-follower", { reference, residentUid: "neighbor", following: true });
   await moderation.merge(actor, { duplicateReference, canonicalReference: reference, expectedRevision: 0, canonicalRevision: 1, reason: "Same streetlight concern." });
+  expect((await moderation.listNotifications("duplicate-reporter"))[0].reference).toBe(duplicateReference);
+  expect((await moderation.listNotifications("neighbor"))[0]).toMatchObject({ reference });
+  expect(JSON.stringify(await moderation.listNotifications("neighbor"))).not.toMatch(/your private report|Same streetlight concern/);
   expect(await moderation.listNotifications("resident")).toHaveLength(2);
   expect(await moderation.listNotifications("duplicate-reporter")).toHaveLength(1);
   const jobs = [...fixture.records].filter(([key]) => key.startsWith("lifecycleEmailJobs/")).map(([,job]) => job.residentUid).sort();
@@ -130,7 +134,7 @@ it("persists the full lifecycle atomically and replaces forged resolution metada
   await moderation.transition(actor, resolution);
   expect(await moderation.getPrivateReport(actor, reference)).toMatchObject({ status: "Resolved", revision: 4, resolutionEvidence: [{ id: resolutionId, type: "image/jpeg", size: 500, name: "evidence.jpg" }] });
   expect((await (await getReportModule()).listMine("resident"))[0].status).toBe("Resolved");
-  expect(await moderation.listNotifications("resident")).toHaveLength(4);
+  expect(await moderation.listNotifications("resident")).toHaveLength(3);
   expect(await moderation.listAudit(actor)).toHaveLength(4);
   await expect(moderation.transition(actor, resolution)).rejects.toMatchObject({ code: "CONFLICT" });
   expect(await moderation.listAudit(actor)).toHaveLength(4);
@@ -147,7 +151,7 @@ it.each(["foreign", "wrong-report", "deleted", "attached", "expired", "missing-f
   await expect(moderation.transition(actor, resolution)).rejects.toMatchObject({ code: "VALIDATION" });
   expect((await moderation.getPrivateReport(actor, reference)).status).toBe("In progress");
   expect(await moderation.listAudit(actor)).toHaveLength(3);
-  expect(await moderation.listNotifications("resident")).toHaveLength(3);
+  expect(await moderation.listNotifications("resident")).toHaveLength(2);
 });
 it("rolls back a failed database action without partial audit, notifications, or public state", async () => {
   const moderation = getModerationModule(); fixture.failCommit = true;

@@ -194,13 +194,6 @@ export function createEngagementModule({
           : [],
       };
       const saved = await store.setResidentState(input.residentUid, input.reference, next, "affected");
-      if (input.active)
-        await notify(
-          input.residentUid,
-          input.reference,
-          "affected",
-          "You marked this report as affecting you.",
-        );
       return saved ?? next;
     },
     async setFollow(input: {
@@ -215,13 +208,6 @@ export function createEngagementModule({
       if (current.following === input.active) return current;
       const next = { ...current, following: input.active };
       const saved = await store.setResidentState(input.residentUid, input.reference, next, "follow");
-      if (input.active)
-        await notify(
-          input.residentUid,
-          input.reference,
-          "follow",
-          "You are now following this report.",
-        );
       return saved ?? next;
     },
     recordReportEvent: (
