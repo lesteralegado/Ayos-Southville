@@ -27,3 +27,7 @@ it('preserves the submitted receipt before any operator history exists', () => {
     { status: 'Submitted', occurredAt: report.submittedAt },
   ]);
 });
+it('retains a duplicate decision and its reason in the private receipt', () => {
+  const detail = residentReportDetail({ ...report, status: 'Duplicate', canonicalReference: 'AS-CANONICAL', history: [{ action: 'merged-into:AS-CANONICAL', occurredAt: '2026-11-17T01:00:00Z', reason: 'The same light is tracked in the original report.' }] });
+  expect(detail.timeline.at(-1)).toEqual({ status: 'Duplicate', occurredAt: '2026-11-17T01:00:00Z', update: { en: 'The same light is tracked in the original report.', fil: 'The same light is tracked in the original report.' } });
+});

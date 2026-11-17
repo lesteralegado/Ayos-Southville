@@ -12,6 +12,7 @@ import {
 import { ReportEngagement } from "./report-engagement";
 import { ReportUpdate } from "./report-update";
 import { ResolutionResponse } from "./resolution-response";
+import { ReportProgress } from "./report-progress";
 
 export function ReportDetail({
   report,
@@ -58,6 +59,8 @@ export function ReportDetail({
           </span>
         </div>
         <h1>{report.publicSummary}</h1>
+        <ReportProgress report={report} locale={locale} ownedReport={ownedReport} archived={archived} />
+        {privateReceipt && ownedReport?.canonicalReference && <p><Link href={`/reports/${ownedReport.canonicalReference}`}>{fil ? "Kaugnay na ulat" : "Related report"}: {ownedReport.canonicalReference}</Link></p>}
         {ownedReport && <ResidentClarification key={ownedReport.reference + ":" + ownedReport.revision} report={ownedReport} />}
         <p className="report-place">
           <span aria-hidden="true">⌖</span>

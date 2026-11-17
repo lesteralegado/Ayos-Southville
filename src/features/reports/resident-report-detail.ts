@@ -6,9 +6,9 @@ export function residentReportDetail(report: ResidentReport): PublicReportDetail
     { status: 'Submitted', occurredAt: report.submittedAt },
   ];
   for (const event of report.history ?? []) {
-    if (event.action.startsWith('rejected:')) {
+    if (event.action.startsWith('rejected:') || event.action.startsWith('merged-into:')) {
       timeline.push({
-        status: 'Rejected', occurredAt: event.occurredAt,
+        status: event.action.startsWith('rejected:') ? 'Rejected' : 'Duplicate', occurredAt: event.occurredAt,
         ...(event.reason ? { update: { en: event.reason, fil: event.reason } } : {}),
       });
     } else if (event.status && event.update && event.action !== 'submitted') {

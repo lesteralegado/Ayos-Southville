@@ -86,6 +86,16 @@ it("loads persisted rejection history only for the owner and omits internal reas
   expect(await reports.listMine("r2")).toEqual([]);
   expect(await reports.getPublic(receipt.reference)).toBeNull();
 });
+it("keeps a duplicate decision reason on the owner's receipt without publishing it", async () => {
+  const reports = await getReportModule();
+  const receipt = await reports.submit(submission);
+  fixtures.records.get(`privateReports/${receipt.reference}`)!.status = "Duplicate";
+  fixtures.records.set(`moderationReports/${receipt.reference}`, { history: [{ action: "merged-into:AS-CANONICAL", occurredAt: "2026-11-17T02:00:00Z", reason: "Same light as the original report", actorUid: "operator" }] });
+  const mine = await reports.getMine("r1", receipt.reference);
+  expect(residentReportDetail(mine!).timeline.at(-1)).toMatchObject({ status: "Duplicate", update: { en: "Same light as the original report" } });
+  expect(await reports.getMine("r2", receipt.reference)).toBeNull();
+  expect(await reports.getPublic(receipt.reference)).toBeNull();
+});
 
 it("accepts only completed owned files and uses server metadata, then recovers the original receipt", async () => {
   const reports = await getReportModule();

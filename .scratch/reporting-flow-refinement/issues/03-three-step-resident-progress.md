@@ -1,6 +1,6 @@
 # 03: Present three-step resident progress
 
-Status: ready-for-agent
+Status: resolved
 
 Blocked by: 02
 
@@ -30,3 +30,30 @@ Use a status/context matrix covering every existing status plus clarification pe
 ## Comments
 
 This updates the earlier simplification specification's presentation. Under review and Resident confirmed remain meaningful domain/history states, consistent with the glossary's independent-pilot boundaries.
+
+## Answer
+
+Resident list and detail now use Submitted, In progress and Resolved as the primary progress sequence. Published reports awaiting work stay at Submitted with Published supporting text; private submissions show Awaiting review. Legacy Assigned records appear as In progress. Resolved reports retain Awaiting your confirmation and both existing confirmation/dispute actions; confirmed reports show Confirmed fixed as supporting information.
+
+A disputed resolution returns to the first step with Still a problem / Under review context, including after a same-state review handoff. Actual resolution, confirmation, assignment and review events retain their historical labels and dates. Declined, duplicate and archived reports do not display the repair progression. Clarification and archive-request context appear only at the owner boundary. Owners can read duplicate decision reasons on their private receipt and open the related report; nonowners retain the public canonical redirect. Review targets appear on submitted reports instead of misleadingly recurring on closed outcomes. Public discovery uses simplified card labels and public-only supporting context while preserving existing filter semantics.
+
+No persisted statuses, coordinates, transactions, counts or pagination contracts were migrated. Existing operator filters and primary lifecycle actions remain intact.
+
+### Verification
+
+- All 373 tests in 84 files pass (`npm test -- --maxWorkers=2`). The first full run caught the new dispute/handoff regression while review was underway; its focused test and the final full run pass after the fix.
+- TypeScript and repository lint pass.
+- Presentation matrix covers every status, owner/public differences, pending/answered clarification, disputed and confirmed resolution, archive requested, archived and terminal reasons.
+- Owner receipt persistence and page tests cover duplicate reasons, cross-owner denial and canonical redirect behavior. Existing resolution conflict/retry tests pass.
+- New browser check passes English desktop and Filipino mobile, all lifecycle states, precise original pin fixture, keyboard dispute action, retained resolution dates, private context exclusion, terminal outcomes, responsive overflow and axe checks for resolved/disputed/archived states.
+- Existing paginated report browser check passes bounded pages, retry without lost rows, older selected details, canonical merge, resident counts, EN/FIL, keyboard and axe.
+- Existing discovery browser check passes filters, shared URLs, back/reload, pagination, real MapLibre/list equivalence, private-field exclusion, approved evidence, responsive axe, reduced motion, keyboard and text zoom.
+- Batched desktop/mobile visual inspection led to a vertical mobile step list; one confirmation pass completed. No design detector ignores added.
+
+### Standards
+
+Independent standards review against baseline `155775a`: zero actionable findings.
+
+### Spec
+
+Independent spec review found one continued-concern reminder hidden by later review coordination. Fixed and regression-tested; reviewer confirmed zero remaining actionable findings. Browser checks use synthetic local fixtures, not production or human screen-reader evidence.

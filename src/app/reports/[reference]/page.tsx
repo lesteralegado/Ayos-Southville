@@ -11,12 +11,13 @@ export default async function ReportPage({ params }: { params: Promise<{ referen
   const { reference } = await params;
   const report = await (await getReportModule()).getPublic(reference.toUpperCase());
   if (!report) {
-    const canonical = await getPublicCanonicalReference(reference.toUpperCase());
-    if (canonical) redirect("/reports/" + canonical);
     const resident = await getVerifiedResident();
     const owned = resident ? await (await getReportModule()).getMine(resident.uid, reference.toUpperCase()) : null;
-    if (!owned) notFound();
-    if (owned.status === "Duplicate" && owned.canonicalReference) redirect("/reports/" + owned.canonicalReference);
+    if (!owned) {
+      const canonical = await getPublicCanonicalReference(reference.toUpperCase());
+      if (canonical) redirect("/reports/" + canonical);
+      notFound();
+    }
     return <ReportDetail privateReceipt archived={!!owned.archivedAt} ownedReport={owned} report={residentReportDetail(owned)} />;
   }
   const demonstration = discoveryMode() === "demo";

@@ -5,7 +5,8 @@ import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react
 import { useLocale } from "@/features/i18n/use-locale";
 import type { DiscoveryResult } from "./discovery-module";
 import { publicStatuses } from "./public-projection";
-import { reportStatusLabel, formatManilaDate } from "./report-presentation";
+import { reportStatusLabel, reportStatusLabels, formatManilaDate } from "./report-presentation";
+import { ReportProgress } from "./report-progress";
 import { discoveryCopy } from "./discovery-copy";
 
 const CommunityMap = lazy(() => import("./community-map"));
@@ -69,7 +70,7 @@ export function LiveDiscovery() {
         {params.has("category") && !categories.some((category) => category.id === params.get("category")) && <option value={params.get("category")!}>{params.get("category")}</option>}
       </select></label>
       <label>{copy.status}<select aria-label={copy.status} value={params.get("status") ?? "all"} onChange={(event) => filter("status", event.target.value)}>
-        <option value="all">{copy.all}</option>{publicStatuses.filter(status => status !== "Assigned").map((status) => <option key={status} value={status}>{reportStatusLabel(status, locale)}</option>)}
+        <option value="all">{copy.all}</option>{publicStatuses.filter(status => status !== "Assigned").map((status) => <option key={status} value={status}>{reportStatusLabels[locale][status]}</option>)}
       </select></label>
       <label>{copy.date}<select aria-label={copy.date} value={params.get("date") ?? "all"} onChange={(event) => filter("date", event.target.value)}>
         <option value="all">{copy.anyTime}</option>{[7, 30].map((days) => <option key={days} value={days}>{days} {copy.days}</option>)}
@@ -89,6 +90,7 @@ export function LiveDiscovery() {
         {data.reports.map((report) => <article className="report-card" id={`report-${report.reference}`} key={report.reference}>
           <div className="report-card__topline"><span>{categories.find((category) => category.id === report.category)?.label[locale] ?? report.category}</span><span className="status status-progress">{reportStatusLabel(report.status, locale)}</span></div>
           <h3><Link href={`/reports/${report.reference}`}>{report.publicSummary}</Link></h3>
+          <ReportProgress report={report} locale={locale} compact />
           <p className="report-place">{report.publicArea}</p>
           <footer><span>{report.reference}</span><time dateTime={report.submittedAt}>{formatManilaDate(report.submittedAt, locale)}</time></footer>
           <Link className="text-link" href={`/reports/${report.reference}`}>{copy.detail}</Link>

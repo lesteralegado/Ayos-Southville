@@ -262,6 +262,13 @@ body:has(> .auth-page[data-mode="sign-in"]) .product-utilities > a[href="/sign-i
 .consent-details { margin-top: 18px; }
 .consent-details > summary { min-height: 44px; padding-block: 12px; cursor: pointer; font-weight: 700; }
 .clarification-panel { margin-block: 24px; overflow-wrap: anywhere; }
+.report-progress { margin-block: 16px; overflow-wrap: anywhere; }
+.report-progress ol { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0 0 12px; padding-left: 24px; }
+.report-progress li { padding: 8px 4px; color: var(--muted); }
+.report-progress li[data-reached="true"] { color: var(--ink); }
+.report-progress li[aria-current="step"] { font-weight: 700; }
+.report-progress p { margin-block: 6px; }
+@media (max-width: 560px) { .report-progress ol { flex-direction: column; gap: 0; } }
 .clarification-panel fieldset { border: 0; padding: 0; margin-block: 16px; min-width: 0; display: grid; gap: 12px; }
 .clarification-panel label { display: block; line-height: 1.5; }
 .clarification-panel textarea, .clarification-panel input:not([type="checkbox"]), .clarification-panel select { display: block; width: 100%; max-width: 100%; min-height: 44px; margin-top: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font: inherit; }
