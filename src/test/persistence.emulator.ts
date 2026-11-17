@@ -3,7 +3,7 @@ import { initializeApp, deleteApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { getAuth, type Auth } from "firebase-admin/auth";
 import { getStorage } from "firebase-admin/storage";
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { assertLocalEmulatorServer, localEmulatorHosts, localEmulatorProject } from "@/lib/firebase/local-emulator";
 import { defaultPilotConfiguration } from "@/features/admin/administration-module";
 import { consentVersion } from "@/features/pilot/participation-consent";
@@ -64,6 +64,11 @@ beforeAll(async () => {
   await db.collection("pilotConfiguration").doc("current").set(defaultPilotConfiguration);
 });
 
+// Each contract has its own rate window; the named database belongs to this run.
+beforeEach(async () => {
+  for (const doc of (await db.collection("mutationLimits").get()).docs) await doc.ref.delete();
+});
+
 afterAll(async () => {
   // Never clear the shared default database, other test databases or accounts.
   try {
@@ -89,6 +94,71 @@ function submission() {
 function acceptance(reference: string) {
   return { reference, expectedRevision: 0, publicSummary: "SYNTHETIC CONTRACT TEST: light concern.", publicArea: "Synthetic court", approvedMedia: [], reason: "Synthetic privacy review." };
 }
+it("completes clarification, reviewed photo and exact-pin publication, resolution, dispute and archive without leaking private details", async () => {
+  const reports = await getReportModule(), moderation = getModerationModule();
+  await getEngagementModule().setPreferences(uid, { emailEnabled: true, statusUpdates: true, followUpdates: true });
+  const input = submission();
+  const id = createHash("sha256").update(`${run}:journey-photo`).digest("hex"), path = `contracts/${run}/${id}.jpg`;
+  ownedStoragePaths.push(path);
+  await getStorage(app).bucket(process.env.FIREBASE_STORAGE_BUCKET).file(path).save(Buffer.from("Synthetic protected test evidence"), { contentType: "image/jpeg" });
+  const photo = { id, name: "synthetic.jpg", type: "image/jpeg" as const, size: 33, visibility: "restricted" as const };
+  await db.collection("evidenceUploads").doc(id).set({ ...photo, path, residentUid: uid, draftKey: input.idempotencyKey, slotId: "original", createdAt: new Date().toISOString() });
+  const { reference } = await reports.submit({ ...input, evidence: [photo] });
+  const question = { reference, expectedRevision: 0, operationId: randomUUID(), question: "SYNTHETIC private entrance question" };
+  await moderation.requestClarification(actor, question);
+  await moderation.requestClarification(actor, question);
+  const pin = { latitude: 14.281234567, longitude: 121.126789123 };
+  const response = { reference, expectedRevision: 1, operationId: randomUUID(), requestId: question.operationId, explanation: "SYNTHETIC private answer", description: "SYNTHETIC corrected light concern", location: pin };
+  await moderation.respondToClarification({ uid, roles: ["Resident"] }, response);
+  await moderation.respondToClarification({ uid, roles: ["Resident"] }, response);
+  expect(await reports.getPublic(reference)).toBeNull();
+  expect((await reports.getMine(uid, reference))?.description).toBe("SYNTHETIC CONTRACT TEST: private reporting details.");
+  await moderation.reviewClarification(actor, { reference, expectedRevision: 2, operationId: randomUUID(), requestId: question.operationId, decision: "accepted", reason: "Synthetic correction reviewed" });
+  // Recreate the module to prove the reviewed source was persisted, not just kept in memory.
+  const draft = preparePublicDraft(await getModerationModule().getPrivateReport(actor, reference));
+  expect(draft.summary).toBe(response.description);
+  await moderation.accept(actor, { ...acceptance(reference), expectedRevision: 3, publicSummary: draft.summary, approvedMedia: [{ id, alt: "Synthetic light concern" }], publicLocation: { latitude: Number(draft.latitude), longitude: Number(draft.longitude) } });
+  const published = await reports.getPublic(reference);
+  expect(published?.publicLocation).toEqual(pin);
+  expect(JSON.stringify(published)).not.toMatch(/private entrance question|private answer/);
+  expect((await reports.getMine(uid, reference))?.clarifications?.[0].response?.explanation).toBe(response.explanation);
+  expect(published?.media).toEqual([expect.objectContaining({ id })]);
+  await expect(reports.getMine(`${uid}-other`, reference)).resolves.toBeNull();
+  await expect(moderation.transition({ uid: `${uid}-other`, roles: ["Resident"] }, { reference, expectedRevision: 4, to: "In progress", update: { en: "Denied", fil: "" } })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  await moderation.transition(actor, { reference, expectedRevision: 4, to: "In progress", update: { en: "Synthetic work started", fil: "Nagsimula ang gawain" } });
+  const resolutionId = createHash("sha256").update(`${run}:journey-resolution`).digest("hex"), resolutionPath = `contracts/${run}/${resolutionId}.jpg`;
+  ownedStoragePaths.push(resolutionPath);
+  await getStorage(app).bucket(process.env.FIREBASE_STORAGE_BUCKET).file(resolutionPath).save(Buffer.from("Synthetic resolution evidence"), { contentType: "image/jpeg" });
+  const resolutionPhoto = { ...photo, id: resolutionId };
+  await db.collection("evidenceUploads").doc(resolutionId).set({ ...resolutionPhoto, path: resolutionPath, residentUid: uid, draftKey: `resolution_${reference}`, slotId: "resolution", createdAt: new Date().toISOString() });
+  await moderation.transition(actor, { reference, expectedRevision: 5, to: "Resolved", update: { en: "Synthetic work completed", fil: "Natapos ang gawain" }, resolutionEvidence: [resolutionPhoto] });
+  await moderation.respondToResolution(actor, { reference, expectedRevision: 6, response: "dispute", reason: "Synthetic private remaining problem" });
+  await changeResidentReport(uid, reference, "request-archive");
+  await Promise.all([archiveRequestedReport(actor, reference, "Synthetic requested archive"), archiveRequestedReport(actor, reference, "Synthetic requested archive")]);
+  expect(await (await getReportModule()).getPublic(reference)).toBeNull();
+  const retained = await (await getReportModule()).getMine(uid, reference);
+  expect(retained).toMatchObject({ archivedAt: expect.any(String), description: "SYNTHETIC CONTRACT TEST: private reporting details." });
+  const notices = (await getEngagementModule().listNotifications(uid)).filter(notice => notice.reference === reference);
+  expect(notices).toHaveLength(7);
+  expect(new Set(notices.map(notice => notice.id)).size).toBe(7);
+  expect((await db.collection("lifecycleEmailJobs").where("reference", "==", reference).get()).size).toBe(6);
+  expect(JSON.stringify(notices)).not.toMatch(/private entrance question|private answer|private remaining problem/);
+
+});
+
+it("counts all owned reports beyond the first page with the real SDK", async () => {
+  const reports = await getReportModule();
+  const countUid = `${uid}-count`;
+  const batch = db.batch();
+  for (let index = 0; index < 27; index++) {
+    batch.set(db.collection("privateReports").doc(`AS-COUNT${run}${index}`), { reporterUid: countUid, submittedAt: new Date().toISOString(), ...(index === 0 ? { archivedAt: new Date().toISOString() } : {}) });
+  }
+  await batch.commit();
+  expect(await reports.countMine(countUid)).toBe(27);
+  expect(await reports.countMine(`${countUid}-other`)).toBe(0);
+  await db.collection("privateReports").doc(`AS-COUNT${run}1`).delete();
+  expect(await reports.countMine(countUid)).toBe(26);
+});
 
 it("archives a report atomically with real SDK retries and retains the owner's private record", async () => {
   const reports = await getReportModule(), moderation = getModerationModule();
@@ -226,8 +296,8 @@ it("concurrent actions at one revision commit exactly one lifecycle change and o
   const rejected = results.find(result => result.status === "rejected") as PromiseRejectedResult;
   expect(rejected.reason).toMatchObject({ code: "CONFLICT" });
   expect(await moderation.getPrivateReport(actor, reference)).toMatchObject({ status: "Assigned", revision: 2 });
-  expect((await moderation.listNotifications(uid)).filter(notice => notice.reference === reference)).toHaveLength(3);
-  expect((await db.collection("lifecycleEmailJobs").where("reference", "==", reference).get()).docs).toHaveLength(2);
+  expect((await moderation.listNotifications(uid)).filter(notice => notice.reference === reference)).toHaveLength(2);
+  expect((await db.collection("lifecycleEmailJobs").where("reference", "==", reference).get()).docs).toHaveLength(1);
   expect(await reports.getPublic(reference)).toMatchObject({ status: "Assigned" });
   expect(JSON.stringify(await reports.getPublic(reference))).not.toContain("private reporting details");
 });

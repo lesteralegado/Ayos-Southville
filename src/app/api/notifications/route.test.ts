@@ -11,7 +11,7 @@ it("persists read state only for the authenticated recipient and never exposes a
   expect((await PATCH(request({ notificationId: other[0].id }))).status).toBe(200);
   expect((await state.module!.listNotifications("neighbor"))[0].read).toBe(false);
   expect((await PATCH(request({ notificationId: mine[0].id }))).status).toBe(200);
-  const response = await GET(); const body = await response.json();
+  const response = await GET(new Request("https://ayos.test/api/notifications")); const body = await response.json();
   expect(response.headers.get("cache-control")).toBe("private, no-store");
   expect(body.notifications).toHaveLength(1); expect(body.notifications[0].read).toBe(true);
 });
@@ -19,5 +19,5 @@ it("rejects cross-origin, malformed preferences, and signed-out requests", async
   expect((await PATCH(request({ preferences: {} }, "https://evil.test"))).status).toBe(403);
   expect((await PATCH(request({ preferences: { emailEnabled: "true" } }))).status).toBe(422);
   expect((await PATCH(request(null))).status).toBe(422);
-  state.uid = ""; expect((await GET()).status).toBe(401); expect((await PATCH(request({ notificationId: "notice" }))).status).toBe(401);
+  state.uid = ""; expect((await GET(new Request("https://ayos.test/api/notifications"))).status).toBe(401); expect((await PATCH(request({ notificationId: "notice" }))).status).toBe(401);
 });

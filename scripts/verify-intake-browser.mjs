@@ -235,7 +235,7 @@ try {
   await page
     .getByLabel("I confirm this is not an emergency.", { exact: true })
     .check();
-  await page.getByLabel(/I understand that only/).check();
+  await page.locator("#confirm-public-summary").check();
   const photo = await sharp({
     create: { width: 180, height: 120, channels: 3, background: "#1f674b" },
   })

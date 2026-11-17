@@ -37,7 +37,7 @@ function createFirebaseReportStore(): ReportStore {
     const operating = pilotOperations(operatingDoc.data());
     return values.map((data, index) => {
       const history = (moderation[index].data()?.history ?? []) as NonNullable<ResidentReport["history"]>;
-      return { ...data, history: history.map(event => ({ action: event.action, occurredAt: event.occurredAt, ...(event.status ? { status: event.status } : {}), ...(event.update ? { update: event.update } : {}), ...(event.action.startsWith("rejected:") && event.reason ? { reason: event.reason } : {}) })), reviewExpectation: { dueAt: reviewDeadline(data.submittedAt, operating.reviewCalendar), acknowledgedAt: (data as ResidentReport & { reviewAcknowledgedAt?: string }).reviewAcknowledgedAt ?? null } };
+      return { ...data, revision: moderation[index].data()?.revision ?? 0, clarifications: moderation[index].data()?.clarifications ?? [], history: history.map(event => ({ action: event.action, occurredAt: event.occurredAt, ...(event.status ? { status: event.status } : {}), ...(event.update ? { update: event.update } : {}), ...((event.action.startsWith("rejected:") || event.action.startsWith("merged-into:")) && event.reason ? { reason: event.reason } : {}) })), reviewExpectation: { dueAt: reviewDeadline(data.submittedAt, operating.reviewCalendar), acknowledgedAt: (data as ResidentReport & { reviewAcknowledgedAt?: string }).reviewAcknowledgedAt ?? null } };
     });
   }
   return {
@@ -140,6 +140,11 @@ function createFirebaseReportStore(): ReportStore {
     },
     async listByResident(residentUid: string) {
       return this.listResidentWindow(residentUid, null, reportPageSize);
+    },
+    async countByResident(residentUid) {
+      if (await pilotRecordsExpired()) return 0;
+      const snapshot = await db.collection("privateReports").where("reporterUid", "==", residentUid).count().get();
+      return snapshot.data().count;
     },
     async listResidentWindow(residentUid, after, limit) {
       if (await pilotRecordsExpired()) return [];

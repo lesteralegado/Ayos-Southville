@@ -30,7 +30,7 @@ describe("report resolution lifecycle", () => {
     await moderation.respondToResolution(reporter, { reference: "AS-LIFE01", response: "confirm", reason: "Water now drains normally." });
     expect(await moderation.getPrivateReport(coordinator, "AS-LIFE01")).toMatchObject({ status: "Resident confirmed", resolutionEvidence: [{ id: "resolution-1" }] });
     expect(await moderation.getPublicReport("AS-LIFE01")).toMatchObject({ status: "Resident confirmed", timeline: [expect.objectContaining({ status: "Under review" }), expect.objectContaining({ status: "Assigned" }), expect.objectContaining({ status: "In progress" }), expect.objectContaining({ status: "Resolved" }), expect.objectContaining({ status: "Resident confirmed" })] });
-    expect(await moderation.listNotifications("resident-2")).toHaveLength(5);
+    expect(await moderation.listNotifications("resident-2")).toHaveLength(4);
     expect(await moderation.listAudit({ uid: "admin-1", roles: ["Administrator"] })).toHaveLength(5);
   });
 

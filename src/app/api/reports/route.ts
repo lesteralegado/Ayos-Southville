@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   const resident = await getVerifiedResident();
   if (!resident)
     return NextResponse.json(
@@ -90,7 +90,10 @@ export async function GET(request?: Request) {
     );
   const headers = { "Cache-Control": "private, no-store" };
   try {
-    const cursor = request ? new URL(request.url).searchParams.get("cursor") : null;
+    if (new URL(request.url).searchParams.get("summary") === "1") {
+      return NextResponse.json({ reportCount: await (await getReportModule()).countMine(resident.uid) }, { headers });
+    }
+    const cursor = new URL(request.url).searchParams.get("cursor");
     return NextResponse.json(await (await getReportModule()).listMinePage(resident.uid, cursor), { headers });
   } catch (error) {
     if (error instanceof ReportPageError) return NextResponse.json({ error: error.message, code: error.code }, { status: 422, headers });

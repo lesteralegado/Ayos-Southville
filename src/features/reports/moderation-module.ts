@@ -3,6 +3,7 @@ import { filterStatuses, memoryWindow, pageCursor, pagePosition, queueFilter, re
 import { reviewDeadline } from "./review-calendar";
 import { ownedReportPage } from "./owned-report-pages";
 import { resolutionOutcomeUpdate } from "./resolution-copy";
+import { createClarificationModule, pendingClarification, reviewedReportSource, unpublishedCorrection, type ReportClarification } from "./report-clarification";
 import type {
   EvidenceAsset,
   ExactLocation,
@@ -53,6 +54,8 @@ export type TimelineEvent = {
   update?: BilingualUpdate;
 };
 export type ModerationReport = {
+  clarificationPublishedRevision?: number;
+  clarifications?: ReportClarification[];
   archivedAt?: string;
   reviewTakeoverAvailable?: boolean;
   externalFollowUp?: { phase: "forwarded" | "acknowledged" | "accepted" | "resolved"; organization: string; correspondence: string; occurredAt: string; actorUid: string; operationId: string }[];
@@ -87,10 +90,13 @@ export type ModerationReport = {
   history: TimelineEvent[];
 };
 export type ModerationCommit = {
+  privateOnly?: boolean;
   operatingRevision?: number;
   reports: ModerationReport[];
   audit: AuditEvent;
   notifications: ModerationNotification[];
+  /** Public fan-out template, independent of an owner's private destination; null disables fan-out. */
+  notificationTemplate?: ModerationNotification | null;
   actorUid: string;
 };
 export type ModerationStore = {
@@ -237,9 +243,9 @@ export function createModerationModule({
     operatingRevision?: number,
   ) {
     const occurredAt = now().toISOString();
-    const notifications = update
+    const notifications = update && action !== "report.assigned"
       ? unique([
-          ...reports.flatMap(report => [report.reporterUid, ...report.followers, ...report.affectedResidents]),
+          ...reports.flatMap(report => action === "report.rejected" ? [report.reporterUid] : [report.reporterUid, ...report.followers, ...report.affectedResidents]),
         ]).map((residentUid) => ({
           residentUid,
           reference: notifiedReport.reference,
@@ -248,11 +254,21 @@ export function createModerationModule({
           createdAt: occurredAt,
         }))
       : [];
+    const notificationTemplate = action === "report.rejected" ? null : notifications[0];
+    if (action === "report.merged") {
+      const duplicateNotice = notifications.find(notice => notice.residentUid === reports[0].reporterUid);
+      if (duplicateNotice) {
+        duplicateNotice.reference = reports[0].reference;
+        duplicateNotice.update = { en: "Your report is a duplicate. Open your private report for the decision and related report.", fil: "Duplikado ang iyong ulat. Buksan ang pribadong ulat para sa pasya at kaugnay na ulat." };
+        duplicateNotice.message = duplicateNotice.update.en;
+      }
+    }
     await store.commit({
       ...(operatingRevision !== undefined ? { operatingRevision } : {}),
       actorUid: actor.uid,
       reports,
       notifications,
+      notificationTemplate: notificationTemplate ? { ...notificationTemplate, reference: notifiedReport.reference, update, message: [update?.en, update?.fil].filter(Boolean).join(" / ") } : null,
       audit: {
         actorUid: actor.uid,
         occurredAt,
@@ -274,6 +290,7 @@ export function createModerationModule({
     }
   }
   return {
+    ...createClarificationModule({ store, now }),
     async recordExternalFollowUp(actor: Operator, input: { reference: string; expectedRevision: number; operationId: string; phase: "forwarded" | "acknowledged" | "accepted" | "resolved"; organization: string; correspondence: string }) {
       requireRole(actor, ["Coordinator", "Administrator"]);
       const report = await findReport(input.reference);
@@ -405,6 +422,7 @@ export function createModerationModule({
       requireEditableRevision(report, input.expectedRevision);
       requireStatus(report, "Submitted");
       const reason = requireText(input.reason, "Reason");
+      if (pendingClarification(report)) throw new ModerationValidationError("Handle the pending clarification before publishing.");
       if (input.publicSummary?.length > 1000 || input.publicArea?.length > 160) throw new ModerationValidationError("Use a public summary up to 1,000 characters and an area up to 160.");
       const update = requireUpdate(
         input.update ?? {
@@ -440,6 +458,9 @@ export function createModerationModule({
           "Choose valid public coordinates.",
         );
       report.approved = true;
+      report.clarificationPublishedRevision = report.revision ?? 0;
+      const selectedPin = reviewedReportSource(report).exactLocation;
+      if (input.publicLocation && (!selectedPin || input.publicLocation.latitude !== selectedPin.latitude || input.publicLocation.longitude !== selectedPin.longitude)) throw new ModerationValidationError("Request and review a resident clarification before changing the selected pin.");
       report.status = "Under review";
       report.reviewOwnerUid = actor.uid;
       report.review ??= { acknowledgedAt: occurredAt, actorUid: actor.uid, nextStep: "Approved for public review; check the next action." };
@@ -501,8 +522,8 @@ export function createModerationModule({
         reason,
       });
       await finish(actor, [report], "report.rejected", reason, {
-        en: reason,
-        fil: "Hindi tinanggap ang ulat. Tingnan ang dahilan ng operator.",
+        en: "Report declined. Open your private report to read the reason.",
+        fil: "Hindi tinanggap ang ulat. Buksan ang pribadong ulat upang basahin ang dahilan.",
       });
     },
     async merge(
@@ -635,6 +656,8 @@ export function createModerationModule({
       requireEditableRevision(report, input.expectedRevision);
       if (!["In progress", "Resolved"].includes(input.to))
         throw new ModerationValidationError("Choose a valid transition.");
+      if (pendingClarification(report)) throw new ModerationValidationError("Handle the pending clarification before changing progress.");
+      if (unpublishedCorrection(report)) throw new ModerationValidationError("Have a moderator publish the reviewed correction before changing progress.");
       const update = requireUpdate(input.update);
       const occurredAt = now().toISOString();
       if (input.to === "In progress") {

@@ -22,6 +22,7 @@ try {
     const metrics = await page.evaluate(() => { const wrap=document.querySelector('.auth-form-wrap');return { page:document.documentElement.scrollHeight, viewport:innerHeight, width:document.documentElement.scrollWidth, form:wrap.scrollHeight, available:wrap.clientHeight }; });
     assert.ok(metrics.page <= height, `${name}/${locale}: page scroll ${JSON.stringify(metrics)}`);
     assert.ok(metrics.width <= width, `${name}/${locale}: horizontal overflow`);
+    assert.ok(await page.locator('.auth-switch').evaluate(link => link.getBoundingClientRect().height >= 44), `${name}/${locale}: switch touch target`);
     if (height >= 568) assert.ok(metrics.form <= metrics.available + 1, `${name}/${locale}: form scroll ${JSON.stringify(metrics)}`);
     await page.locator("#sign-in-email").fill("synthetic@example.test"); await page.locator("#sign-in-password").fill("synthetic-pass-123");
     const button = page.locator(".auth-submit"); await button.scrollIntoViewIfNeeded(); await button.click();

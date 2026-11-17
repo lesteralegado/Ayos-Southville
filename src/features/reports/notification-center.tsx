@@ -85,7 +85,7 @@ export function NotificationCenter({ embedded = false }: { embedded?: boolean })
     <ul className="notification-list" aria-busy={busy}>{notifications.map(notice => <li key={notice.id} className={notice.read ? "is-read" : ""}><div>
       <span className="notification-read-state">{notice.read ? t("Read", "Nabasa") : t("Unread", "Hindi pa nababasa")}</span>
       <strong>{notice.update ? <ReportUpdate update={notice.update} locale={locale} /> : notice.kind === "follow" ? t("You are now following this report.", "Sinusundan mo na ang ulat na ito.") : notice.kind === "affected" ? t("You marked this report as affecting you.", "Minarkahan mong nakaaapekto sa iyo ang ulat na ito.") : notice.message}</strong>
-      <Link href={`/reports/${notice.reference}`}>{t("View report", "Tingnan ang ulat")} {notice.reference}</Link>
+      <Link href={`/reports/${encodeURIComponent(notice.reference)}?from=notification`}>{t("View report", "Tingnan ang ulat")} {notice.reference}</Link>
       <time dateTime={notice.createdAt}>{formatManilaDate(notice.createdAt, locale, true)}</time>
     </div>{!notice.read && <button type="button" className="button button-quiet" disabled={busy} onClick={() => void update({ notificationId: notice.id })}>{t("Mark read", "Markahang nabasa")}</button>}</li>)}</ul>
     {loaded && !error && notifications.length === 0 && <p className="empty-state">{t("No notifications yet. Updates will appear here when your reports progress.", "Wala pang abiso. Dito lilitaw ang mga update kapag may progreso ang iyong mga ulat.")}</p>}

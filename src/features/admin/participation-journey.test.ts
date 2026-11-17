@@ -74,10 +74,10 @@ it("persists overdue backup responsibility, one delay notice, actual acknowledge
     fixture.records.set("pilotOperations/current", { ...defaultPilotOperations, primaryUid: "primary", backupUid: "backup", backupAffirmed: true, reviewCalendar: { from: "2026-10-01", through: "2026-12-31", holidays: ["2026-11-02"], source: "Synthetic confirmed calendar", ownerConfirmed: true } });
     await accept(request("participation", choice));
     const reference = (await (await submit(request("reports", report))).json()).reference;
-    expect((await (await mine()).json()).reports[0].reviewExpectation).toMatchObject({ dueAt: "2026-11-04T11:00:00.000Z" });
+    expect((await (await mine(new Request("https://ayos.test/api/reports"))).json()).reports[0].reviewExpectation).toMatchObject({ dueAt: "2026-11-04T11:00:00.000Z" });
     fixture.records.set("residentProfiles/backup", { roles: ["Administrator"] }); fixture.uid = "backup";
     vi.setSystemTime(new Date("2026-11-04T11:00:01Z"));
-    expect((await (await operatorWorkspace()).json()).reports[0].reviewExpectation.overdue).toBe(true);
+    expect((await (await operatorWorkspace(new Request("https://ayos.test/api/moderation"))).json()).reports[0].reviewExpectation.overdue).toBe(true);
     const change = (action: string, input: object) => processReport(new Request("https://isolated.test/api/moderation", { method: "PATCH", headers: { origin: "https://isolated.test", "content-type": "application/json" }, body: JSON.stringify({ action, input: { reference, ...input } }) }));
     const takeover = { expectedRevision: 0, expectedOperatingRevision: 0, operationId: "synthetic-takeover", privacyReviewed: true, update: { en: "Review delayed; backup checking the next step.", fil: "Naantala ang review; sinusuri ng backup ang susunod na hakbang." } };
     expect((await change("take-over-review", takeover)).status).toBe(200);
@@ -90,7 +90,7 @@ it("persists overdue backup responsibility, one delay notice, actual acknowledge
     const privateReport = await getModerationModule().getPrivateReport({ uid: "backup", roles: ["Administrator"] }, reference);
     expect(privateReport).toMatchObject({ status: "Under review", reviewOwnerUid: "backup", externalFollowUp: [expect.objectContaining({ phase: "forwarded" })] });
     fixture.uid = "resident";
-    expect((await (await mine()).json()).reports[0].reviewExpectation.acknowledgedAt).toBe("2026-11-04T11:00:01.000Z");
+    expect((await (await mine(new Request("https://ayos.test/api/reports"))).json()).reports[0].reviewExpectation.acknowledgedAt).toBe("2026-11-04T11:00:01.000Z");
     expect(JSON.stringify(await getModerationModule().listNotifications("resident"))).not.toMatch(/alice|Block 9|Private organization/);
     // One connected synthetic API journey; provider fixtures, never live outcomes.
     const discoveryBefore = await (await publicDiscovery(new Request("https://isolated.test/api/public-reports"))).json();
@@ -125,7 +125,7 @@ it("confirms a private consent receipt before real submission and recovers the s
   expect((await (await accept(request("participation", choice))).json()).receipt).toEqual(receipt);
   expect((await (await consentStatus()).json()).receipt).toEqual(receipt);
   expect((await submit(request("reports", report))).status).toBe(201);
-  expect((await (await mine()).json()).reports).toHaveLength(1);
+  expect((await (await mine(new Request("https://ayos.test/api/reports"))).json()).reports).toHaveLength(1);
 });
 it("refuses an in-flight submission whose access was revoked after the initial checks", async () => {
   await accept(request("participation", choice));
@@ -151,7 +151,7 @@ it.each(["signed-out", "unverified", "unapproved", "cross-origin", "not-adult", 
   expect((await (await consentStatus()).json()).receipt).toBeNull();
 });
 it("keeps private report history and deletion available without participation consent", async () => {
-  expect((await mine()).status).toBe(200);
+  expect((await mine(new Request("https://ayos.test/api/reports"))).status).toBe(200);
   const response = await requestDeletion(request("privacy", { confirmed: true }));
   expect(response.status).toBe(200);
   expect((await response.json()).request.status).toBe("requested");
@@ -188,5 +188,5 @@ it("completes the consented resident-to-operator-to-resident lifecycle without t
   expect((await change("transition", { reference, expectedRevision: 3, to: "Resolved", resolutionEvidence: [asset], update: { en: "Synthetic resolution exercise only.", fil: "Synthetic na pagsubok lamang ang resolusyon." } })).status).toBe(200);
   fixture.uid = "resident";
   expect((await change("respond-to-resolution", { reference, expectedRevision: 4, response: "confirm", reason: "Synthetic confirmation." })).status).toBe(200);
-  expect((await (await mine()).json()).reports[0].status).toBe("Resident confirmed");
+  expect((await (await mine(new Request("https://ayos.test/api/reports"))).json()).reports[0].status).toBe("Resident confirmed");
 });

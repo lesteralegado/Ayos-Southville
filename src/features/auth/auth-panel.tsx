@@ -8,9 +8,11 @@ import { createUserWithEmailAndPassword, deleteUser, sendEmailVerification, sign
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useLocale } from "@/features/i18n/use-locale";
 import { getFirebaseClient, getSessionlessAuth } from "@/lib/firebase/client";
+import { authDestination } from "./auth-destination";
 
 type AuthPanelProps = {
   mode: "register" | "sign-in";
+  nextPath?: string;
 };
 
 const authCopy = {
@@ -56,7 +58,7 @@ const authCopy = {
   },
 } as const;
 
-export function AuthPanel({ mode }: AuthPanelProps) {
+export function AuthPanel({ mode, nextPath }: AuthPanelProps) {
   const router = useRouter();
   const { locale } = useLocale();
   const [error, setError] = useState("");
@@ -99,7 +101,7 @@ export function AuthPanel({ mode }: AuthPanelProps) {
         const response = await fetch("/api/session", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify({ idToken }) });
         await signOut(auth);
         if (!response.ok) throw new Error("Session creation failed");
-        router.push("/account");
+        router.push(authDestination(nextPath));
         router.refresh();
       }
     } catch {

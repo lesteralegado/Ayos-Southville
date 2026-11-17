@@ -29,17 +29,19 @@ export function ResidentPanel({
   publicAlias,
   roles = [],
   approved = true,
+  showLanguageControl = true,
 }: {
   publicAlias: string;
   roles?: string[];
   approved?: boolean;
+  showLanguageControl?: boolean;
 }) {
   const { locale, chooseLocale } = useLocale();
   const message = copy[locale];
   return (
-    <main className="message-page">
+    <main className="message-page account-page">
       <div className="message-card">
-        <button type="button" className="language-button" onClick={() => chooseLocale(locale === "en" ? "fil" : "en")}>{locale === "en" ? "Filipino" : "English"}</button>
+        {showLanguageControl && <button type="button" className="language-button" onClick={() => chooseLocale(locale === "en" ? "fil" : "en")}>{locale === "en" ? "Filipino" : "English"}</button>}
         <h1>
           {message.greeting}, {publicAlias}.
         </h1>
@@ -85,8 +87,8 @@ export function ResidentPanel({
             <Link href="/privacy">{navigationCopy[locale].privacy}</Link>
           </div>
         </details>
-        <ConsentPanel />
         <SignOutButton />
+        <ConsentPanel />
       </div>
     </main>
   );

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useLocale } from "@/features/i18n/use-locale";
-import type { PublicReportDetail } from "./report-module";
+import type { PublicReportDetail, ResidentReport } from "./report-module";
+import { ResidentClarification } from "./resident-clarification";
 import {
   formatManilaDate,
   reportCategoryLabels,
@@ -11,6 +12,7 @@ import {
 import { ReportEngagement } from "./report-engagement";
 import { ReportUpdate } from "./report-update";
 import { ResolutionResponse } from "./resolution-response";
+import { ReportProgress } from "./report-progress";
 
 export function ReportDetail({
   report,
@@ -19,6 +21,7 @@ export function ReportDetail({
   canRespond = false,
   categoryLabel,
   demonstration = false,
+  ownedReport,
 }: {
   report: PublicReportDetail;
   privateReceipt?: boolean;
@@ -26,6 +29,7 @@ export function ReportDetail({
   canRespond?: boolean;
   categoryLabel?: { en: string; fil: string };
   demonstration?: boolean;
+  ownedReport?: ResidentReport;
 }) {
   const { locale } = useLocale();
   const fil = locale === "fil";
@@ -55,6 +59,9 @@ export function ReportDetail({
           </span>
         </div>
         <h1>{report.publicSummary}</h1>
+        <ReportProgress report={report} locale={locale} ownedReport={ownedReport} archived={archived} />
+        {privateReceipt && ownedReport?.canonicalReference && <p><Link href={`/reports/${ownedReport.canonicalReference}`}>{fil ? "Kaugnay na ulat" : "Related report"}: {ownedReport.canonicalReference}</Link></p>}
+        {ownedReport && <ResidentClarification key={ownedReport.reference + ":" + ownedReport.revision} report={ownedReport} />}
         <p className="report-place">
           <span aria-hidden="true">⌖</span>
           {report.publicArea}

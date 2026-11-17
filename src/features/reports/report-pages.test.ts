@@ -28,6 +28,8 @@ it("traverses 100 resident reports with tied dates exactly once and still opens 
   expect(await reports.getMine("other", "AS-000001")).toBeNull();
   expect(await reports.listMinePage("other")).toEqual({ reports: [], nextCursor: null });
   expect(await reports.listMine("resident")).toHaveLength(20);
+  expect(await reports.countMine("resident")).toBe(100);
+  expect(await reports.countMine("other")).toBe(0);
   await expect(reports.listMinePage("resident", "malformed")).rejects.toMatchObject({ code: "VALIDATION" });
 });
 

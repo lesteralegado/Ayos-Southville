@@ -19,6 +19,7 @@ export default async function AccountPage() {
     : ["Resident"];
   return (
     <ResidentPanel
+      showLanguageControl={false}
       publicAlias={typeof publicAlias === "string" ? publicAlias : "neighbor"}
       roles={roles}
       approved={await hasPilotEligibility(resident)}

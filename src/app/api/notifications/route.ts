@@ -6,13 +6,13 @@ import { getEngagementModule } from "@/features/reports/firebase-engagement-stor
 import { EngagementValidationError, type NotificationPreferences } from "@/features/reports/engagement-module";
 const headers = { "Cache-Control": "private, no-store" };
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   try {
     const resident = await getVerifiedResident();
     if (!resident) return NextResponse.json({ code: "AUTH", error: "Sign in to view your notifications." }, { status: 401, headers });
     const engagement = getEngagementModule();
-    if (request && new URL(request.url).searchParams.get("summary") === "1") return NextResponse.json({ unreadCount: await engagement.unreadCount(resident.uid) }, { headers });
-    const cursor = request ? new URL(request.url).searchParams.get("cursor") : null;
+    if (new URL(request.url).searchParams.get("summary") === "1") return NextResponse.json({ unreadCount: await engagement.unreadCount(resident.uid) }, { headers });
+    const cursor = new URL(request.url).searchParams.get("cursor");
     const [page, preferences, unreadCount] = await Promise.all([engagement.listNotificationsPage(resident.uid, cursor), engagement.getPreferences(resident.uid), engagement.unreadCount(resident.uid)]);
     return NextResponse.json({ ...page, preferences, unreadCount }, { headers });
   } catch { return NextResponse.json({ code: "UNAVAILABLE", error: "Notifications could not be loaded. Retry." }, { status: 503, headers }); }

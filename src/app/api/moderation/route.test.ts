@@ -30,6 +30,7 @@ const seed: ModerationReport = {
   category: "streetlights",
   description: "Private phone 09171234567",
   nearbyLandmark: "Block 9 Lot 12",
+  exactLocation: { latitude: 14.281234, longitude: 121.126789, privateDetails: "Private entrance" },
   evidence: [],
   status: "Submitted",
   submittedAt: "2026-10-10T02:00:00Z",
@@ -55,6 +56,17 @@ const request = (action: string, input: unknown) =>
     },
     body: JSON.stringify({ action, input }),
   });
+it("allows private clarification only for an authorized operator and the report's consenting owner", async () => {
+  const base = { reference: seed.reference, operationId: "question-1", expectedRevision: 0 };
+  expect((await PATCH(request("request-clarification", { ...base, question: "Which entrance?" }))).status).toBe(200);
+  state.actor = { uid: "other", roles: ["Resident"] };
+  const response = { ...base, expectedRevision: 1, operationId: "reply-1", requestId: "question-1", explanation: "North entrance" };
+  expect((await PATCH(request("respond-to-clarification", response))).status).toBe(403);
+  state.actor = { uid: "r1", roles: ["Resident"] };
+  expect((await PATCH(request("respond-to-clarification", response))).status).toBe(200);
+  expect((await PATCH(request("respond-to-clarification", response))).status).toBe(200);
+  expect((await PATCH(request("request-clarification", { ...base, question: "Unauthorized" }))).status).toBe(403);
+});
 const acceptance = {
   reference: seed.reference,
   expectedRevision: 0,
@@ -66,7 +78,7 @@ const acceptance = {
 };
 it("publishes explicit redaction and returns a conflict on a repeated stale request", async () => {
   expect((await PATCH(request("accept", acceptance))).status).toBe(200);
-  const response = await GET();
+  const response = await GET(new Request("https://ayos.test/api/moderation"));
   expect(response.headers.get("cache-control")).toBe("private, no-store");
   expect((await response.json()).reports[0]).toMatchObject({ status: "Under review", revision: 1 });
   const detail = await GET(new Request(`https://ayos.test/api/moderation?reference=${seed.reference}`));
@@ -95,7 +107,7 @@ it.each(["Resident", "Coordinator"] as const)(
 );
 it("denies revoked operator access and malformed direct requests", async () => {
   state.access = false;
-  expect((await GET()).status).toBe(403);
+  expect((await GET(new Request("https://ayos.test/api/moderation"))).status).toBe(403);
   state.access = true;
   expect((await PATCH(request("accept", null))).status).toBe(422);
 });

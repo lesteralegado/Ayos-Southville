@@ -21,20 +21,20 @@ describe("report engagement boundary", () => {
     ]);
   });
 
-  it("keeps affected and follow relationships unique and creates private notifications", async () => {
+  it("keeps subscriptions and protected evidence without adding confirmation noise to the feed", async () => {
     const engagement = createEngagementModule({ store: createMemoryEngagementStore() });
     await engagement.setAffected({ residentUid: "r1", reference: "AS-1", active: true, evidence: [{ id: "private-photo", name: "proof.jpg", type: "image/jpeg", size: 10, visibility: "restricted" }] });
     await engagement.setAffected({ residentUid: "r1", reference: "AS-1", active: true, evidence: [] });
     await engagement.setFollow({ residentUid: "r1", reference: "AS-1", active: true });
     expect(await engagement.getResidentState("r1", "AS-1")).toMatchObject({ affected: true, following: true });
-    expect(await engagement.listNotifications("r1")).toHaveLength(2);
+    expect(await engagement.listNotifications("r1")).toHaveLength(0);
     await engagement.setAffected({ residentUid: "r1", reference: "AS-1", active: false, evidence: [] });
     expect(await engagement.getResidentState("r1", "AS-1")).toMatchObject({ affected: false, following: true });
   });
 
   it("marks notifications read and stores resident delivery preferences", async () => {
     const engagement = createEngagementModule({ store: createMemoryEngagementStore() });
-    await engagement.setFollow({ residentUid: "r1", reference: "AS-2", active: true });
+    await engagement.recordReportEvent("r1", "AS-2", "Historical report update");
     const [notice] = await engagement.listNotifications("r1");
     await engagement.markNotificationRead("r1", notice.id);
     await engagement.setPreferences("r1", { emailEnabled: true, statusUpdates: true, followUpdates: false });

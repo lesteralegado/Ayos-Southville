@@ -45,21 +45,30 @@ export function ConsentPanel() {
     } catch (error) { const code = error instanceof Error ? error.message : "failure"; setNotice(["permission", "validation", "changed", "limited"].includes(code) ? code as Notice : "failure"); }
     finally { clearTimeout(timer); setPending(false); }
   }
-  return <section id="participation" className="consent-section" aria-labelledby="participation-title">
-    <h2 id="participation-title">{copy.title}</h2>
-    <div aria-labelledby="consent-disclosure">
+  const confirmed = !!receipt && statusConfirmed && !loading && !pending && !notice;
+  const disclosure = <div aria-labelledby="consent-disclosure">
       <h3 id="consent-disclosure">{copy.disclosure}</h3>
       <p>{copy.trial}</p><p>{copy.boundaries}</p><p>{copy.retention}</p><p>{copy.deletion}</p><p>{copy.recruitment}</p>
       <p><Link href="/privacy" className="text-link">{copy.privacy}</Link></p>
-    </div>
+    </div>;
+  return <section id="participation" className="consent-section" aria-labelledby="participation-title">
+    <h2 id="participation-title" tabIndex={-1} ref={resultRef}>{confirmed ? copy.confirmed : copy.title}</h2>
+    {!confirmed && disclosure}
     <p role="status" aria-live="polite">{loading ? copy.loading : pending ? copy.pending : !receipt && statusConfirmed && !notice ? declined ? copy.declined : copy.noConsent : ""}</p>
     {notice && <p id="consent-error" className="form-error" role="alert">{copy[notice]}</p>}
     {!loading && !eligible && !notice && <p>{copy.permission}</p>}
-    {receipt ? <div className="consent-receipt">
-      <h3 tabIndex={-1} ref={resultRef}>{copy.receipt}</h3><p>{copy.receiptHelp}</p>
-      <dl><dt>{copy.id}</dt><dd>{receipt.id}</dd><dt>{copy.version}</dt><dd>{receipt.version}</dd><dt>{copy.date}</dt><dd><time dateTime={receipt.consentedAt}>{new Date(receipt.consentedAt).toLocaleString(locale === "fil" ? "fil-PH" : "en-PH", { timeZone: "Asia/Manila" })}</time></dd><dt>{copy.language}</dt><dd>{receipt.locale === "fil" ? "Filipino" : "English"}</dd></dl>
+    {confirmed && receipt ? <>
+      <p>{copy.receiptHelp}</p>
       {eligible && <Link className="button button-primary" href="/reports/new">{copy.continue}</Link>}
-    </div> : !declined && <form onSubmit={event => void submit(event)} aria-describedby="consent-disclosure">
+      <details className="advanced-disclosure consent-details">
+        <summary>{copy.details}</summary>
+        {disclosure}
+        <div className="consent-receipt">
+      <h3>{copy.receipt}</h3>
+      <dl><dt>{copy.id}</dt><dd>{receipt.id}</dd><dt>{copy.version}</dt><dd>{receipt.version}</dd><dt>{copy.date}</dt><dd><time dateTime={receipt.consentedAt}>{new Date(receipt.consentedAt).toLocaleString(locale === "fil" ? "fil-PH" : "en-PH", { timeZone: "Asia/Manila" })}</time></dd><dt>{copy.language}</dt><dd>{receipt.locale === "fil" ? "Filipino" : "English"}</dd></dl>
+        </div>
+      </details>
+    </> : !receipt && !declined && <form onSubmit={event => void submit(event)} aria-describedby="consent-disclosure">
       <fieldset disabled={loading || pending || !statusConfirmed || !eligible || notice === "permission" || notice === "changed"}>
         <legend>{copy.title}</legend>
         <label className="consent-check"><input type="checkbox" checked={adult} onChange={event => setAdult(event.target.checked)} aria-invalid={notice === "validation" && !adult} aria-describedby={notice === "validation" && !adult ? "consent-adult-help consent-error" : "consent-adult-help"} />{copy.adult}</label>

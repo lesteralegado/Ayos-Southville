@@ -10,7 +10,7 @@ vi.mock("@/lib/firebase/admin", async () => {
   const db = firebaseBoundary(fixture.records, { beforeCommit() {
     if (fixture.failCommit) throw new Error("Database unavailable");
   } });
-  return { getFirebaseAdmin: () => ({ db }) };
+  return { getFirebaseAdmin: () => ({ db, auth: { getUser: async () => ({ emailVerified: true, disabled: false }) } }) };
 });
 import { getModerationModule } from "./firebase-moderation-store";
 import { getReportModule } from "./firebase-report-store";
@@ -38,6 +38,27 @@ async function start() {
   await moderation.transition(actor, { reference, expectedRevision: 2, to: "In progress", update: { en: "Started.", fil: "Nagsimula." } });
   return moderation;
 }
+it("keeps clarification content private and rolls back a failed request atomically", async () => {
+  fixture.records.set("pilotConsents/resident", { id: "11111111-1111-4111-8111-111111111111", version: "southville-adult-pilot-2026-10-12", consentedAt: new Date().toISOString(), adultAcknowledged: true, locale: "en" });
+  fixture.records.set("residentProfiles/resident", { roles: ["Resident"], pilotAccess: "approved" });
+  fixture.records.set("reportEngagements/neighbor", { reference, residentUid: "neighbor", following: true });
+  const clarificationModule = getModerationModule();
+  const question = { reference, expectedRevision: 0, operationId: "question-1", question: "Private question about the entrance" };
+  fixture.failCommit = true;
+  await expect(clarificationModule.requestClarification(actor, question)).rejects.toThrow();
+  expect(fixture.records.has("moderationReports/" + reference)).toBe(false);
+  expect([...fixture.records.keys()].some(key => key.startsWith("residentNotifications/"))).toBe(false);
+  fixture.failCommit = false;
+  await clarificationModule.requestClarification(actor, question);
+  await clarificationModule.requestClarification(actor, question);
+  await clarificationModule.respondToClarification({ uid: "resident", roles: ["Resident"] }, { reference, expectedRevision: 1, operationId: "reply-1", requestId: "question-1", explanation: "Private answer", location: { latitude: 14.281234567, longitude: 121.126789123 } });
+  expect((await (await getReportModule()).getMine("resident", reference))?.clarifications?.[0].response?.explanation).toBe("Private answer");
+  expect(await (await getReportModule()).getMine("neighbor", reference)).toBeNull();
+  expect(fixture.records.has("publicReports/" + reference)).toBe(false);
+  expect(await clarificationModule.listNotifications("neighbor")).toHaveLength(0);
+  expect(await clarificationModule.listNotifications("resident")).toHaveLength(1);
+  expect(JSON.stringify([...fixture.records].filter(([key]) => key.startsWith("auditEvents/")))).not.toMatch(/Private question|Private answer/);
+});
 it("publishes the resident's selected pin without shifting its coordinates", async () => {
   const pin = { latitude: 14.281234567, longitude: 121.126789123 };
   fixture.records.get("privateReports/" + reference)!.exactLocation = { ...pin, privateDetails: "Private gate instructions" };
@@ -66,7 +87,11 @@ it("persists a merge notification and opt-in email for both original reporters w
   const duplicateReference = "AS-300002";
   fixture.records.set("privateReports/" + duplicateReference, { ...fixture.records.get("privateReports/" + reference), reference: duplicateReference, reporterUid: "duplicate-reporter", status: "Submitted" });
   for (const uid of ["resident", "duplicate-reporter"]) fixture.records.set("notificationPreferences/" + uid, { emailEnabled: true, statusUpdates: true, followUpdates: true });
+  fixture.records.set("reportEngagements/late-follower", { reference, residentUid: "neighbor", following: true });
   await moderation.merge(actor, { duplicateReference, canonicalReference: reference, expectedRevision: 0, canonicalRevision: 1, reason: "Same streetlight concern." });
+  expect((await moderation.listNotifications("duplicate-reporter"))[0].reference).toBe(duplicateReference);
+  expect((await moderation.listNotifications("neighbor"))[0]).toMatchObject({ reference });
+  expect(JSON.stringify(await moderation.listNotifications("neighbor"))).not.toMatch(/your private report|Same streetlight concern/);
   expect(await moderation.listNotifications("resident")).toHaveLength(2);
   expect(await moderation.listNotifications("duplicate-reporter")).toHaveLength(1);
   const jobs = [...fixture.records].filter(([key]) => key.startsWith("lifecycleEmailJobs/")).map(([,job]) => job.residentUid).sort();
@@ -109,7 +134,7 @@ it("persists the full lifecycle atomically and replaces forged resolution metada
   await moderation.transition(actor, resolution);
   expect(await moderation.getPrivateReport(actor, reference)).toMatchObject({ status: "Resolved", revision: 4, resolutionEvidence: [{ id: resolutionId, type: "image/jpeg", size: 500, name: "evidence.jpg" }] });
   expect((await (await getReportModule()).listMine("resident"))[0].status).toBe("Resolved");
-  expect(await moderation.listNotifications("resident")).toHaveLength(4);
+  expect(await moderation.listNotifications("resident")).toHaveLength(3);
   expect(await moderation.listAudit(actor)).toHaveLength(4);
   await expect(moderation.transition(actor, resolution)).rejects.toMatchObject({ code: "CONFLICT" });
   expect(await moderation.listAudit(actor)).toHaveLength(4);
@@ -126,7 +151,7 @@ it.each(["foreign", "wrong-report", "deleted", "attached", "expired", "missing-f
   await expect(moderation.transition(actor, resolution)).rejects.toMatchObject({ code: "VALIDATION" });
   expect((await moderation.getPrivateReport(actor, reference)).status).toBe("In progress");
   expect(await moderation.listAudit(actor)).toHaveLength(3);
-  expect(await moderation.listNotifications("resident")).toHaveLength(3);
+  expect(await moderation.listNotifications("resident")).toHaveLength(2);
 });
 it("rolls back a failed database action without partial audit, notifications, or public state", async () => {
   const moderation = getModerationModule(); fixture.failCommit = true;

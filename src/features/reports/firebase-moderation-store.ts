@@ -77,6 +77,8 @@ function createFirebaseModerationStore(): ModerationStore {
         media: publicReport?.media ?? [],
       },
       revision: stored?.revision ?? 0,
+      clarifications: stored?.clarifications ?? [],
+      clarificationPublishedRevision: stored?.clarificationPublishedRevision,
       archivedAt: stored?.archivedAt,
       approved: stored?.approved ?? false,
       followers: states
@@ -112,12 +114,22 @@ function createFirebaseModerationStore(): ModerationStore {
       await db.runTransaction(async (transaction) => {
         const allowed = ["report.accepted", "report.rejected", "report.merged"].includes(change.audit.action) ? ["Moderator", "Administrator"] : ["report.assigned", "report.started", "report.resolved", "report.external-follow-up"].includes(change.audit.action) ? ["Coordinator", "Administrator"] : ["report.review-acknowledged", "report.review-takeover"].includes(change.audit.action) ? ["Moderator", "Coordinator", "Administrator"] : undefined;
         await assertWritable(transaction, change.actorUid, change.reports.flatMap(report => [report.reporterUid, ...report.followers, ...report.affectedResidents]), allowed);
+        if (["report.clarification-requested", "report.clarification-reviewed", "report.clarification-published"].includes(change.audit.action)) {
+          await assertWritable(transaction, change.actorUid, [], change.audit.action === "report.clarification-published" ? ["Moderator", "Administrator"] : ["Moderator", "Coordinator", "Administrator"]);
+          await assertParticipant(transaction, change.actorUid, false);
+        }
+        if (change.audit.action === "report.clarification-responded") await assertParticipant(transaction, change.actorUid);
         if (["report.resident-confirmed", "report.resident-disputed"].includes(change.audit.action)) await assertParticipant(transaction, change.actorUid);
         if (["report.review-acknowledged", "report.review-takeover", "report.external-follow-up"].includes(change.audit.action)) await assertParticipant(transaction, change.actorUid, false);
         const refs = change.reports.map((report) =>
           db.collection("moderationReports").doc(report.reference),
         );
         const current = await transaction.getAll(...refs);
+        if (change.audit.action.startsWith("report.clarification-")) {
+          const privateDocument = await transaction.get(db.collection("privateReports").doc(change.reports[0].reference));
+          if (!privateDocument.exists || privateDocument.data()?.archivedAt ||
+            (change.audit.action === "report.clarification-responded" && privateDocument.data()?.reporterUid !== change.actorUid)) throw new ModerationConflictError();
+        }
         if (change.audit.action === "report.owner-reassigned") {
           await assertWritable(transaction, change.actorUid, [], ["Coordinator", "Administrator"]);
           const ownerUid = change.reports[0].reviewOwnerUid!;
@@ -220,10 +232,10 @@ function createFirebaseModerationStore(): ModerationStore {
             ...verified.map(evidenceAsset),
           ];
         const notifications = new Map(change.notifications.map(notice => [notice.residentUid, notice]));
-        const template = change.notifications[0];
+        const template = change.notificationTemplate === undefined ? change.notifications[0] : change.notificationTemplate;
         const currentStates = engagements.flatMap(snapshot => snapshot.docs.map(doc => doc.data()));
-        if (template) for (const state of currentStates)
-          if (state.following || state.affected) notifications.set(state.residentUid, { ...template, residentUid: state.residentUid });
+        if (template && !change.privateOnly) for (const state of currentStates)
+          if ((state.following || state.affected) && !notifications.has(state.residentUid)) notifications.set(state.residentUid, { ...template, residentUid: state.residentUid });
         const recipientIds = [...notifications.keys()];
         await assertWritable(transaction, change.actorUid, recipientIds);
         const preferences = recipientIds.length ? await transaction.getAll(...recipientIds.map(uid => db.collection("notificationPreferences").doc(uid))) : [];
@@ -246,6 +258,7 @@ function createFirebaseModerationStore(): ModerationStore {
           const publicRef = db
             .collection("publicReports")
             .doc(report.reference);
+          if (change.privateOnly) continue;
           if (
             report.approved &&
             !["Submitted", "Rejected", "Duplicate"].includes(report.status)
